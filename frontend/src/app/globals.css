@@ -231,6 +231,12 @@ body {
   padding: 0;
 }
 
+/* The inspector holds dense data: keep its surface nearly opaque even where backdrop blur is
+   unavailable (some GPUs, headless browsers). Unlayered so it beats .aeon-panel. */
+.aeon-sheet {
+  background-color: rgba(12, 12, 14, 0.96);
+}
+
 /* The inspector header already names the tool: a module's own heading becomes its technical
    sub-label (Vast-style spec label), and the duplicate icon in front of it is dropped. */
 .aeon-inspector .aeon-panel h2 {

@@ -39,7 +39,7 @@ export function Inspector({ tool, wide, onToggleWide, onClose, children }: Inspe
     <aside
       key={tool}
       aria-label={dict.shell.toolNames[tool]}
-      className={`aeon-panel aeon-slide-in fixed bg-[rgba(12,12,14,0.94)] inset-x-0 bottom-[60px] z-30 flex h-[74dvh] flex-col rounded-b-none shadow-2xl md:inset-x-auto md:bottom-4 md:right-[76px] md:top-[72px] md:h-auto md:rounded-b-[14px] ${
+      className={`aeon-panel aeon-sheet aeon-slide-in fixed inset-x-0 bottom-[60px] z-30 flex h-[74dvh] flex-col rounded-b-none shadow-2xl md:inset-x-auto md:bottom-4 md:right-[76px] md:top-[72px] md:h-auto md:rounded-b-[14px] ${
         wide ? "md:w-[min(1100px,calc(100vw-120px))]" : "md:w-[min(560px,calc(100vw-120px))]"
       }`}
     >
