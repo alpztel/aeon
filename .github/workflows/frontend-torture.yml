@@ -1,0 +1,58 @@
+name: frontend-torture
+
+# TEMPORARY (removed before merge): browser tests of the AI module against the full Docker Compose stack.
+on:
+  pull_request:
+    branches: [main]
+    paths: ["torture/**", "frontend/**", "ai-engine/**", ".github/workflows/frontend-torture.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  torture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: Start the full stack behind nginx
+        run: |
+          touch deploy/.env
+          docker compose -f deploy/docker-compose.yml --profile full up -d --build
+          for i in $(seq 1 90); do
+            curl -fsS http://localhost/api/v1/health >/dev/null && \
+            curl -fsS -X POST -H 'content-type: application/json' -d '{"message":"ping"}' http://localhost/api/v1/ai/command >/dev/null && break
+            sleep 5
+          done
+          docker compose -f deploy/docker-compose.yml --profile full ps
+          curl -sS -X POST -H 'content-type: application/json' -d '{"ra":133.7586977,"dec":-7.2420576}' http://localhost/api/v1/ai/classify | cut -c1-400
+      - name: Build and start frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_BASE: http://localhost
+        run: |
+          npm ci
+          npm run build
+          nohup npm start -- -p 3000 > ../frontend.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS localhost:3000 >/dev/null && break; sleep 2; done
+      - name: AI module browser tests
+        working-directory: torture
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+          npx playwright test || true
+          node -e "const r=require('./results.json');const t=[];const w=s=>{(s.suites||[]).forEach(w);(s.specs||[]).forEach(p=>p.tests.forEach(x=>{const res=x.results.at(-1)||{};t.push([p.title,res.status,(res.error&&res.error.message||'').split('\n')[0].slice(0,300),res.duration])}))};r.suites.forEach(w);for(const [n,s,e,d] of t)console.log('TORTURE|'+s+'|'+n+'|'+d+'ms|'+e);const f=t.filter(x=>x[1]!=='passed'&&x[1]!=='skipped').length;console.log('TORTURE_SUMMARY|'+(t.length-f)+'/'+t.length+' passed');process.exit(f?1:0)"
+      - if: always()
+        run: docker compose -f deploy/docker-compose.yml --profile full logs --no-color --tail 150 ai-engine nginx > compose.log 2>&1 || true
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: torture-report
+          path: |
+            torture/results.json
+            torture/test-results/
+            frontend.log
+            compose.log
