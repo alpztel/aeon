@@ -160,6 +160,25 @@
     "mission": "Mission",
     "error": "Cross-match query failed."
   },
+  "ai": {
+    "paletteTitle": "Astro-LLM Copilot Command Palette",
+    "placeholder": "Ask Astro-LLM in English or Turkish (e.g. 'Go to WISE 0855 and open difference mode')...",
+    "send": "Execute",
+    "running": "Executing...",
+    "examplesTitle": "Suggested Commands",
+    "examples": [
+      "Fly to WISE 0855 and toggle difference mode",
+      "Go to RW Aur and set epoch to 2026-Q3",
+      "Fly to PX-2026-09, run blind search and open 3D orbit"
+    ],
+    "executedActions": "Executed UI Actions",
+    "classifyTitle": "1D-CNN Spectral Classifier & PatchAnomalyViT",
+    "topClass": "Top Predicted Class",
+    "anomalyScore": "ViT Anomaly Score",
+    "highAnomaly": "High Discovery Priority",
+    "normalAnomaly": "Nominal Field / Catalog",
+    "models": "Models"
+  },
   "classes": {
     "cold_brown_dwarf": "Cold Brown Dwarf",
     "planet_x_candidate": "Planet X Candidate",

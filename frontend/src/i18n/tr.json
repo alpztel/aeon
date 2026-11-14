@@ -160,6 +160,25 @@
     "mission": "Görev",
     "error": "Çoklu görev eşleştirme sorgusu başarısız oldu."
   },
+  "ai": {
+    "paletteTitle": "Astro-LLM Kopilot Komut Paleti",
+    "placeholder": "Türkçe veya İngilizce komut yazın (ör. 'WISE 0855'e git ve fark modunu aç')...",
+    "send": "Çalıştır",
+    "running": "Çalıştırılıyor...",
+    "examplesTitle": "Örnek Komutlar",
+    "examples": [
+      "WISE 0855'e git ve fark modunu aç",
+      "RW Aur'a git ve dönemi 2026-Q3 yap",
+      "PX-2026-09'a git, kör tarama yap ve 3B yörüngeyi aç"
+    ],
+    "executedActions": "Uygulanan Arayüz Aksiyonları",
+    "classifyTitle": "1D-CNN Tayf Sınıflandırıcı & PatchAnomalyViT",
+    "topClass": "En Yüksek Olasılıklı Sınıf",
+    "anomalyScore": "ViT Anomali Skoru",
+    "highAnomaly": "Yüksek Keşif Önceliği",
+    "normalAnomaly": "Normal Alan / Katalog",
+    "models": "Modeller"
+  },
   "classes": {
     "cold_brown_dwarf": "Soğuk Kahverengi Cüce",
     "planet_x_candidate": "Planet X Adayı",

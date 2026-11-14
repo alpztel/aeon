@@ -15,6 +15,11 @@ export type Detection = components["schemas"]["Detection"];
 export type AstrometryPoint = components["schemas"]["Astrometry"];
 export type OrbitRequest = components["schemas"]["OrbitRequest"];
 export type OrbitResult = components["schemas"]["OrbitResult"];
+export type UiAction = components["schemas"]["UiAction"];
+export type AiCommandResponse =
+  operations["aiCommand"]["responses"]["200"]["content"]["application/json"];
+export type AiClassifyResponse =
+  operations["aiClassify"]["responses"]["200"]["content"]["application/json"];
 export type CrossmatchResult =
   operations["missionsCrossmatch"]["responses"]["200"]["content"]["application/json"];
 
@@ -376,7 +381,6 @@ export async function getCrossmatch(params: {
       if (cached) return { data: cached, fromCache: true };
     }
 
-    // Build scientifically consistent fallback from core spectrum + archival catalog parameters
     const sed: NonNullable<CrossmatchResult["sed"]> = [];
     try {
       const { data: spec } = await getSpectrum({ ra: params.ra, dec: params.dec });
@@ -487,6 +491,195 @@ export async function getCrossmatch(params: {
         sed,
         unmatched_ir_candidate: true,
         mast_overlap: [],
+      },
+    };
+  }
+}
+
+export async function sendAiCommand(params: {
+  message: string;
+  lang: "tr" | "en";
+  context?: Record<string, unknown>;
+}): Promise<{ data: AiCommandResponse; fromCache: boolean }> {
+  try {
+    const data = await fetchJson<AiCommandResponse>("/api/v1/ai/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    return { data, fromCache: false };
+  } catch {
+    // Rule-based bilingual fallback parser when ai-engine is offline
+    const lower = params.message.toLowerCase();
+    const actions: UiAction[] = [];
+
+    if (lower.includes("wise") || lower.includes("0855")) {
+      actions.push({
+        type: "FLY_TO",
+        params: { target_id: "wise-0855", ra: 133.79513, dec: -7.24514 },
+      });
+    } else if (lower.includes("rw") || lower.includes("aur")) {
+      actions.push({
+        type: "FLY_TO",
+        params: { target_id: "rw-aur", ra: 76.9564, dec: 30.4013 },
+      });
+    } else if (lower.includes("px") || lower.includes("planet x") || lower.includes("2026-09")) {
+      actions.push({
+        type: "FLY_TO",
+        params: { target_id: "px-2026-09", ra: 51.2, dec: 14.8 },
+      });
+    }
+
+    for (const ep of EPOCHS) {
+      if (lower.includes(ep.toLowerCase()) || lower.includes(ep.slice(-2).toLowerCase())) {
+        actions.push({ type: "SET_EPOCH", params: { epoch: ep } });
+      }
+    }
+
+    if (lower.includes("fark") || lower.includes("diff")) {
+      actions.push({ type: "TOGGLE_DIFF", params: { open: true } });
+    }
+    if (lower.includes("kör") || lower.includes("blind")) {
+      actions.push({ type: "RUN_BLIND_SEARCH", params: {} });
+    } else if (lower.includes("shift") || lower.includes("stack") || lower.includes("yığ")) {
+      actions.push({
+        type: "RUN_SHIFT_STACK",
+        params: { rate_arcsec_yr: 110, pa_deg: 62 },
+      });
+    }
+    if (lower.includes("tayf") || lower.includes("spectr")) {
+      actions.push({ type: "OPEN_SPECTRUM", params: {} });
+    }
+    if (lower.includes("3d") || lower.includes("3b") || lower.includes("yörünge") || lower.includes("orbit")) {
+      actions.push({ type: "OPEN_3D_ORBIT", params: {} });
+    }
+    if (lower.includes("jwst") || lower.includes("hubble") || lower.includes("hst") || lower.includes("pip")) {
+      actions.push({ type: "OPEN_JWST", params: {} });
+    }
+    if (lower.includes("sed") || lower.includes("crossmatch") || lower.includes("eşleş")) {
+      actions.push({ type: "OPEN_CROSSMATCH", params: {} });
+    }
+    if (lower.includes("pdf") || lower.includes("rapor") || lower.includes("report")) {
+      actions.push({ type: "GENERATE_PDF", params: {} });
+    }
+    if (lower.includes("demo") || lower.includes("tur") || lower.includes("tour")) {
+      actions.push({ type: "START_DEMO_TOUR", params: {} });
+    }
+
+    const reply =
+      params.lang === "tr"
+        ? `Komut ayrıştırıldı (${actions.length} aksiyon uygulandı — yerel kural motoru).`
+        : `Command parsed (${actions.length} action(s) executed — local rule parser).`;
+
+    return {
+      fromCache: true,
+      data: {
+        reply,
+        lang: params.lang,
+        actions,
+      },
+    };
+  }
+}
+
+export async function classifyTarget(params: {
+  flux_ujy?: number[];
+  image?: SkyImage;
+  ra?: number;
+  dec?: number;
+}): Promise<{ data: AiClassifyResponse; fromCache: boolean }> {
+  try {
+    const data = await fetchJson<AiClassifyResponse>("/api/v1/ai/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flux_ujy: params.flux_ujy, image: params.image }),
+    });
+    return { data, fromCache: false };
+  } catch {
+    const id =
+      params.ra !== undefined && params.dec !== undefined
+        ? matchDemoId(params.ra, params.dec)
+        : null;
+
+    if (id === "wise-0855") {
+      return {
+        fromCache: true,
+        data: {
+          top_class: "cold_brown_dwarf",
+          anomaly_score: 0.88,
+          probabilities: {
+            cold_brown_dwarf: 0.91,
+            planet_x_candidate: 0.05,
+            young_variable_star: 0.01,
+            main_sequence_star: 0.01,
+            high_z_galaxy: 0.02,
+          },
+          model_versions: {
+            "1d_cnn": "aeon-spec-cnn-v1.0-fallback",
+            patch_vit: "aeon-patch-vit-v1.0-fallback",
+          },
+        },
+      };
+    }
+
+    if (id === "rw-aur") {
+      return {
+        fromCache: true,
+        data: {
+          top_class: "young_variable_star",
+          anomaly_score: 0.72,
+          probabilities: {
+            young_variable_star: 0.89,
+            main_sequence_star: 0.07,
+            high_z_galaxy: 0.02,
+            cold_brown_dwarf: 0.01,
+            planet_x_candidate: 0.01,
+          },
+          model_versions: {
+            "1d_cnn": "aeon-spec-cnn-v1.0-fallback",
+            patch_vit: "aeon-patch-vit-v1.0-fallback",
+          },
+        },
+      };
+    }
+
+    if (id === "px-2026-09") {
+      return {
+        fromCache: true,
+        data: {
+          top_class: "planet_x_candidate",
+          anomaly_score: 0.96,
+          probabilities: {
+            planet_x_candidate: 0.87,
+            cold_brown_dwarf: 0.09,
+            high_z_galaxy: 0.02,
+            young_variable_star: 0.01,
+            main_sequence_star: 0.01,
+          },
+          model_versions: {
+            "1d_cnn": "aeon-spec-cnn-v1.0-fallback",
+            patch_vit: "aeon-patch-vit-v1.0-fallback",
+          },
+        },
+      };
+    }
+
+    return {
+      fromCache: true,
+      data: {
+        top_class: "main_sequence_star",
+        anomaly_score: 0.24,
+        probabilities: {
+          main_sequence_star: 0.72,
+          young_variable_star: 0.12,
+          high_z_galaxy: 0.08,
+          cold_brown_dwarf: 0.05,
+          planet_x_candidate: 0.03,
+        },
+        model_versions: {
+          "1d_cnn": "aeon-spec-cnn-v1.0-fallback",
+          patch_vit: "aeon-patch-vit-v1.0-fallback",
+        },
       },
     };
   }

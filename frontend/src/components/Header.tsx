@@ -8,10 +8,16 @@ import type { DataMode } from "@/lib/api";
 interface HeaderProps {
   dataMode: DataMode | "checking";
   onOpenShortcuts: () => void;
+  onOpenCmdPalette?: () => void;
   onStartDemoTour?: () => void;
 }
 
-export function Header({ dataMode, onOpenShortcuts, onStartDemoTour }: HeaderProps) {
+export function Header({
+  dataMode,
+  onOpenShortcuts,
+  onOpenCmdPalette,
+  onStartDemoTour,
+}: HeaderProps) {
   const { lang, setLang, dict } = useI18n();
 
   const modeBadgeClass =
@@ -65,9 +71,11 @@ export function Header({ dataMode, onOpenShortcuts, onStartDemoTour }: HeaderPro
             <span>{dict.header.demoTour}</span>
           </button>
 
-          {/* Cmd+K Hint */}
-          <div
-            className="hidden items-center gap-1.5 rounded-lg border border-violet-400/25 bg-violet-500/10 px-2.5 py-1.5 text-xs text-violet-200 md:inline-flex"
+          {/* Cmd+K Button */}
+          <button
+            type="button"
+            onClick={onOpenCmdPalette}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-500/15 px-2.5 py-1.5 text-xs font-medium text-violet-200 transition hover:bg-violet-500/25"
             title={dict.shortcuts.items.k}
           >
             <Sparkles className="h-3.5 w-3.5 text-violet-300" />
@@ -75,7 +83,7 @@ export function Header({ dataMode, onOpenShortcuts, onStartDemoTour }: HeaderPro
             <kbd className="aeon-mono rounded border border-white/15 bg-black/40 px-1 text-[10px] text-slate-300">
               ⌘K
             </kbd>
-          </div>
+          </button>
 
           {/* TR | EN Toggle */}
           <div

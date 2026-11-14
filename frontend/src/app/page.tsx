@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Layers, Orbit, Radar } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Layers, Orbit, Radar, Sparkles } from "lucide-react";
+import { AstroLlmModal } from "@/components/AstroLlmModal";
+import { ClassificationCard } from "@/components/ClassificationCard";
 import { CrossmatchSedPanel } from "@/components/CrossmatchSedPanel";
 import { DifferencePanel } from "@/components/DifferencePanel";
 import { Header } from "@/components/Header";
@@ -11,8 +13,9 @@ import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { SkyMapPanel } from "@/components/SkyMapPanel";
 import { SolarSystem3DPanel } from "@/components/SolarSystem3DPanel";
 import { SpectrumPanel } from "@/components/SpectrumPanel";
-import { useI18n } from "@/i18n/context";
+import { useI18n, type Lang } from "@/i18n/context";
 import {
+  EPOCHS,
   getHealth,
   searchCatalog,
   type AstrometryPoint,
@@ -20,12 +23,14 @@ import {
   type CrossmatchResult,
   type DataMode,
   type Epoch,
+  type UiAction,
 } from "@/lib/api";
 
 export default function HomePage() {
-  const { dict } = useI18n();
+  const { dict, setLang } = useI18n();
   const [dataMode, setDataMode] = useState<DataMode | "checking">("checking");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(true);
   const [stackOpen, setStackOpen] = useState(true);
   const [orbitOpen, setOrbitOpen] = useState(true);
@@ -62,6 +67,12 @@ export default function HomePage() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setCmdOpen((prev) => !prev);
+        return;
+      }
+
       const target = e.target as HTMLElement | null;
       const isInput =
         target?.tagName === "INPUT" ||
@@ -88,11 +99,80 @@ export default function HomePage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  const executeUiActions = useCallback(
+    async (actions: UiAction[]) => {
+      for (const act of actions) {
+        const p = act.params ?? {};
+        switch (act.type) {
+          case "FLY_TO": {
+            const q = typeof p.target_id === "string" ? p.target_id : typeof p.q === "string" ? p.q : null;
+            const ra = typeof p.ra === "number" ? p.ra : undefined;
+            const dec = typeof p.dec === "number" ? p.dec : undefined;
+            if (q) {
+              try {
+                const { data } = await searchCatalog({ q, epoch });
+                if (data.results[0]) {
+                  setSelectedObject(data.results[0]);
+                  setCoords({ ra: data.results[0].ra, dec: data.results[0].dec });
+                  break;
+                }
+              } catch {
+                // fallback to coords below
+              }
+            }
+            if (ra !== undefined && dec !== undefined) {
+              setCoords({ ra, dec });
+            }
+            break;
+          }
+          case "SET_EPOCH": {
+            const ep = p.epoch as Epoch | undefined;
+            if (ep && EPOCHS.includes(ep)) {
+              setEpoch(ep);
+            }
+            break;
+          }
+          case "TOGGLE_DIFF": {
+            setDiffOpen(typeof p.open === "boolean" ? p.open : true);
+            break;
+          }
+          case "RUN_SHIFT_STACK":
+          case "RUN_BLIND_SEARCH": {
+            setStackOpen(true);
+            break;
+          }
+          case "OPEN_3D_ORBIT": {
+            setOrbitOpen(true);
+            break;
+          }
+          case "OPEN_JWST": {
+            setPipOpen(true);
+            break;
+          }
+          case "SET_LANG": {
+            if (p.lang === "tr" || p.lang === "en") {
+              setLang(p.lang as Lang);
+            }
+            break;
+          }
+          case "GENERATE_PDF": {
+            window.print();
+            break;
+          }
+          default:
+            break;
+        }
+      }
+    },
+    [epoch, setLang]
+  );
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header
         dataMode={dataMode}
         onOpenShortcuts={() => setShortcutsOpen(true)}
+        onOpenCmdPalette={() => setCmdOpen(true)}
       />
       <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-5 px-4 py-5 sm:px-6">
         <SkyMapPanel
@@ -146,6 +226,15 @@ export default function HomePage() {
             <Orbit className="h-3.5 w-3.5" />
             <span>{dict.orbit.toggle}</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setCmdOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-violet-400/35 bg-violet-500/15 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:bg-violet-500/25"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>{dict.header.cmdPalette} (⌘K)</span>
+          </button>
         </div>
 
         {diffOpen && (
@@ -155,6 +244,11 @@ export default function HomePage() {
         <SpectrumPanel
           coords={coords}
           epoch={epoch}
+          selectedObject={selectedObject}
+        />
+
+        <ClassificationCard
+          coords={coords}
           selectedObject={selectedObject}
         />
 
@@ -189,6 +283,18 @@ export default function HomePage() {
         onClose={() => setPipOpen(false)}
         overlaps={pipOverlaps}
         coords={coords}
+      />
+
+      <AstroLlmModal
+        open={cmdOpen}
+        onClose={() => setCmdOpen(false)}
+        context={{
+          ra: coords.ra,
+          dec: coords.dec,
+          epoch,
+          target_id: selectedObject?.id,
+        }}
+        onExecuteActions={executeUiActions}
       />
 
       <ShortcutsModal
