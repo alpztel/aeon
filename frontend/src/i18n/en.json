@@ -55,7 +55,7 @@
     "realData": "Real SPHEREx",
     "modelData": "Physical model",
     "frames": "frames",
-    "noObservation": "no SPHEREx visit in this epoch",
+    "noObservation": "no usable SPHEREx data in this epoch",
     "coverageLegendReal": "real SPHEREx data",
     "coverageLegendModel": "physical model"
   },
