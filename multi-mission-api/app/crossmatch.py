@@ -16,6 +16,7 @@ Flux conversion:
 
 from __future__ import annotations
 
+from functools import lru_cache
 import hashlib
 import json
 import math
@@ -60,6 +61,7 @@ def angular_sep_arcsec(ra1: float, dec1: float, ra2: float, dec2: float) -> floa
     return math.degrees(2.0 * math.asin(math.sqrt(a))) * 3600.0
 
 
+@lru_cache(maxsize=1)
 def _load_fixtures() -> dict[str, Any]:
     return json.loads(FIXTURES_PATH.read_text(encoding="utf-8"))
 
@@ -78,7 +80,7 @@ def _match_fixture(ra: float, dec: float) -> dict[str, Any] | None:
 def _fetch_spherex_spectrum(ra: float, dec: float) -> dict[str, Any] | None:
     core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
     try:
-        with httpx.Client(timeout=2.5) as client:
+        with httpx.Client(timeout=2.5, verify=not core_url.startswith("http://")) as client:
             resp = client.get(f"{core_url}/api/v1/spectrum", params={"ra": ra, "dec": dec, "epoch": "2026-Q1"})
             if resp.status_code == 200:
                 return resp.json()
