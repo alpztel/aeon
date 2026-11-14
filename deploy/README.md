@@ -34,3 +34,16 @@
 docker compose -f deploy/docker-compose.yml up -d --build
 pip install pytest httpx jsonschema && AEON_GATEWAY_URL=http://localhost pytest -q deploy/e2e
 ```
+
+## Bellek ve işçi ayarları (2 GB droplet)
+
+| Değişken | Varsayılan | Not |
+|---|---|---|
+| `WEB_CONCURRENCY` | 2 | backend web işçisi |
+| `AEON_HEAVY_WORKERS` | 1 | işçi başına ağır iş süreci (kör tarama, yörünge uydurma) |
+| `AI_WEB_CONCURRENCY` | 1 | AI motoru web işçisi; her ek işçi ~170 MB |
+| `OMP_NUM_THREADS` | 1 | AI motorunda torch iş parçacığı; küçük 1D-CNN için fazlası CPU'yu boşa harcar |
+| `AEON_CATALOG_CACHE_TTL` | 600 | AI motorunun katalog sorgu önbelleği (s) |
+| `AEON_UPSTREAM_BACKOFF_S` | 5 | backend hata/zaman aşımı sonrası AI motorunun bekleme süresi (s) |
+
+Stres testinde (c150) tüm sistemin tepe belleği ~1,8 GB'dır; droplet büyütülürse önce `AI_WEB_CONCURRENCY=2` açın.
