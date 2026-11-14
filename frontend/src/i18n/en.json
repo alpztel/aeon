@@ -181,7 +181,8 @@
     "anomalyScore": "ViT Anomaly Score",
     "highAnomaly": "High Discovery Priority",
     "normalAnomaly": "Nominal Field / Catalog",
-    "models": "Models"
+    "models": "Models",
+    "serviceUnavailable": "AI engine not connected — no classification is shown until it responds."
   },
   "community": {
     "gcnLabel": "NASA GCN Live Notices",
@@ -195,7 +196,9 @@
     "notesPlaceholder": "Discovery notes (e.g. dipole S/N, CH4 depth)...",
     "vote": "Upvote",
     "flyTo": "Inspect",
-    "issueOpened": "GitHub Issue"
+    "issueOpened": "GitHub Issue",
+    "empty": "No candidates yet.",
+    "offlineEmpty": "Candidate service not connected — only your own submissions are kept in this browser session."
   },
   "tour": {
     "badge": "Jury Demo Tour",

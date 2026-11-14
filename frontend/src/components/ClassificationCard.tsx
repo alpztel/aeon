@@ -31,6 +31,7 @@ export function ClassificationCard({
 
   const [result, setResult] = useState<AiClassifyResponse | null>(null);
   const [fromCache, setFromCache] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -39,8 +40,13 @@ export function ClassificationCard({
         if (!active) return;
         setResult(data);
         setFromCache(cached);
+        setUnavailable(false);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!active) return;
+        setResult(null);
+        setUnavailable(true);
+      });
     return () => {
       active = false;
     };
@@ -51,6 +57,11 @@ export function ClassificationCard({
 
   return (
     <section className="aeon-panel rounded-2xl p-4 sm:p-5">
+      {unavailable && (
+        <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {dict.ai.serviceUnavailable}
+        </p>
+      )}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2.5">
           <Cpu className="h-4 w-4 text-violet-400" />

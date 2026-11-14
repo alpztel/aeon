@@ -620,135 +620,14 @@ export async function classifyTarget(params: {
   ra?: number;
   dec?: number;
 }): Promise<{ data: AiClassifyResponse; fromCache: boolean }> {
-  try {
-    const data = await fetchJson<AiClassifyResponse>("/api/v1/ai/classify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ flux_ujy: params.flux_ujy, image: params.image }),
-    });
-    return { data, fromCache: false };
-  } catch {
-    const id =
-      params.ra !== undefined && params.dec !== undefined
-        ? matchDemoId(params.ra, params.dec)
-        : null;
-
-    if (id === "wise-0855") {
-      return {
-        fromCache: true,
-        data: {
-          top_class: "cold_brown_dwarf",
-          anomaly_score: 0.88,
-          probabilities: {
-            cold_brown_dwarf: 0.91,
-            planet_x_candidate: 0.05,
-            young_variable_star: 0.01,
-            main_sequence_star: 0.01,
-            high_z_galaxy: 0.02,
-          },
-          model_versions: {
-            "1d_cnn": "aeon-spec-cnn-v1.0-fallback",
-            patch_vit: "aeon-patch-vit-v1.0-fallback",
-          },
-        },
-      };
-    }
-
-    if (id === "rw-aur") {
-      return {
-        fromCache: true,
-        data: {
-          top_class: "young_variable_star",
-          anomaly_score: 0.72,
-          probabilities: {
-            young_variable_star: 0.89,
-            main_sequence_star: 0.07,
-            high_z_galaxy: 0.02,
-            cold_brown_dwarf: 0.01,
-            planet_x_candidate: 0.01,
-          },
-          model_versions: {
-            "1d_cnn": "aeon-spec-cnn-v1.0-fallback",
-            patch_vit: "aeon-patch-vit-v1.0-fallback",
-          },
-        },
-      };
-    }
-
-    if (id === "px-2026-09") {
-      return {
-        fromCache: true,
-        data: {
-          top_class: "planet_x_candidate",
-          anomaly_score: 0.96,
-          probabilities: {
-            planet_x_candidate: 0.87,
-            cold_brown_dwarf: 0.09,
-            high_z_galaxy: 0.02,
-            young_variable_star: 0.01,
-            main_sequence_star: 0.01,
-          },
-          model_versions: {
-            "1d_cnn": "aeon-spec-cnn-v1.0-fallback",
-            patch_vit: "aeon-patch-vit-v1.0-fallback",
-          },
-        },
-      };
-    }
-
-    return {
-      fromCache: true,
-      data: {
-        top_class: "main_sequence_star",
-        anomaly_score: 0.24,
-        probabilities: {
-          main_sequence_star: 0.72,
-          young_variable_star: 0.12,
-          high_z_galaxy: 0.08,
-          cold_brown_dwarf: 0.05,
-          planet_x_candidate: 0.03,
-        },
-        model_versions: {
-          "1d_cnn": "aeon-spec-cnn-v1.0-fallback",
-          patch_vit: "aeon-patch-vit-v1.0-fallback",
-        },
-      },
-    };
-  }
+  // No offline substitute: class probabilities and anomaly scores only come from the ai-engine.
+  const data = await fetchJson<AiClassifyResponse>("/api/v1/ai/classify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ flux_ujy: params.flux_ujy, image: params.image }),
+  });
+  return { data, fromCache: false };
 }
-
-const FALLBACK_GCN_ALERTS: GcnAlert[] = [
-  {
-    id: "GCN-2026-40112",
-    kind: "GRB",
-    time_utc: "2026-04-19T14:22:10Z",
-    ra: 133.82,
-    dec: -7.21,
-    error_radius_deg: 0.08,
-    title: "Fermi-GBM & Swift-BAT GRB 260419A Localization (Archived Notice)",
-    url: "https://gcn.nasa.gov/circulars",
-  },
-  {
-    id: "GCN-2026-40098",
-    kind: "Neutrino",
-    time_utc: "2026-04-18T21:05:44Z",
-    ra: 77.04,
-    dec: 30.38,
-    error_radius_deg: 0.45,
-    title: "IceCube-260418A High-Energy Track Alert near Auriga (Archived Notice)",
-    url: "https://gcn.nasa.gov/circulars",
-  },
-  {
-    id: "GCN-2026-40071",
-    kind: "SN",
-    time_utc: "2026-04-17T08:14:00Z",
-    ra: 51.18,
-    dec: 14.82,
-    error_radius_deg: 0.02,
-    title: "ZTF26aakq Transient Counterpart Candidate Follow-up (Archived Notice)",
-    url: "https://gcn.nasa.gov/circulars",
-  },
-];
 
 export async function getGcnAlerts(
   limit = 10
@@ -757,51 +636,15 @@ export async function getGcnAlerts(
     const data = await fetchJson<GcnAlert[]>(`/api/v1/alerts/gcn?limit=${limit}`);
     return { data, fromCache: false };
   } catch {
-    return { data: FALLBACK_GCN_ALERTS.slice(0, limit), fromCache: true };
+    // GCN service unreachable: show nothing rather than invented notices.
+    return { data: [], fromCache: true };
   }
 }
 
 const CANDIDATES_STORAGE_KEY = "aeon_candidates_pool";
 
-const INITIAL_CANDIDATES: Candidate[] = [
-  {
-    id: "cand-wise-0855",
-    ra: 133.79513,
-    dec: -7.24514,
-    object_class: "cold_brown_dwarf",
-    anomaly_score: 0.88,
-    snr: 18.4,
-    votes: 14,
-    submitted_by: "IMU-AstroTeam",
-    created_utc: "2026-04-19T10:00:00Z",
-    notes: "High proper-motion (8.1 arcsec/yr) Y-dwarf dipole + deep 3.3 um CH4 band.",
-  },
-  {
-    id: "cand-px-2026-09",
-    ra: 51.2,
-    dec: 14.8,
-    object_class: "planet_x_candidate",
-    anomaly_score: 0.96,
-    snr: 7.4,
-    votes: 23,
-    submitted_by: "AEON-ShiftStack-Bot",
-    created_utc: "2026-04-19T11:30:00Z",
-    github_issue_url: "https://github.com/alpztel/aeon/issues",
-    notes: "[SYNTHETIC TEST] Recovered at 110 arcsec/yr, PA 62 deg, d = 520 AU.",
-  },
-  {
-    id: "cand-rw-aur",
-    ra: 76.9564,
-    dec: 30.4013,
-    object_class: "young_variable_star",
-    anomaly_score: 0.72,
-    snr: 42.1,
-    votes: 9,
-    submitted_by: "T-Tauri-Patrol",
-    created_utc: "2026-04-18T19:15:00Z",
-    notes: "Strong 102-band continuum variability across 2026-Q1..Q4.",
-  },
-];
+// Offline mode keeps only the visitor's own submissions in sessionStorage; nothing is pre-filled.
+const INITIAL_CANDIDATES: Candidate[] = [];
 
 function loadLocalCandidates(): Candidate[] {
   try {

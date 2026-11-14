@@ -79,21 +79,33 @@ export function JwstPipWindow({
                 </div>
               </dl>
 
-              {typeof (item as { preview_url?: unknown }).preview_url === "string" &&
-              (item as { preview_url?: string }).preview_url ? (
-                <div className="mt-2.5 overflow-hidden rounded-lg border border-white/10 bg-black">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={(item as { preview_url: string }).preview_url}
-                    alt={`${item.mission ?? "MAST"} ${item.obs_id ?? ""}`}
-                    className="h-28 w-full object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="mt-2.5 flex h-16 items-center justify-center rounded-lg border border-white/10 bg-black/40 px-3 text-center text-[11px] text-slate-400">
-                  {dict.missions.noPreview}
-                </div>
-              )}
+              {(() => {
+                const url = (item as { preview_url?: unknown }).preview_url;
+                if (typeof url !== "string" || !url) {
+                  return (
+                    <div className="mt-2.5 flex h-16 items-center justify-center rounded-lg border border-white/10 bg-black/40 px-3 text-center text-[11px] text-slate-400">
+                      {dict.missions.noPreview}
+                    </div>
+                  );
+                }
+                // Only real image URLs are embedded; archive portal pages are offered as links.
+                const isImage = /\.(png|jpe?g|gif|webp)(\?|$)/i.test(url);
+                return isImage ? (
+                  <div className="mt-2.5 overflow-hidden rounded-lg border border-white/10 bg-black">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`${item.mission ?? "MAST"} ${item.obs_id ?? ""}`} className="h-28 w-full object-cover" />
+                  </div>
+                ) : (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-medium text-cyan-200 hover:bg-cyan-500/20"
+                  >
+                    {dict.missions.openMast} ↗
+                  </a>
+                );
+              })()}
             </div>
           ))}
         </div>

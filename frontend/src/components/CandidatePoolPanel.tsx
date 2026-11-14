@@ -174,6 +174,11 @@ export function CandidatePoolPanel({
 
       {/* Candidates Leaderboard */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {candidates.length === 0 && (
+          <p className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-slate-400">
+            {fromCache ? dict.community.offlineEmpty : dict.community.empty}
+          </p>
+        )}
         {candidates.map((c, idx) => (
           <div
             key={c.id ?? idx}

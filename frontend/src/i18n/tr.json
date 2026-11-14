@@ -181,7 +181,8 @@
     "anomalyScore": "ViT Anomali Skoru",
     "highAnomaly": "Yüksek Keşif Önceliği",
     "normalAnomaly": "Normal Alan / Katalog",
-    "models": "Modeller"
+    "models": "Modeller",
+    "serviceUnavailable": "AI motoru bağlı değil — yanıt verene kadar sınıflandırma gösterilmez."
   },
   "community": {
     "gcnLabel": "NASA GCN Canlı Uyarılar",
@@ -195,7 +196,9 @@
     "notesPlaceholder": "Keşif notları (ör. dipol S/N, CH4 derinliği)...",
     "vote": "Oy Ver",
     "flyTo": "İncele",
-    "issueOpened": "GitHub Issue"
+    "issueOpened": "GitHub Issue",
+    "empty": "Henüz aday yok.",
+    "offlineEmpty": "Aday servisi bağlı değil — yalnız bu tarayıcı oturumundaki kendi başvurularınız tutulur."
   },
   "tour": {
     "badge": "Jüri Demo Turu",
