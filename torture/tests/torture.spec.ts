@@ -200,18 +200,6 @@ test("T14 page goes quiet after load (no polling / refetch loops)", async ({ pag
 });
 
 
-test("T14 page goes quiet after load (no polling / refetch loops)", async ({ page }) => {
-  const urls: string[] = [];
-  await page.goto("/");
-  await settle(page);
-  await page.waitForTimeout(8000);
-  page.on("request", (r) => urls.push(`${r.method()} ${r.url().replace(/\?.*/, "")}`));
-  await page.waitForTimeout(10_000);
-  const counts: Record<string, number> = {};
-  for (const u of urls) counts[u] = (counts[u] ?? 0) + 1;
-  expect(urls.length, `requests in 10 s of idle: ${JSON.stringify(counts)}`).toBeLessThan(5);
-});
-
 test("T15 Astro-LLM palette: Ctrl+K opens, TR command flies to the target", async ({ page }) => {
   const errors = trackErrors(page);
   await page.goto("/");
