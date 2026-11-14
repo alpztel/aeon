@@ -49,7 +49,7 @@ DEFAULT_RETRIES = 4
 DEFAULT_MAX_FILE_MB = 25.0          # per downloaded cutout (EPSF alone is ~4 MB)
 DEFAULT_MAX_TOTAL_MB = 3000.0       # per fetch run, counted on downloaded bytes
 
-# Demo targets (AGENTS.md section 4). Positions: catalog positions propagated to 2026.0.
+# Demo targets (AGENTS.md section 4). Positions: apparent geocentric catalog positions at 2026.0.
 # px-2026-09 is SYNTHETIC: only the real SPHEREx background of its field is downloaded.
 DEMO_TARGETS = ("wise-0855", "rw-aur", "px-2026-09")
 
@@ -254,10 +254,11 @@ def _spread(recs: list[SiaRecord], n: int) -> list[SiaRecord]:
 
 
 def demo_position(target_id: str, t_year: float = 2026.0) -> tuple[float, float, str]:
-    from .catalog import ENTRIES_BY_ID, position_at
+    from .catalog import ENTRIES_BY_ID
+    from .ephem import apparent_position
 
     e = ENTRIES_BY_ID[target_id]
-    ra, dec = position_at(e, t_year)
+    ra, dec = apparent_position(e, t_year)
     note = (f"{e.name}: field of a SYNTHETIC injected candidate; only the real sky background is real"
             if e.is_synthetic else f"{e.name}: real target")
     return ra, dec, note

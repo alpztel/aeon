@@ -10,8 +10,8 @@ Owner: Node 1 · branch `agent/claude-leader-backend`. Implements the `core` pat
 | `GET /api/v1/sky/cutout` | Background-subtracted cutout as JSON or FITS (astropy WCS header) |
 | `GET /api/v1/spectrum` | 102-band spectrum: photutils forced photometry on a spectral cube, molecular band depths |
 | `POST /api/v1/analysis/difference` | I(t2) − I(t1), matched-filter S/N map, ± detections (photutils segmentation) |
-| `POST /api/v1/analysis/shift-stack` | Static-sky removal, sub-pixel shift along (rate, PA), stack, S/N gain |
-| `POST /api/v1/analysis/blind-search` | 5×5 (rate, PA) grid + 5×5 refinement, best stack |
+| `POST /api/v1/analysis/shift-stack` | Static-sky removal, digital tracking along the predicted apparent track (rate, PA, optional distance for Earth parallax), S/N gain |
+| `POST /api/v1/analysis/blind-search` | distance (uniform in parallax) × 5×5 (rate, PA) grid + local refinement, best stack |
 | `POST /api/v1/orbit/simulate` | REBOUND IAS15: Sun + Jupiter…Neptune + particle, 1/5/10-yr horizons |
 
 ## Modules (`aeon/`)
@@ -25,6 +25,7 @@ Owner: Node 1 · branch `agent/claude-leader-backend`. Implements the `core` pat
   pedestal, depth-calibrated noise, FITS output.
 - `photometry.py`, `analysis.py` – Astropy/Photutils pipeline shared by model and archive data.
 - `orbit.py` – REBOUND integration, JPL planetary elements, state ↔ elements conversion.
+- `ephem.py` – apparent geocentric positions: Earth ephemeris (astropy/ERFA), parallax, hypothesis tracks.
 - `archive.py` – real FITS mode: reads **SPHEREx Level 2 spectral images** (IMAGE/FLAGS/VARIANCE/WCS-WAVE,
   MJy/sr, flagged pixels → NaN, per-pixel LVF wavelength) and generic 2-D WCS images from `AEON_DATA_DIR`,
   resampled north-up/east-left in µJy/pixel. Details: [`docs/spherex-l2-notes.md`](docs/spherex-l2-notes.md).
@@ -34,9 +35,16 @@ Owner: Node 1 · branch `agent/claude-leader-backend`. Implements the `core` pat
 ## Science notes and limits
 
 - **PX-2026-09 is synthetic** (`is_synthetic: true`), injected to validate the detection chain.
-  In the model, single-exposure S/N ≈ 1.5–3; a 24-exposure stack along 110″/yr, PA 62° gives S/N ≈ 6–9.
-- Shift-and-stack rates are **heliocentric**: a real search must first remove Earth's reflex
-  (parallax) motion for each trial distance; the model sky renders PX with heliocentric motion only.
+- **Earth parallax is modelled and tracked.** Catalog and rendered positions are apparent geocentric
+  positions (proper motion + parallax from Earth's ERFA ephemeris). At 520 AU the annual parallax
+  ellipse has a ~397″ semi-major axis, so a straight-line stack misses PX-2026-09 (S/N ≈ 2). Digital
+  tracking with `distance_au: 520` recovers it (single exposure S/N ≈ 2, 24-exposure stack S/N ≈ 10), and
+  the blind search over distance × rate × PA (~1700 hypotheses, ~4 s) recovers 110″/yr, PA ≈ 60°,
+  d ≈ 520 AU.
+- Hypotheses assume linear heliocentric motion over the one-year baseline (orbital curvature at
+  hundreds of AU is far below a pixel per year). Blind-search S/N is the maximum over all hypotheses,
+  so its false-alarm level rises with `n_hypotheses` (reported in the response).
+- Frame cadence is uniform over 2026; real SPHEREx visits a field in ~2 windows per year (roadmap item 7).
 - WISE 0855 positions use linear proper motion from epoch 2010.5 (parallax 0.44″ ignored).
 - Orbit forecasts start at 2026.5 from heliocentric direction + distance + angular rate; the
   "Kepler-only deviation" compares against a Sun-only integration (includes the Sun's reflex wobble).

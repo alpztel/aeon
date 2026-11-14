@@ -8,7 +8,7 @@ from astropy.io import fits
 
 from conftest import assert_schema
 
-PX = (51.2139524, 14.8071725)  # PX-2026-09 at mid-survey (2026.5)
+PX = (51.295473, 14.8325559)  # PX-2026-09 apparent geocentric position at mid-survey (2026.5)
 
 
 def test_contract_has_11_paths(contract):
@@ -95,25 +95,37 @@ def test_difference_rejects_same_epoch(client):
     assert r.status_code == 422
 
 
-def test_shift_stack_recovers_planet_x(client):
-    body = client.post("/api/v1/analysis/shift-stack", json={"ra": PX[0], "dec": PX[1], "rate_arcsec_yr": 110, "pa_deg": 62}).json()
+def test_shift_stack_recovers_planet_x_with_parallax(client):
+    body = client.post("/api/v1/analysis/shift-stack", json={
+        "ra": PX[0], "dec": PX[1], "rate_arcsec_yr": 110, "pa_deg": 62, "distance_au": 520}).json()
     assert_schema(body, "ShiftStackResult")
     assert body["snr_single_frame"] < 3 < 5 < body["snr_stacked"]
+    assert body["motion_frame"].startswith("geocentric") and len(body["track"]) == body["n_frames"]
     sep = math.hypot((body["peak"]["ra"] - PX[0]) * math.cos(math.radians(PX[1])), body["peak"]["dec"] - PX[1]) * 3600
     assert sep < 6.2
 
 
+def test_linear_stack_misses_planet_x(client):
+    # Without Earth-parallax tracking the ~400" annual parallax ellipse smears the object out.
+    body = client.post("/api/v1/analysis/shift-stack", json={"ra": PX[0], "dec": PX[1], "rate_arcsec_yr": 110, "pa_deg": 62}).json()
+    assert body["distance_au"] is None and body["snr_stacked"] < 5
+
+
 def test_shift_stack_wrong_velocity_fails(client):
-    body = client.post("/api/v1/analysis/shift-stack", json={"ra": PX[0], "dec": PX[1], "rate_arcsec_yr": 110, "pa_deg": 242}).json()
+    body = client.post("/api/v1/analysis/shift-stack", json={
+        "ra": PX[0], "dec": PX[1], "rate_arcsec_yr": 110, "pa_deg": 242, "distance_au": 520}).json()
     assert body["snr_stacked"] < 5
 
 
-def test_blind_search_finds_velocity(client):
+def test_blind_search_finds_velocity_and_distance(client):
     body = client.post("/api/v1/analysis/blind-search", json={"ra": PX[0], "dec": PX[1]}).json()
     assert_schema(body, "BlindSearchResult")
     assert len(body["grid"]) == 5 and len(body["grid"][0]) == 5
+    assert len(body["distance_profile"]) == len(body["distances_au"]) > 10
     best = body["best"]
-    assert abs(best["rate_arcsec_yr"] - 110) <= 25 and abs(best["pa_deg"] - 62) <= 10 and best["snr_stacked"] > 5
+    assert abs(best["rate_arcsec_yr"] - 110) <= 25 and abs(best["pa_deg"] - 62) <= 10
+    assert abs(best["distance_au"] - 520) / 520 < 0.05
+    assert best["snr_stacked"] > 5
 
 
 def test_orbit_planet_x(client):

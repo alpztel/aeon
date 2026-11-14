@@ -37,14 +37,6 @@ def snr_map(img: np.ndarray, psf_sigma_px: float, weight: np.ndarray | None = No
     return (filt - med) / max(std, 1e-12)
 
 
-def _offset_px(rate_arcsec_yr: float, pa_deg: float, dt_yr: np.ndarray, scale_arcsec: float):
-    """Pixel displacement (dx, dy) of an object moving at rate/PA after dt years."""
-    pa = math.radians(pa_deg)
-    d_east = rate_arcsec_yr * math.sin(pa) * dt_yr
-    d_north = rate_arcsec_yr * math.cos(pa) * dt_yr
-    return -d_east / scale_arcsec, d_north / scale_arcsec
-
-
 def to_detection(x: float, y: float, w: WCS, flux: float, snr: float, sign: str = "positive") -> dict:
     ra, dec = w.all_pix2world([[x, y]], 0)[0]
     return {"x": round(float(x), 3), "y": round(float(y), 3), "ra": round(float(ra) % 360, 7),
@@ -92,43 +84,6 @@ def remove_static_sky(frames: np.ndarray) -> np.ndarray:
     return bs - template
 
 
-def shift_stack(residuals: np.ndarray, times: np.ndarray, rate_arcsec_yr: float, pa_deg: float,
-                scale_arcsec: float, combine: str = "mean", t_ref: float | None = None) -> tuple[np.ndarray, np.ndarray]:
-    """Shift each frame back along the trial motion (sub-pixel, bilinear) and combine.
-    Returns (stack, coverage) where coverage is the fraction of frames contributing per pixel."""
-    t_ref = float(np.mean(times)) if t_ref is None else t_ref
-    dx, dy = _offset_px(rate_arcsec_yr, pa_deg, times - t_ref, scale_arcsec)
-    shifted = np.empty_like(residuals)
-    cover = np.empty_like(residuals)
-    ones = np.ones(residuals.shape[1:])
-    for i in range(len(residuals)):
-        shifted[i] = ndimage.shift(residuals[i], (-dy[i], -dx[i]), order=1, mode="constant", cval=0.0)
-        cover[i] = ndimage.shift(ones, (-dy[i], -dx[i]), order=1, mode="constant", cval=0.0)
-    coverage = cover.sum(axis=0)
-    if combine == "median":
-        masked = np.where(cover > 0.5, shifted, np.nan)
-        with np.errstate(all="ignore"):
-            stack = np.nan_to_num(np.nanmedian(masked, axis=0))
-    else:
-        stack = np.where(coverage > 0, shifted.sum(axis=0) / np.maximum(coverage, 1e-9), 0.0)
-    return stack, coverage / len(residuals)
-
-
-def stack_peak(stack: np.ndarray, coverage: np.ndarray, psf_sigma_px: float,
-               search_radius_px: float | None = None) -> tuple[float, tuple[int, int], np.ndarray]:
-    """Peak matched-filter S/N within well-covered pixels (optionally near the image centre)."""
-    good = coverage >= 0.75
-    snr = snr_map(stack, psf_sigma_px, weight=good.astype(float))
-    mask = good.copy()
-    if search_radius_px is not None:
-        ny, nx = stack.shape
-        yy, xx = np.mgrid[:ny, :nx]
-        mask &= np.hypot(xx - (nx - 1) / 2, yy - (ny - 1) / 2) <= search_radius_px
-    masked = np.where(mask, snr, -np.inf)
-    iy, ix = np.unravel_index(int(np.argmax(masked)), masked.shape)
-    return float(masked[iy, ix]), (int(iy), int(ix)), snr
-
-
 def refine_centroid(img: np.ndarray, iy: int, ix: int, half: int = 2) -> tuple[float, float, float]:
     """Flux-weighted centroid and summed flux in a (2*half+1)^2 box around the peak."""
     ny, nx = img.shape
@@ -142,61 +97,128 @@ def refine_centroid(img: np.ndarray, iy: int, ix: int, half: int = 2) -> tuple[f
     return float((xx * box).sum() / tot), float((yy * box).sum() / tot), float(img[y0:y1, x0:x1].sum())
 
 
-def run_shift_stack(frames: np.ndarray, times: np.ndarray, w: WCS, psf_sigma_px: float, scale_arcsec: float,
-                    rate: float, pa: float, combine: str = "mean", residuals: np.ndarray | None = None) -> dict:
-    res = remove_static_sky(frames) if residuals is None else residuals
-    t_ref = float(np.mean(times))
-    stack, cov = shift_stack(res, times, rate, pa, scale_arcsec, combine, t_ref)
-    peak_snr, (iy, ix), _ = stack_peak(stack, cov, psf_sigma_px)
-    x, y, flux = refine_centroid(stack, iy, ix)
-    # Single-frame S/N at the motion-corrected sub-pixel location in the frame nearest t_ref
-    # (bilinear interpolation of the S/N map: unbiased, no peak-picking).
+# --------------------------------------------------------------------------------------------
+# Digital tracking (shift-and-stack along an arbitrary predicted track)
+# --------------------------------------------------------------------------------------------
+
+class Tracker:
+    """Stacks static-sky-subtracted frames along predicted tracks.
+
+    For a hypothesis the caller supplies, per frame, the pixel offset (dx, dy) of the object from
+    its reference-epoch position (cx, cy). Each frame is resampled (bilinear) on a co-moving grid
+    centred on the predicted position, and the frames are averaged. Straight lines (linear motion)
+    and Earth-parallax ellipses are handled identically.
+
+    Noise is calibrated once per frame set from a null stack (random sub-pixel offsets), so S/N
+    values of all hypotheses share one scale and small stamps can be scored quickly.
+    """
+
+    def __init__(self, residuals: np.ndarray, psf_sigma_px: float, cx: float, cy: float, seed: int = 7):
+        self.res = residuals
+        self.n = len(residuals)
+        self.cx, self.cy = cx, cy
+        sig = max(psf_sigma_px, 0.5)
+        k = Gaussian2DKernel(x_stddev=sig).array
+        self.kernel = k / k.sum()
+        self.psf_sigma_px = psf_sigma_px
+        rng = np.random.default_rng(seed)
+        ny, nx = residuals.shape[1:]
+        half = max(min(nx, ny) // 2 - 6, 8)
+        null, cov = self.stack(rng.uniform(-3, 3, self.n), rng.uniform(-3, 3, self.n), 2 * half)
+        filt = self._filter(null, cov)
+        _, _, self.sigma_filt = sigma_clipped_stats(filt[cov >= 0.75], sigma=3.0, maxiters=10)
+        self.sigma_filt = max(float(self.sigma_filt), 1e-12)
+        single = ndimage.convolve(residuals[0], self.kernel, mode="nearest")
+        _, _, self.sigma_single = sigma_clipped_stats(single, sigma=3.0, maxiters=10)
+
+    def stack(self, dx: np.ndarray, dy: np.ndarray, size: int, combine: str = "mean"):
+        g = np.arange(size) - (size - 1) / 2.0
+        gy, gx = np.meshgrid(g, g, indexing="ij")
+        # The offset of a hypothesis is constant over the stamp in each frame, so bilinear
+        # resampling reduces to four weighted slices per frame (exact, and far faster than a
+        # general interpolator). Stamps that touch the frame edge fall back to map_coordinates.
+        ny, nx = self.res.shape[1:]
+        g0 = -(size - 1) / 2.0
+        fy0 = self.cy + np.asarray(dy, float) + g0
+        fx0 = self.cx + np.asarray(dx, float) + g0
+        iy = np.floor(fy0).astype(int)
+        ix = np.floor(fx0).astype(int)
+        ty = (fy0 - iy)[:, None, None]
+        tx = (fx0 - ix)[:, None, None]
+        inside = (iy >= 0) & (iy + size + 1 <= ny) & (ix >= 0) & (ix + size + 1 <= nx)
+        if inside.all():
+            off = np.arange(size)
+            f = np.arange(self.n)[:, None, None]
+            r0 = (iy[:, None] + off)[:, :, None]
+            c0 = (ix[:, None] + off)[:, None, :]
+            R = self.res
+            samples = ((1 - ty) * (1 - tx) * R[f, r0, c0] + (1 - ty) * tx * R[f, r0, c0 + 1]
+                       + ty * (1 - tx) * R[f, r0 + 1, c0] + ty * tx * R[f, r0 + 1, c0 + 1])
+        else:
+            samples = np.empty((self.n, size, size))
+            for i in range(self.n):
+                coords = [self.cy + dy[i] + gy, self.cx + dx[i] + gx]
+                samples[i] = ndimage.map_coordinates(self.res[i], coords, order=1, mode="constant", cval=np.nan)
+        valid = np.isfinite(samples)
+        coverage = valid.mean(axis=0)
+        with np.errstate(all="ignore"):
+            if combine == "median":
+                st = np.nanmedian(samples, axis=0)
+            else:
+                st = np.nanmean(samples, axis=0)
+        return np.nan_to_num(st), coverage
+
+    def _filter(self, stack: np.ndarray, coverage: np.ndarray) -> np.ndarray:
+        return ndimage.convolve(np.where(coverage >= 0.75, stack, 0.0), self.kernel, mode="constant")
+
+    def score(self, dx, dy, size: int, search_radius_px: float, combine: str = "mean"):
+        """Peak S/N within `search_radius_px` of the reference position. Returns (snr, iy, ix, stack, cov)."""
+        st, cov = self.stack(dx, dy, size, combine)
+        snr = self._filter(st, cov) / self.sigma_filt
+        c = (size - 1) / 2.0
+        yy, xx = np.mgrid[:size, :size]
+        mask = (np.hypot(xx - c, yy - c) <= search_radius_px) & (cov >= 0.75)
+        masked = np.where(mask, snr, -np.inf)
+        iy, ix = np.unravel_index(int(np.argmax(masked)), masked.shape)
+        return float(masked[iy, ix]), int(iy), int(ix), st, cov
+
+    def single_frame_snr(self, i: int, x: float, y: float) -> float:
+        filt = ndimage.convolve(self.res[i], self.kernel, mode="nearest")
+        ny, nx = filt.shape
+        if not (0 <= x <= nx - 1 and 0 <= y <= ny - 1):
+            return float("nan")
+        return float(ndimage.map_coordinates(filt, [[y], [x]], order=1)[0] / max(self.sigma_single, 1e-12))
+
+    def single_frame_stamp(self, i: int, dx: float, dy: float, size: int) -> np.ndarray:
+        g = np.arange(size) - (size - 1) / 2.0
+        gy, gx = np.meshgrid(g, g, indexing="ij")
+        out = ndimage.map_coordinates(self.res[i], [self.cy + dy + gy, self.cx + dx + gx], order=1, mode="constant", cval=0.0)
+        return out
+
+
+def stamp_wcs(w: WCS, cx: float, cy: float, size: int) -> WCS:
+    """WCS of a co-moving stamp whose centre is frame pixel (cx, cy) at the reference epoch."""
+    sw = w.deepcopy()
+    c = (size - 1) / 2.0
+    sw.wcs.crpix = [w.wcs.crpix[0] - (cx - c), w.wcs.crpix[1] - (cy - c)]
+    return sw
+
+
+def run_tracked(tracker: Tracker, w: WCS, times: np.ndarray, t_ref: float, dx: np.ndarray, dy: np.ndarray,
+                size: int, search_radius_px: float = 6.0, combine: str = "mean") -> dict:
+    """Full-size stack for one hypothesis plus single-frame comparison."""
+    snr, iy, ix, st, cov = tracker.score(dx, dy, size, search_radius_px, combine)
+    x, y, flux = refine_centroid(st, iy, ix)
+    sw = stamp_wcs(w, tracker.cx, tracker.cy, size)
     i_ref = int(np.argmin(np.abs(times - t_ref)))
-    dx, dy = _offset_px(rate, pa, np.array([times[i_ref] - t_ref]), scale_arcsec)
-    single_snr_map = snr_map(res[i_ref], psf_sigma_px)
-    ny, nx = stack.shape
-    sx, sy = x + dx[0], y + dy[0]
-    if 0 <= sx <= nx - 1 and 0 <= sy <= ny - 1:
-        single = float(ndimage.map_coordinates(single_snr_map, [[sy], [sx]], order=1)[0])
-    else:
-        single = float("nan")
+    c = (size - 1) / 2.0
+    # Peak offset from the stamp centre maps to the same offset in every frame along the track.
+    fx = tracker.cx + dx[i_ref] + (x - c)
+    fy = tracker.cy + dy[i_ref] + (y - c)
+    single = tracker.single_frame_snr(i_ref, fx, fy)
     return {
-        "stacked": stack, "single_frame": res[i_ref], "coverage": cov,
-        "snr_stacked": peak_snr, "snr_single_frame": single,
-        "snr_gain": peak_snr / single if single and single > 0 and math.isfinite(single) else None,
-        "peak": to_detection(x, y, w, flux, peak_snr), "t_ref": t_ref,
-        "rate_arcsec_yr": rate, "pa_deg": pa,
+        "stacked": st, "coverage": cov, "single_frame": tracker.single_frame_stamp(i_ref, dx[i_ref], dy[i_ref], size),
+        "snr_stacked": snr, "snr_single_frame": single,
+        "snr_gain": snr / single if single and single > 0 and math.isfinite(single) else None,
+        "peak": to_detection(x, y, sw, flux, snr), "t_ref": t_ref, "wcs": sw,
     }
-
-
-def blind_search(frames: np.ndarray, times: np.ndarray, w: WCS, psf_sigma_px: float, scale_arcsec: float,
-                 rate_range: tuple[float, float], pa_range: tuple[float, float], grid: int = 5,
-                 combine: str = "mean", refine: bool = True) -> dict:
-    """Coarse grid x grid search over (rate, PA) maximising stacked S/N, followed by a finer
-    grid x grid search centred on the coarse optimum (half the coarse spacing)."""
-    res = remove_static_sky(frames)
-    rates = np.linspace(rate_range[0], rate_range[1], grid)
-    pas = np.linspace(pa_range[0], pa_range[1], grid)
-    t_ref = float(np.mean(times))
-
-    def score(r: float, p: float) -> float:
-        st, cv = shift_stack(res, times, r, p, scale_arcsec, combine, t_ref)
-        return stack_peak(st, cv, psf_sigma_px)[0]
-
-    coarse = np.array([[score(r, p) for p in pas] for r in rates])
-    ir, ip = np.unravel_index(int(np.argmax(coarse)), coarse.shape)
-    best_r, best_p = float(rates[ir]), float(pas[ip])
-    fine_grid = None
-    if refine and grid > 1:
-        dr = (rates[1] - rates[0]) / 2 if grid > 1 else 0
-        dp = (pas[1] - pas[0]) / 2 if grid > 1 else 0
-        f_rates = np.linspace(best_r - dr, best_r + dr, grid)
-        f_pas = np.linspace(best_p - dp, best_p + dp, grid)
-        fine = np.array([[score(r, p) for p in f_pas] for r in f_rates])
-        jr, jp = np.unravel_index(int(np.argmax(fine)), fine.shape)
-        if fine[jr, jp] > coarse[ir, ip]:
-            best_r, best_p = float(f_rates[jr]), float(f_pas[jp])
-        fine_grid = {"rates_arcsec_yr": f_rates.tolist(), "pas_deg": f_pas.tolist(), "grid": fine.round(3).tolist()}
-    best = run_shift_stack(frames, times, w, psf_sigma_px, scale_arcsec, best_r, best_p, combine, residuals=res)
-    return {"rates": rates.tolist(), "pas": pas.tolist(), "grid": coarse.round(3).tolist(),
-            "refined": fine_grid, "best": best}
