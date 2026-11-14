@@ -19,13 +19,15 @@ import {
 interface DifferencePanelProps {
   coords: { ra: number; dec: number };
   selectedObject: CatalogObject | null;
+  /** Starting epoch pair; the page passes two epochs with real SPHEREx data when there are any. */
+  defaultEpochs?: [Epoch, Epoch];
 }
 
-export function DifferencePanel({ coords, selectedObject }: DifferencePanelProps) {
+export function DifferencePanel({ coords, selectedObject, defaultEpochs }: DifferencePanelProps) {
   const { dict } = useI18n();
 
-  const [epoch1, setEpoch1] = useState<Epoch>("2026-Q1");
-  const [epoch2, setEpoch2] = useState<Epoch>("2026-Q3");
+  const [epoch1, setEpoch1] = useState<Epoch>(defaultEpochs?.[0] ?? "2026-Q1");
+  const [epoch2, setEpoch2] = useState<Epoch>(defaultEpochs?.[1] ?? "2026-Q3");
   const [colormap, setColormap] = useState<ColormapName>("inferno");
   const [result, setResult] = useState<DifferenceResult | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);

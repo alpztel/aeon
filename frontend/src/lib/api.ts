@@ -106,7 +106,7 @@ export const DEMO_TARGETS: readonly DemoTargetMeta[] = [
     dec: -7.2422291,
     refRa: 133.7586977,
     refDec: -7.2420576,
-    epoch: "2026-Q1",
+    epoch: "2026-Q2", // SPHEREx visited WISE 0855 in Q2 and Q4: open on real data
     epochCoords: {
       "2026-Q1": { ra: 133.7595813, dec: -7.2422291 },
       "2026-Q2": { ra: 133.7589286, dec: -7.2420981 },
