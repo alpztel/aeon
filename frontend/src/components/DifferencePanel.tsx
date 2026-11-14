@@ -10,7 +10,11 @@ import {
   type DifferenceResult,
   type Epoch,
 } from "@/lib/api";
-import { renderSkyArrayToCanvas, type ColormapName } from "@/lib/colormaps";
+import {
+  COLORMAP_OPTIONS,
+  renderSkyArrayToCanvas,
+  type ColormapName,
+} from "@/lib/colormaps";
 
 interface DifferencePanelProps {
   coords: { ra: number; dec: number };
@@ -162,10 +166,11 @@ export function DifferencePanel({ coords, selectedObject }: DifferencePanelProps
               onChange={(e) => setColormap(e.target.value as ColormapName)}
               className="bg-transparent font-medium text-cyan-200 focus:outline-none"
             >
-              <option value="inferno" className="bg-[#090D16]">Inferno</option>
-              <option value="viridis" className="bg-[#090D16]">Viridis</option>
-              <option value="magma" className="bg-[#090D16]">Magma</option>
-              <option value="grayscale" className="bg-[#090D16]">Grayscale</option>
+              {COLORMAP_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value} className="bg-[#090D16]">
+                  {opt.label}
+                </option>
+              ))}
             </select>
           </label>
 

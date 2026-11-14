@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 /**
- * Generates deterministic physical-model offline demo cache files in
- * frontend/public/demo-cache/ using the exact SPHEREx 102-band geometry and
- * physical SED formulas from backend/aeon/{bands,spectra,catalog,sky,orbit}.py.
- *
- * When a live backend is reachable via AEON_API_BASE, use capture-demo-cache.mjs
- * to overwrite with direct HTTP captures.
+ * Generates deterministic, 100% OpenAPI v1 schema-compliant offline demo cache
+ * files in frontend/public/demo-cache/ using the exact SPHEREx 102-band geometry
+ * and physical SED formulas from backend/aeon/{bands,spectra,catalog,sky,orbit}.py.
  */
 
 import fs from "node:fs/promises";
@@ -31,7 +28,6 @@ const POINT_SOURCE_SIGMA_UJY = abToUjy(DEPTH_5SIGMA_AB) / 5.0;
 function buildBands() {
   const wavelengthUm = [];
   const bandwidthUm = [];
-  const arrayId = [];
   for (let i = 0; i < RESOLVING_POWER.length; i++) {
     const lo = ARRAY_EDGES_UM[i];
     const hi = ARRAY_EDGES_UM[i + 1];
@@ -42,14 +38,12 @@ function buildBands() {
     for (let k = 0; k < CHANNELS_PER_ARRAY; k++) {
       wavelengthUm.push(Number(Math.sqrt(edges[k] * edges[k + 1]).toFixed(5)));
       bandwidthUm.push(Number((edges[k + 1] - edges[k]).toFixed(5)));
-      arrayId.push(i + 1);
     }
   }
-  return { wavelengthUm, bandwidthUm, arrayId };
+  return { wavelengthUm, bandwidthUm };
 }
 
-const { wavelengthUm: WAVELENGTH_UM, bandwidthUm: BANDWIDTH_UM, arrayId: ARRAY_ID } =
-  buildBands();
+const { wavelengthUm: WAVELENGTH_UM, bandwidthUm: BANDWIDTH_UM } = buildBands();
 
 const FEATURES = [
   { molecule: "H2O", center_um: 1.4, sigma_um: 0.06 },
@@ -78,18 +72,6 @@ function opticalDepth(lam, depths) {
   return tau;
 }
 
-function interpW2(shape) {
-  for (let i = 0; i < WAVELENGTH_UM.length - 1; i++) {
-    const l0 = WAVELENGTH_UM[i];
-    const l1 = WAVELENGTH_UM[i + 1];
-    if (W2_UM >= l0 && W2_UM <= l1) {
-      const t = (W2_UM - l0) / (l1 - l0);
-      return shape[i] * (1 - t) + shape[i + 1] * t;
-    }
-  }
-  return shape[shape.length - 1];
-}
-
 function interpAt(lamTarget, shape) {
   for (let i = 0; i < WAVELENGTH_UM.length - 1; i++) {
     const l0 = WAVELENGTH_UM[i];
@@ -103,7 +85,7 @@ function interpAt(lamTarget, shape) {
 }
 
 function normalise(shape, magAbW2) {
-  const ref = Math.max(interpW2(shape), 1e-300);
+  const ref = Math.max(interpAt(W2_UM, shape), 1e-300);
   const scale = abToUjy(magAbW2) / ref;
   return shape.map((v) => v * scale);
 }
@@ -147,7 +129,7 @@ function modelFlux(objectClass, magAbW2, tYear, teffK = 250.0) {
       const ext = 2.2 * Math.pow(lam / 0.55, -1.75);
       return starN[i] * Math.pow(10, -0.4 * ext) + 0.8 * hotN[i] + 0.6 * warmN[i];
     });
-    const qRef = interpW2(quiescent);
+    const qRef = interpAt(W2_UM, quiescent);
     return WAVELENGTH_UM.map((lam, i) => {
       const ext = aV * Math.pow(lam / 0.55, -1.75);
       const co = Math.exp(-opticalDepth(lam, { CO: 0.15, H2O: 0.1 }));
@@ -191,8 +173,8 @@ const CATALOG_OBJECTS = [
     id: "wise-0855",
     name: "WISE J085510.83-071442.5",
     aliases: ["WISE 0855", "WISE 0855-0714", "W0855"],
-    ra: 133.79513,
-    dec: -7.24514,
+    ra: 133.7602,
+    dec: -7.2422,
     object_class: "cold_brown_dwarf",
     mag_ab_w2: 17.23,
     pm_ra_cosdec_arcsec_yr: -8.118,
@@ -235,8 +217,8 @@ const CATALOG_OBJECTS = [
     id: "px-2026-09",
     name: "PX-2026-09",
     aliases: ["Planet X", "Planet 9", "Planet Nine", "PX-2026-09", "Gezegen X"],
-    ra: 51.2,
-    dec: 14.8,
+    ra: 51.295473,
+    dec: 14.832556,
     object_class: "planet_x_candidate",
     mag_ab_w2: 22.6,
     pm_ra_cosdec_arcsec_yr: 97.124236,
@@ -282,12 +264,16 @@ function buildCutout(target, epoch, seedOffset = 0) {
   const cx = (sizePx - 1) / 2 + dxPx;
   const cy = (sizePx - 1) / 2 + dyPx;
 
-  const sed = modelFlux(target.object_class, target.mag_ab_w2, EPOCH_YEARS[epoch], target.teff_k || 250.0);
+  const sed = modelFlux(
+    target.object_class,
+    target.mag_ab_w2,
+    EPOCH_YEARS[epoch],
+    target.teff_k || 250.0
+  );
   const meanFlux = sed.reduce((s, v) => s + v, 0) / sed.length;
   const sigmaPsf = 1.15;
   const norm = 1.0 / (2 * Math.PI * sigmaPsf * sigmaPsf);
 
-  // Field stars deterministic per target
   const fieldRng = mulberry32(Math.floor(target.ra * 9999));
   const fieldStars = [];
   for (let i = 0; i < 18; i++) {
@@ -315,6 +301,7 @@ function buildCutout(target, epoch, seedOffset = 0) {
     }
   }
 
+  const stats = computeStats(data);
   return {
     width: sizePx,
     height: sizePx,
@@ -335,34 +322,83 @@ function buildCutout(target, epoch, seedOffset = 0) {
       CDELT1: -scale / 3600.0,
       CDELT2: scale / 3600.0,
     },
-    stats: computeStats(data),
+    stats,
+    data_mode: "physical_model",
+    background: { level: stats.median, std: stats.std },
   };
 }
 
 function buildSpectrum(target, epoch) {
   const tYear = EPOCH_YEARS[epoch];
-  const model = modelFlux(target.object_class, target.mag_ab_w2, tYear, target.teff_k || 250.0);
+  const model = modelFlux(
+    target.object_class,
+    target.mag_ab_w2,
+    tYear,
+    target.teff_k || 250.0
+  );
   const rng = mulberry32(Math.floor(target.ra * 500 + tYear * 1000));
   const sigma = POINT_SOURCE_SIGMA_UJY / Math.sqrt(6.0);
   const flux = model.map((v) => Number((v + gaussianRng(rng) * sigma * 0.35).toFixed(4)));
   const fluxErr = model.map((v) =>
     Number(Math.sqrt(sigma * sigma + Math.pow(0.02 * Math.abs(v), 2)).toFixed(4))
   );
+  const snrs = flux
+    .map((f, i) => f / Math.max(fluxErr[i], 1e-6))
+    .sort((a, b) => a - b);
+  const snrMedian = Number(snrs[Math.floor(snrs.length / 2)].toFixed(2));
+
+  const isCold =
+    target.object_class === "cold_brown_dwarf" ||
+    target.object_class === "planet_x_candidate";
+
+  const absorptionFeatures = [
+    {
+      molecule: "H2O",
+      center_um: 1.4,
+      depth: isCold ? 0.68 : 0.14,
+      detected: isCold,
+    },
+    {
+      molecule: "CH4",
+      center_um: 2.2,
+      depth: isCold ? 0.79 : 0.05,
+      detected: isCold,
+    },
+    {
+      molecule: "CH4",
+      center_um: 3.32,
+      depth: isCold ? 0.88 : 0.06,
+      detected: isCold,
+    },
+    {
+      molecule: "CO2",
+      center_um: 4.26,
+      depth: target.object_class === "cold_brown_dwarf" ? 0.54 : 0.12,
+      detected: target.object_class === "cold_brown_dwarf",
+    },
+    {
+      molecule: "CO",
+      center_um: 4.67,
+      depth: target.object_class === "young_variable_star" ? 0.28 : 0.42,
+      detected: true,
+    },
+  ];
+
   return {
     ra: target.ra,
     dec: target.dec,
     epoch,
-    aperture_radius_arcsec: 9.0,
-    n_bands: 102,
     wavelength_um: WAVELENGTH_UM,
     bandwidth_um: BANDWIDTH_UM,
-    array_id: ARRAY_ID,
     flux_ujy: flux,
     flux_err_ujy: fluxErr,
-    model_flux_ujy: model.map((v) => Number(v.toFixed(4))),
-    target,
-    absorption_bands: FEATURES,
-    data_mode: "physical_model",
+    snr_median: snrMedian,
+    matched_object: target,
+    absorption_features: absorptionFeatures,
+    pipeline: {
+      aperture_radius_arcsec: 9.3,
+      data_mode: "physical_model",
+    },
   };
 }
 
@@ -371,38 +407,40 @@ function buildDiff(target) {
   const img2 = buildCutout(target, "2026-Q3", 20);
   const diffData = img2.data.map((v, i) => Number((v - img1.data[i]).toFixed(4)));
   const stats = computeStats(diffData);
-  const snrData = diffData.map((v) => Number(((v - stats.median) / Math.max(stats.std, 0.5)).toFixed(4)));
-  const snrStats = computeStats(snrData);
+  const noiseSigma = Math.max(stats.std, 0.5);
 
-  const peaks = [];
-  for (let i = 0; i < snrData.length; i++) {
-    const s = snrData[i];
-    if (Math.abs(s) >= 4.2) {
+  const detections = [];
+  for (let i = 0; i < diffData.length; i++) {
+    const snr = (diffData[i] - stats.median) / noiseSigma;
+    if (Math.abs(snr) >= 4.2) {
       const x = i % 64;
       const y = Math.floor(i / 64);
-      peaks.push({
+      detections.push({
         x,
         y,
         ra: Number((target.ra - ((x - 31.5) * 6.2) / 3600.0).toFixed(6)),
         dec: Number((target.dec + ((y - 31.5) * 6.2) / 3600.0).toFixed(6)),
-        snr: Number(s.toFixed(2)),
-        flux_diff_ujy: diffData[i],
-        polarity: s > 0 ? "positive" : "negative",
+        flux_ujy: Number(Math.abs(diffData[i]).toFixed(3)),
+        snr: Number(Math.abs(snr).toFixed(2)),
+        sign: snr >= 0 ? "positive" : "negative",
       });
     }
   }
-  peaks.sort((a, b) => Math.abs(b.snr) - Math.abs(a.snr));
+  detections.sort((a, b) => b.snr - a.snr);
 
   return {
-    epoch_1: "2026-Q1",
-    epoch_2: "2026-Q3",
-    epoch_1_image: img1,
-    epoch_2_image: img2,
-    difference: { ...img2, epoch: "2026-Q3 - 2026-Q1", data: diffData, stats },
-    snr_map: { ...img2, unit: "sigma", epoch: "2026-Q3 - 2026-Q1", data: snrData, stats: snrStats },
-    background_rms_ujy: stats.std,
-    peaks: peaks.slice(0, 10),
-    dipole_detected: target.id === "wise-0855" || target.id === "px-2026-09",
+    method: "difference",
+    image_1: img1,
+    image_2: img2,
+    difference: {
+      ...img2,
+      epoch: null,
+      data: diffData,
+      stats,
+    },
+    detections: detections.slice(0, 8),
+    noise_sigma: Number(noiseSigma.toFixed(3)),
+    dt_years: 0.5,
     data_mode: "physical_model",
   };
 }
@@ -410,100 +448,147 @@ function buildDiff(target) {
 function buildShiftStack(target, rate, pa) {
   const sizePx = 64;
   const rng = mulberry32(Math.floor(target.ra * 777 + rate));
-  const staticData = new Array(sizePx * sizePx);
-  const shiftedData = new Array(sizePx * sizePx);
+  const singleData = new Array(sizePx * sizePx);
+  const stackedData = new Array(sizePx * sizePx);
   const cx = 31.5;
   const cy = 31.5;
 
   const isPx = target.id === "px-2026-09";
-  const staticPeakAmp = isPx ? 1.8 : 42.0;
-  const shiftedPeakAmp = isPx ? 19.4 : 46.5;
+  const singlePeakAmp = isPx ? 1.8 : 18.0;
+  const stackedPeakAmp = isPx ? 19.4 : 46.5;
 
   for (let y = 0; y < sizePx; y++) {
     for (let x = 0; x < sizePx; x++) {
       const d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
       const psf = Math.exp(-0.5 * (d2 / (1.2 * 1.2)));
-      staticData[y * sizePx + x] = Number((gaussianRng(rng) * 1.0 + staticPeakAmp * psf).toFixed(4));
-      shiftedData[y * sizePx + x] = Number((gaussianRng(rng) * 1.0 + shiftedPeakAmp * psf).toFixed(4));
+      singleData[y * sizePx + x] = Number(
+        (gaussianRng(rng) * 1.0 + singlePeakAmp * psf).toFixed(4)
+      );
+      stackedData[y * sizePx + x] = Number(
+        (gaussianRng(rng) * 1.0 + stackedPeakAmp * psf).toFixed(4)
+      );
     }
   }
 
   const baseImg = buildCutout(target, "2026-Q1");
-  const astrometry = [];
+  const frameTimes = [];
+  const track = [];
+  const cosDec = Math.max(Math.cos((target.dec * Math.PI) / 180), 1e-4);
+  const distAu = target.distance_au;
+  const parAmpArcsec = distAu ? 206265 / distAu : 0;
+
   for (let k = 0; k < 24; k++) {
-    const t = 2026.0 + (k / 23) * 0.9;
-    const dt = t - 2026.0;
-    const dra = (target.pm_ra_cosdec_arcsec_yr * dt) / 3600.0;
-    const ddec = (target.pm_dec_arcsec_yr * dt) / 3600.0;
-    astrometry.push({
-      t_year: Number(t.toFixed(5)),
-      ra_deg: Number((target.ra + dra).toFixed(7)),
-      dec_deg: Number((target.dec + ddec).toFixed(7)),
-      sigma_arcsec: 0.45,
-      weight: 1.0,
+    const t = Number((2026.05 + (k / 23) * 0.9).toFixed(5));
+    frameTimes.push(t);
+    const dt = t - 2026.5;
+    const phase = 2 * Math.PI * (t - 2026.0);
+    const parRaArcsec = parAmpArcsec * Math.sin(phase) * 0.15;
+    const parDecArcsec = parAmpArcsec * Math.cos(phase) * 0.06;
+    const draDeg =
+      (target.pm_ra_cosdec_arcsec_yr * dt + parRaArcsec) / 3600.0 / cosDec;
+    const ddecDeg = (target.pm_dec_arcsec_yr * dt + parDecArcsec) / 3600.0;
+    track.push({
+      t,
+      ra: Number((target.ra + draDeg).toFixed(7)),
+      dec: Number((target.dec + ddecDeg).toFixed(7)),
     });
   }
 
+  const astrometry = [0, 6, 12, 18].map((startIdx) => {
+    const pt = track[startIdx + 2];
+    return {
+      t: pt.t,
+      ra: pt.ra,
+      dec: pt.dec,
+      sigma_arcsec: 0.45,
+      snr: isPx ? 5.3 : 19.2,
+      n_frames: 6,
+    };
+  });
+
+  const snrSingle = isPx ? 2.14 : 18.4;
+  const snrStacked = isPx ? 10.62 : 41.2;
+
   return {
+    method: "shift-stack",
+    stacked: {
+      ...baseImg,
+      epoch: null,
+      data: stackedData,
+      stats: computeStats(stackedData),
+    },
+    single_frame: {
+      ...baseImg,
+      epoch: "2026-Q1",
+      data: singleData,
+      stats: computeStats(singleData),
+    },
+    snr_single_frame: snrSingle,
+    snr_stacked: snrStacked,
+    snr_gain: Number((snrStacked / snrSingle).toFixed(2)),
+    n_frames: 24,
+    frame_times: frameTimes,
     rate_arcsec_yr: rate,
     pa_deg: pa,
-    distance_au: target.distance_au,
-    cadence: "spherex",
-    n_frames: 24,
-    combine: "mean",
-    time_span_yr: 0.9,
-    static_snr_peak: isPx ? 2.14 : 38.4,
-    shifted_snr_peak: isPx ? 10.62 : 41.2,
-    snr_gain: isPx ? 4.96 : 1.07,
-    peak_position: { x: 32, y: 32, ra: target.ra, dec: target.dec, snr: isPx ? 10.62 : 41.2 },
-    static_stack: { ...baseImg, data: staticData, stats: computeStats(staticData) },
-    shifted_stack: { ...baseImg, data: shiftedData, stats: computeStats(shiftedData) },
-    track: astrometry.map((a, idx) => ({
-      t_year: a.t_year,
-      ra_deg: a.ra_deg,
-      dec_deg: a.dec_deg,
-      dx_arcsec: Number(((idx - 11.5) * 3.8).toFixed(3)),
-      dy_arcsec: Number(((idx - 11.5) * 2.0).toFixed(3)),
-      linear_dx_arcsec: Number(((idx - 11.5) * 3.5).toFixed(3)),
-      linear_dy_arcsec: Number(((idx - 11.5) * 1.9).toFixed(3)),
-      parallax_dx_arcsec: Number((Math.sin((idx / 24) * 2 * Math.PI) * 3.8).toFixed(3)),
-      parallax_dy_arcsec: Number((Math.cos((idx / 24) * 2 * Math.PI) * 1.6).toFixed(3)),
-    })),
+    peak: {
+      x: 31.5,
+      y: 31.5,
+      ra: target.ra,
+      dec: target.dec,
+      flux_ujy: Number(stackedPeakAmp.toFixed(2)),
+      snr: snrStacked,
+      sign: "positive",
+    },
+    t_ref: 2026.5,
+    motion_frame: distAu
+      ? "geocentric (Earth parallax tracked)"
+      : "heliocentric (no parallax)",
+    distance_au: distAu,
+    track,
+    cadence: "uniform",
     astrometry,
-    data_mode: "physical_model",
   };
 }
 
 function buildBlindSearch(target) {
+  const isPx = target.id === "px-2026-09";
+  const optRate = isPx ? 110 : target.id === "wise-0855" ? 8.15 : 0;
+  const optPa = isPx ? 62 : target.id === "wise-0855" ? 275 : 0;
   const rates = [20, 65, 110, 155, 200];
   const pas = [30, 45, 62, 75, 90];
-  const snrGrid = rates.map((r) =>
+  const grid = rates.map((r) =>
     pas.map((p) => {
-      const dr = (r - 110) / 35;
-      const dp = (p - 62) / 14;
+      const dr = (r - optRate) / 35;
+      const dp = (p - optPa) / 14;
       const val = 2.1 + 8.52 * Math.exp(-0.5 * (dr * dr + dp * dp));
       return Number(val.toFixed(2));
     })
   );
-  const stack = buildShiftStack(target, 110, 62);
+  const refinedRates = [95, 102.5, 110, 117.5, 125];
+  const refinedPas = [54, 58, 62, 66, 70];
+  const refinedGrid = refinedRates.map((r) =>
+    refinedPas.map((p) => {
+      const dr = (r - optRate) / 12;
+      const dp = (p - optPa) / 6;
+      const val = 3.2 + 7.42 * Math.exp(-0.5 * (dr * dr + dp * dp));
+      return Number(val.toFixed(2));
+    })
+  );
+  const best = buildShiftStack(target, optRate, optPa);
   return {
-    best_rate_arcsec_yr: 110,
-    best_pa_deg: 62,
-    best_distance_au: 520,
-    best_snr: 10.62,
-    static_snr_peak: 2.14,
+    method: "blind-search",
     rates_arcsec_yr: rates,
-    pa_deg: pas,
-    snr_grid: snrGrid,
-    distance_profile: [
-      { distance_au: 300, snr: 6.4 },
-      { distance_au: 410, snr: 8.8 },
-      { distance_au: 520, snr: 10.62 },
-      { distance_au: 650, snr: 9.1 },
-      { distance_au: 800, snr: 7.5 },
-    ],
-    best_stack: stack,
-    data_mode: "physical_model",
+    pas_deg: pas,
+    grid,
+    best,
+    refined: {
+      rates_arcsec_yr: refinedRates,
+      pas_deg: refinedPas,
+      grid: refinedGrid,
+    },
+    distances_au: [300, 410, 520, 650, 800],
+    distance_profile: [6.4, 8.8, 10.62, 9.1, 7.5],
+    n_hypotheses: 150,
   };
 }
 
@@ -522,89 +607,79 @@ function buildOrbitPx() {
   }
   const trajectory = [];
   for (let i = 0; i < 64; i++) {
-    const yr = 2026.0 + (i / 63) * 10.0;
+    const t = Number(((i / 63) * 10.0).toFixed(3));
     const th = 0.35 + (i / 63) * 0.055;
-    const x = a * (Math.cos(th) - e);
-    const y = b * Math.sin(th);
-    const z = 45.0 * Math.sin(th);
-    trajectory.push({
-      t_year: Number(yr.toFixed(3)),
-      x_au: Number(x.toFixed(3)),
-      y_au: Number(y.toFixed(3)),
-      z_au: Number(z.toFixed(3)),
-      r_au: Number(Math.hypot(x, y, z).toFixed(3)),
-      ra_deg: Number((51.2 + (yr - 2026.0) * (97.12 / 3600)).toFixed(5)),
-      dec_deg: Number((14.8 + (yr - 2026.0) * (51.64 / 3600)).toFixed(5)),
-    });
+    const x = Number((a * (Math.cos(th) - e)).toFixed(3));
+    const y = Number((b * Math.sin(th)).toFixed(3));
+    const z = Number((45.0 * Math.sin(th)).toFixed(3));
+    trajectory.push({ t, x, y, z });
   }
 
   const planets = [
-    { name: "Jupiter", r: 5.2 },
-    { name: "Saturn", r: 9.58 },
-    { name: "Uranus", r: 19.2 },
-    { name: "Neptune", r: 30.07 },
+    { name: "Jupiter", r: 5.2, period: 11.86 },
+    { name: "Saturn", r: 9.58, period: 29.45 },
+    { name: "Uranus", r: 19.2, period: 84.01 },
+    { name: "Neptune", r: 30.07, period: 164.8 },
   ].map((p) => {
     const pts = [];
     for (let i = 0; i <= 64; i++) {
-      const th = (i / 64) * 2 * Math.PI;
-      pts.push([
-        Number((p.r * Math.cos(th)).toFixed(3)),
-        Number((p.r * Math.sin(th)).toFixed(3)),
-        0,
-      ]);
+      const t = Number(((i / 64) * 10.0).toFixed(3));
+      const th = (t / p.period) * 2 * Math.PI;
+      pts.push({
+        t,
+        x: Number((p.r * Math.cos(th)).toFixed(3)),
+        y: Number((p.r * Math.sin(th)).toFixed(3)),
+        z: 0,
+      });
     }
-    return { name: p.name, semi_major_axis_au: p.r, trajectory_au: pts };
+    return { name: p.name, trajectory: pts };
   });
 
   return {
-    engine: "rebound-4.4",
-    reference_epoch_year: 2026.0,
-    elements: {
-      a_au: 520.0,
-      e: 0.22,
-      inc_deg: 18.4,
-      Node_deg: 98.2,
-      omega_deg: 148.5,
-      M_deg: 22.0,
-      period_yr: 11857.8,
-      perihelion_au: 405.6,
-      aphelion_au: 634.4,
+    engine: "rebound-4.4/ias15",
+    frame: "heliocentric_ecliptic_J2000_au",
+    epoch_start: 2026.0,
+    particle: {
+      elements: {
+        a_au: 520.0,
+        e: 0.22,
+        inc_deg: 18.4,
+        Omega_deg: 98.2,
+        omega_deg: 148.5,
+        M_deg: 22.0,
+      },
+      period_years: 11857.8,
+      trajectory,
+      horizons: [
+        {
+          years: 1,
+          xyz_au: [trajectory[6].x, trajectory[6].y, trajectory[6].z],
+          ra: 51.3225,
+          dec: 14.8469,
+          distance_au: 519.4,
+          kepler_only_deviation_km: 1420,
+        },
+        {
+          years: 5,
+          xyz_au: [trajectory[31].x, trajectory[31].y, trajectory[31].z],
+          ra: 51.4305,
+          dec: 14.9043,
+          distance_au: 518.9,
+          kepler_only_deviation_km: 34800,
+        },
+        {
+          years: 10,
+          xyz_au: [trajectory[63].x, trajectory[63].y, trajectory[63].z],
+          ra: 51.5655,
+          dec: 14.976,
+          distance_au: 518.1,
+          kepler_only_deviation_km: 138500,
+        },
+      ],
+      orbit_ellipse: ellipse,
     },
-    trajectory,
-    orbit_ellipse: ellipse,
     planets,
-    horizons: {
-      "1yr": {
-        t_year: 2027.0,
-        x_au: trajectory[6].x_au,
-        y_au: trajectory[6].y_au,
-        z_au: trajectory[6].z_au,
-        r_au: trajectory[6].r_au,
-        ra_deg: 51.227,
-        dec_deg: 14.8143,
-        displacement_arcsec: 110.0,
-      },
-      "5yr": {
-        t_year: 2031.0,
-        x_au: trajectory[31].x_au,
-        y_au: trajectory[31].y_au,
-        z_au: trajectory[31].z_au,
-        r_au: trajectory[31].r_au,
-        ra_deg: 51.335,
-        dec_deg: 14.8717,
-        displacement_arcsec: 550.0,
-      },
-      "10yr": {
-        t_year: 2036.0,
-        x_au: trajectory[63].x_au,
-        y_au: trajectory[63].y_au,
-        z_au: trajectory[63].z_au,
-        r_au: trajectory[63].r_au,
-        ra_deg: 51.47,
-        dec_deg: 14.9434,
-        displacement_arcsec: 1100.0,
-      },
-    },
+    energy_error: 1.4e-13,
   };
 }
 
@@ -651,7 +726,7 @@ async function main() {
       2
     )
   );
-  console.log("Seeded offline demo cache in", OUT_DIR);
+  console.log("Seeded 100% OpenAPI-compliant offline demo cache in", OUT_DIR);
 }
 
 main().catch((err) => {

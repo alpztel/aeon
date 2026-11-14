@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import {
+  DEMO_TARGETS,
   EPOCHS,
   EPOCH_DECIMAL,
   getSkyCutout,
@@ -20,21 +21,11 @@ import {
   type Epoch,
   type SkyImage,
 } from "@/lib/api";
-import { renderSkyArrayToCanvas, type ColormapName } from "@/lib/colormaps";
-
-interface DemoQuickTarget {
-  id: string;
-  label: string;
-  ra: number;
-  dec: number;
-  synthetic?: boolean;
-}
-
-const QUICK_TARGETS: DemoQuickTarget[] = [
-  { id: "wise-0855", label: "WISE 0855", ra: 133.79513, dec: -7.24514 },
-  { id: "rw-aur", label: "RW Aur", ra: 76.9564, dec: 30.4013 },
-  { id: "px-2026-09", label: "PX-2026-09", ra: 51.2, dec: 14.8, synthetic: true },
-];
+import {
+  COLORMAP_OPTIONS,
+  renderSkyArrayToCanvas,
+  type ColormapName,
+} from "@/lib/colormaps";
 
 interface SkyMapPanelProps {
   selectedObject: CatalogObject | null;
@@ -288,7 +279,7 @@ export function SkyMapPanel({
           <span className="mr-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">
             {dict.sky.quickTargets}:
           </span>
-          {QUICK_TARGETS.map((qt) => {
+          {DEMO_TARGETS.map((qt) => {
             const active = selectedObject?.id === qt.id;
             return (
               <button
@@ -321,10 +312,11 @@ export function SkyMapPanel({
               onChange={(e) => setColormap(e.target.value as ColormapName)}
               className="bg-transparent text-xs font-medium text-cyan-200 focus:outline-none"
             >
-              <option value="inferno" className="bg-[#090D16]">Inferno</option>
-              <option value="viridis" className="bg-[#090D16]">Viridis</option>
-              <option value="magma" className="bg-[#090D16]">Magma</option>
-              <option value="grayscale" className="bg-[#090D16]">Grayscale</option>
+              {COLORMAP_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value} className="bg-[#090D16]">
+                  {opt.label}
+                </option>
+              ))}
             </select>
           </div>
 

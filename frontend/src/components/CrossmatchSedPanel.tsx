@@ -138,6 +138,17 @@ export function CrossmatchSedPanel({
     };
   }, [data, dict.missions.sedX, dict.missions.sedY]);
 
+  useEffect(() => {
+    const container = plotRef.current;
+    return () => {
+      if (container) {
+        import("plotly.js-dist-min")
+          .then((Plotly) => Plotly.purge(container))
+          .catch(() => {});
+      }
+    };
+  }, []);
+
   return (
     <section className="aeon-panel rounded-2xl p-4 sm:p-5">
       {/* Header */}

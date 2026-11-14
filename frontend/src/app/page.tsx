@@ -18,6 +18,7 @@ import { SolarSystem3DPanel } from "@/components/SolarSystem3DPanel";
 import { SpectrumPanel } from "@/components/SpectrumPanel";
 import { useI18n, type Lang } from "@/i18n/context";
 import {
+  DEMO_TARGETS,
   EPOCHS,
   getHealth,
   searchCatalog,
@@ -68,39 +69,29 @@ export default function HomePage() {
     }
   }, [lang, coords, epoch, selectedObject, dataMode]);
 
-  const applyTourStep = useCallback(
-    async (step: 0 | 1 | 2) => {
-      setTourStep(step);
-      setTourActive(true);
-      const targets: Record<0 | 1 | 2, { id: string; ra: number; dec: number; epoch: Epoch }> = {
-        0: { id: "wise-0855", ra: 133.79513, dec: -7.24514, epoch: "2026-Q1" },
-        1: { id: "rw-aur", ra: 76.9564, dec: 30.4013, epoch: "2026-Q3" },
-        2: { id: "px-2026-09", ra: 51.2, dec: 14.8, epoch: "2026-Q1" },
-      };
-      const cfg = targets[step];
-      setEpoch(cfg.epoch);
-      if (step === 0) {
-        setDiffOpen(true);
-      } else if (step === 1) {
-        setDiffOpen(true);
-      } else {
-        setStackOpen(true);
-        setOrbitOpen(true);
+  const applyTourStep = useCallback(async (step: 0 | 1 | 2) => {
+    setTourStep(step);
+    setTourActive(true);
+    const cfg = DEMO_TARGETS[step] ?? DEMO_TARGETS[0];
+    setEpoch(cfg.epoch);
+    if (step === 2) {
+      setStackOpen(true);
+      setOrbitOpen(true);
+    } else {
+      setDiffOpen(true);
+    }
+    try {
+      const { data } = await searchCatalog({ q: cfg.id, epoch: cfg.epoch });
+      if (data.results[0]) {
+        setSelectedObject(data.results[0]);
+        setCoords({ ra: data.results[0].ra, dec: data.results[0].dec });
+        return;
       }
-      try {
-        const { data } = await searchCatalog({ q: cfg.id, epoch: cfg.epoch });
-        if (data.results[0]) {
-          setSelectedObject(data.results[0]);
-          setCoords({ ra: data.results[0].ra, dec: data.results[0].dec });
-          return;
-        }
-      } catch {
-        // fallback to coordinates
-      }
-      setCoords({ ra: cfg.ra, dec: cfg.dec });
-    },
-    []
-  );
+    } catch {
+      // fallback to coordinates
+    }
+    setCoords({ ra: cfg.ra, dec: cfg.dec });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -205,12 +196,27 @@ export default function HomePage() {
             setStackOpen(true);
             break;
           }
+          case "OPEN_SPECTRUM": {
+            document
+              .getElementById("aeon-spectrum-panel")
+              ?.scrollIntoView({ behavior: "smooth" });
+            break;
+          }
+          case "OPEN_CROSSMATCH": {
+            document
+              .getElementById("aeon-crossmatch-panel")
+              ?.scrollIntoView({ behavior: "smooth" });
+            break;
+          }
           case "OPEN_3D_ORBIT": {
             setOrbitOpen(true);
             break;
           }
           case "OPEN_JWST": {
             setPipOpen(true);
+            break;
+          }
+          case "SET_COLORMAP": {
             break;
           }
           case "SET_LANG": {
@@ -335,25 +341,29 @@ export default function HomePage() {
           <DifferencePanel coords={coords} selectedObject={selectedObject} />
         )}
 
-        <SpectrumPanel
-          coords={coords}
-          epoch={epoch}
-          selectedObject={selectedObject}
-        />
+        <div id="aeon-spectrum-panel">
+          <SpectrumPanel
+            coords={coords}
+            epoch={epoch}
+            selectedObject={selectedObject}
+          />
+        </div>
 
         <ClassificationCard
           coords={coords}
           selectedObject={selectedObject}
         />
 
-        <CrossmatchSedPanel
-          coords={coords}
-          selectedObject={selectedObject}
-          onOpenPip={(overlaps) => {
-            setPipOverlaps(overlaps);
-            setPipOpen(true);
-          }}
-        />
+        <div id="aeon-crossmatch-panel">
+          <CrossmatchSedPanel
+            coords={coords}
+            selectedObject={selectedObject}
+            onOpenPip={(overlaps) => {
+              setPipOverlaps(overlaps);
+              setPipOpen(true);
+            }}
+          />
+        </div>
 
         {stackOpen && (
           <ShiftStackPanel

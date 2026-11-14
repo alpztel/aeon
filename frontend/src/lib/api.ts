@@ -86,26 +86,96 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+export interface DemoTargetMeta {
+  id: "wise-0855" | "rw-aur" | "px-2026-09";
+  label: string;
+  ra: number;
+  dec: number;
+  refRa: number;
+  refDec: number;
+  epoch: Epoch;
+  synthetic?: boolean;
+}
+
+export const DEMO_TARGETS: readonly DemoTargetMeta[] = [
+  {
+    id: "wise-0855",
+    label: "WISE 0855",
+    ra: 133.7602,
+    dec: -7.2422,
+    refRa: 133.79513,
+    refDec: -7.24514,
+    epoch: "2026-Q1",
+  },
+  {
+    id: "rw-aur",
+    label: "RW Aur",
+    ra: 76.95642,
+    dec: 30.40142,
+    refRa: 76.95642,
+    refDec: 30.40142,
+    epoch: "2026-Q3",
+  },
+  {
+    id: "px-2026-09",
+    label: "PX-2026-09",
+    ra: 51.29547,
+    dec: 14.83256,
+    refRa: 51.2,
+    refDec: 14.8,
+    epoch: "2026-Q1",
+    synthetic: true,
+  },
+];
+
+export function angularSeparationDeg(
+  ra1: number,
+  dec1: number,
+  ra2: number,
+  dec2: number
+): number {
+  const toRad = Math.PI / 180;
+  const r1 = ra1 * toRad;
+  const d1 = dec1 * toRad;
+  const r2 = ra2 * toRad;
+  const d2 = dec2 * toRad;
+  const sinD = Math.sin((d2 - d1) * 0.5);
+  const sinR = Math.sin((r2 - r1) * 0.5);
+  const h = sinD * sinD + Math.cos(d1) * Math.cos(d2) * sinR * sinR;
+  return (2 * Math.asin(Math.min(1, Math.sqrt(Math.max(0, h))))) / toRad;
+}
+
+const demoCacheMemo = new Map<string, unknown>();
+
 async function fetchDemoCache<T>(filename: string): Promise<T | null> {
+  if (demoCacheMemo.has(filename)) {
+    return demoCacheMemo.get(filename) as T;
+  }
   try {
     const res = await fetch(`/demo-cache/${filename}`);
     if (!res.ok) return null;
-    return (await res.json()) as T;
+    const parsed = (await res.json()) as T;
+    demoCacheMemo.set(filename, parsed);
+    return parsed;
   } catch {
     return null;
   }
 }
 
-export function matchDemoId(ra: number, dec: number): string | null {
-  const candidates = [
-    { id: "wise-0855", ra: 133.79513, dec: -7.24514 },
-    { id: "rw-aur", ra: 76.9564, dec: 30.4013 },
-    { id: "px-2026-09", ra: 51.2, dec: 14.8 },
-  ];
-  const match = candidates.find(
-    (c) => Math.abs(c.ra - ra) < 0.25 && Math.abs(c.dec - dec) < 0.25
-  );
-  return match?.id ?? null;
+export function matchDemoId(ra: number, dec: number): DemoTargetMeta["id"] | null {
+  let bestId: DemoTargetMeta["id"] | null = null;
+  let bestSep = 0.25;
+  for (const c of DEMO_TARGETS) {
+    const sep = Math.min(
+      angularSeparationDeg(ra, dec, c.ra, c.dec),
+      angularSeparationDeg(ra, dec, c.refRa, c.refDec)
+    );
+    if (sep <= bestSep) {
+      bestSep = sep;
+      bestId = c.id;
+    }
+  }
+  return bestId;
 }
 
 export async function getHealth(): Promise<{ health: HealthResponse; mode: DataMode }> {
@@ -163,6 +233,23 @@ export async function searchCatalog(
         );
         return {
           data: { query: cached.query, count: filtered.length, results: filtered },
+          fromCache: true,
+        };
+      }
+      if (params.ra !== undefined && params.dec !== undefined) {
+        const radiusDeg = (params.radius_arcmin ?? 5) / 60;
+        const matched = cached.results
+          .map((item) => {
+            const sepDeg = angularSeparationDeg(params.ra!, params.dec!, item.ra, item.dec);
+            return {
+              ...item,
+              separation_arcsec: Number((sepDeg * 3600).toFixed(3)),
+            };
+          })
+          .filter((item) => (item.separation_arcsec ?? Infinity) <= radiusDeg * 3600)
+          .sort((a, b) => (a.separation_arcsec ?? 0) - (b.separation_arcsec ?? 0));
+        return {
+          data: { query: { ra: params.ra, dec: params.dec }, count: matched.length, results: matched },
           fromCache: true,
         };
       }
@@ -238,9 +325,7 @@ export async function getSpectrum(
     const epoch = params.epoch ?? "2026-Q1";
     const id = matchDemoId(params.ra, params.dec);
     if (id) {
-      const cached =
-        (await fetchDemoCache<SpectrumResponse>(`spectrum-${id}-${epoch}.json`)) ??
-        (await fetchDemoCache<SpectrumResponse>(`spectrum-${id}.json`));
+      const cached = await fetchDemoCache<SpectrumResponse>(`spectrum-${id}-${epoch}.json`);
       if (cached) {
         return { data: cached, fromCache: true };
       }
@@ -403,10 +488,10 @@ export async function getCrossmatch(params: {
 
     if (id === "wise-0855") {
       sed.push(
-        { wavelength_um: 3.35, flux_ujy: 1.9, flux_err_ujy: 0.4, survey: "WISE" },
-        { wavelength_um: 4.6, flux_ujy: 87.1, flux_err_ujy: 2.4, survey: "WISE" },
-        { wavelength_um: 11.56, flux_ujy: 260.0, flux_err_ujy: 18.0, survey: "WISE" },
-        { wavelength_um: 22.09, flux_ujy: 410.0, flux_err_ujy: 45.0, survey: "WISE" }
+        { wavelength_um: 3.35, flux_ujy: 0.013, flux_err_ujy: 0.004, survey: "WISE" },
+        { wavelength_um: 4.6, flux_ujy: 0.465, flux_err_ujy: 0.025, survey: "WISE" },
+        { wavelength_um: 11.56, flux_ujy: 4.57, flux_err_ujy: 0.35, survey: "WISE" },
+        { wavelength_um: 22.09, flux_ujy: 12.8, flux_err_ujy: 1.4, survey: "WISE" }
       );
       return {
         fromCache: true,
@@ -415,9 +500,9 @@ export async function getCrossmatch(params: {
           wise: [
             {
               designation: "WISE J085510.83-071442.5",
-              w1_ab: 18.4,
-              w2_ab: 14.05,
-              w3_ab: 11.85,
+              w1_ab: 21.1,
+              w2_ab: 17.23,
+              w3_ab: 14.75,
               pm_total_arcsec_yr: 8.15,
             },
           ],
@@ -512,59 +597,80 @@ export async function sendAiCommand(params: {
     });
     return { data, fromCache: false };
   } catch {
-    const lower = params.message.toLowerCase();
+    const lower = params.message.toLocaleLowerCase("tr-TR");
     const actions: UiAction[] = [];
 
-    if (lower.includes("wise") || lower.includes("0855")) {
+    if (/\b(wise[\s-]*0855|0855|w0855)\b/i.test(lower)) {
       actions.push({
         type: "FLY_TO",
-        params: { target_id: "wise-0855", ra: 133.79513, dec: -7.24514 },
+        params: { target_id: "wise-0855", ra: 133.7602, dec: -7.2422 },
       });
-    } else if (lower.includes("rw") || lower.includes("aur")) {
+    } else if (/\b(rw[\s-]*aur(?:igae)?|hd\s*240764)\b/i.test(lower)) {
       actions.push({
         type: "FLY_TO",
-        params: { target_id: "rw-aur", ra: 76.9564, dec: 30.4013 },
+        params: { target_id: "rw-aur", ra: 76.95642, dec: 30.40142 },
       });
-    } else if (lower.includes("px") || lower.includes("planet x") || lower.includes("2026-09")) {
+    } else if (/\b(px[\s-]*2026[\s-]*09|planet\s*(?:x|9|nine)|gezegen\s*x)\b/i.test(lower)) {
       actions.push({
         type: "FLY_TO",
-        params: { target_id: "px-2026-09", ra: 51.2, dec: 14.8 },
+        params: { target_id: "px-2026-09", ra: 51.29547, dec: 14.83256 },
       });
+    } else {
+      const coordMatch = lower.match(
+        /(?:ra\s*[:=]?\s*)?([+-]?\d+(?:\.\d+)?)\s*(?:[,;]\s*|\s+dec\s*[:=]?\s*|\s+)([+-]?\d+(?:\.\d+)?)/i
+      );
+      if (coordMatch) {
+        const ra = Number(coordMatch[1]);
+        const dec = Number(coordMatch[2]);
+        if (ra >= 0 && ra <= 360 && dec >= -90 && dec <= 90) {
+          actions.push({ type: "FLY_TO", params: { ra, dec } });
+        }
+      }
     }
 
     for (const ep of EPOCHS) {
-      if (lower.includes(ep.toLowerCase()) || lower.includes(ep.slice(-2).toLowerCase())) {
+      const qTag = ep.slice(-2).toLowerCase();
+      if (lower.includes(ep.toLowerCase()) || new RegExp(`\\b${qTag}\\b`, "i").test(lower)) {
         actions.push({ type: "SET_EPOCH", params: { epoch: ep } });
       }
     }
 
-    if (lower.includes("fark") || lower.includes("diff")) {
+    if (/\b(fark|diff(?:erence)?)\b/i.test(lower)) {
       actions.push({ type: "TOGGLE_DIFF", params: { open: true } });
     }
-    if (lower.includes("kör") || lower.includes("blind")) {
+    if (/\b(kör|kor|blind)\b/i.test(lower)) {
       actions.push({ type: "RUN_BLIND_SEARCH", params: {} });
-    } else if (lower.includes("shift") || lower.includes("stack") || lower.includes("yığ")) {
+    } else if (/\b(shift|stack|yığ|yig|kaydır)\b/i.test(lower)) {
       actions.push({
         type: "RUN_SHIFT_STACK",
         params: { rate_arcsec_yr: 110, pa_deg: 62 },
       });
     }
-    if (lower.includes("tayf") || lower.includes("spectr")) {
+    if (/\b(tayf|spektrum|spectr(?:um)?)\b/i.test(lower)) {
       actions.push({ type: "OPEN_SPECTRUM", params: {} });
     }
-    if (lower.includes("3d") || lower.includes("3b") || lower.includes("yörünge") || lower.includes("orbit")) {
+    if (/\b(3d|3b|yörünge|yorunge|orbit|rebound)\b/i.test(lower)) {
       actions.push({ type: "OPEN_3D_ORBIT", params: {} });
     }
-    if (lower.includes("jwst") || lower.includes("hubble") || lower.includes("hst") || lower.includes("pip")) {
+    if (/\b(jwst|hubble|hst|pip)\b/i.test(lower)) {
       actions.push({ type: "OPEN_JWST", params: {} });
     }
-    if (lower.includes("sed") || lower.includes("crossmatch") || lower.includes("eşleş")) {
+    if (/\b(sed|crossmatch|eşleş|esles)\b/i.test(lower)) {
       actions.push({ type: "OPEN_CROSSMATCH", params: {} });
     }
-    if (lower.includes("pdf") || lower.includes("rapor") || lower.includes("report")) {
+    if (/\b(inferno|viridis|magma|grayscale)\b/i.test(lower)) {
+      const cmap = lower.match(/\b(inferno|viridis|magma|grayscale)\b/i)?.[1]?.toLowerCase();
+      if (cmap) actions.push({ type: "SET_COLORMAP", params: { colormap: cmap } });
+    }
+    if (/\b(türkçe|turkce)\b/i.test(lower)) {
+      actions.push({ type: "SET_LANG", params: { lang: "tr" } });
+    } else if (/\b(english|ingilizce)\b/i.test(lower)) {
+      actions.push({ type: "SET_LANG", params: { lang: "en" } });
+    }
+    if (/\b(pdf|rapor|report)\b/i.test(lower)) {
       actions.push({ type: "GENERATE_PDF", params: {} });
     }
-    if (lower.includes("demo") || lower.includes("tur") || lower.includes("tour")) {
+    if (/\b(demo|tur|tour)\b/i.test(lower)) {
       actions.push({ type: "START_DEMO_TOUR", params: {} });
     }
 

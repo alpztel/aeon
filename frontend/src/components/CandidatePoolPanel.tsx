@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import {
+  classifyTarget,
   getCandidates,
+  runDifference,
   submitOrVoteCandidate,
   type Candidate,
   type CatalogObject,
@@ -65,15 +67,22 @@ export function CandidatePoolPanel({
     e.preventDefault();
     setSubmitting(true);
     try {
+      const [aiRes, diffRes] = await Promise.all([
+        classifyTarget({ ra: coords.ra, dec: coords.dec }).catch(() => null),
+        runDifference({ ra: coords.ra, dec: coords.dec }).catch(() => null),
+      ]);
+      const measuredSnr = diffRes?.data.detections?.[0]?.snr ?? 5.0;
+      const measuredAnomaly = aiRes?.data.anomaly_score ?? 0.5;
       const notePrefix = selectedObject?.is_synthetic ? "[SYNTHETIC TEST] " : "";
       const { data: created } = await submitOrVoteCandidate({
         action: "submit",
         candidate: {
           ra: coords.ra,
           dec: coords.dec,
-          object_class: selectedObject?.object_class ?? "planet_x_candidate",
-          anomaly_score: selectedObject?.id === "px-2026-09" ? 0.96 : 0.82,
-          snr: 7.5,
+          object_class:
+            selectedObject?.object_class ?? aiRes?.data.top_class ?? "planet_x_candidate",
+          anomaly_score: measuredAnomaly,
+          snr: measuredSnr,
           submitted_by: observer.trim() || "Citizen-Scientist",
           notes: `${notePrefix}${notes.trim() || selectedObject?.name || "SPHEREx candidate"}`,
         },

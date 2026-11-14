@@ -19,7 +19,11 @@ import {
   type CatalogObject,
   type ShiftStackResult,
 } from "@/lib/api";
-import { renderSkyArrayToCanvas, type ColormapName } from "@/lib/colormaps";
+import {
+  COLORMAP_OPTIONS,
+  renderSkyArrayToCanvas,
+  type ColormapName,
+} from "@/lib/colormaps";
 
 interface ShiftStackPanelProps {
   coords: { ra: number; dec: number };
@@ -263,24 +267,34 @@ export function ShiftStackPanel({
   const snrStacked = stackResult?.snr_stacked ?? 0;
   const snrGain = stackResult?.snr_gain ?? (snrSingle > 0 ? snrStacked / snrSingle : 0);
 
-  // Compute SVG polyline points for the apparent geocentric parallax track
+  // Compute isotropic SVG polyline points for the apparent geocentric parallax track (preserving ΔRA·cos(Dec) scale)
   const trackPoints = (() => {
     const pts = stackResult?.track;
     if (!pts || pts.length < 2) return null;
-    const ras = pts.map((p) => p.ra);
-    const decs = pts.map((p) => p.dec);
-    const minRa = Math.min(...ras);
-    const maxRa = Math.max(...ras);
-    const minDec = Math.min(...decs);
-    const maxDec = Math.max(...decs);
-    const spanRa = Math.max(maxRa - minRa, 1e-5);
-    const spanDec = Math.max(maxDec - minDec, 1e-5);
+    const meanRa = pts.reduce((s, p) => s + p.ra, 0) / pts.length;
+    const meanDec = pts.reduce((s, p) => s + p.dec, 0) / pts.length;
+    const cosDec = Math.max(Math.cos((meanDec * Math.PI) / 180), 1e-4);
 
-    return pts
+    // Sky convention: East is left (-ΔRA·cos(Dec)), North is up (+ΔDec)
+    const proj = pts.map((p) => ({
+      dx: -(p.ra - meanRa) * cosDec * 3600,
+      dy: (p.dec - meanDec) * 3600,
+    }));
+    const xs = proj.map((p) => p.dx);
+    const ys = proj.map((p) => p.dy);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const midX = 0.5 * (minX + maxX);
+    const midY = 0.5 * (minY + maxY);
+    const uniformSpan = Math.max(maxX - minX, (maxY - minY) * (160 / 56), 1e-3);
+    const scalePxPerArcsec = 156 / uniformSpan;
+
+    return proj
       .map((p) => {
-        // Sky convention: East is left (higher RA on left), North is up (higher Dec on top)
-        const x = 180 - ((p.ra - minRa) / spanRa) * 160;
-        const y = 70 - ((p.dec - minDec) / spanDec) * 56;
+        const x = 100 + (p.dx - midX) * scalePxPerArcsec;
+        const y = 42 - (p.dy - midY) * scalePxPerArcsec;
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(" ");
@@ -316,10 +330,11 @@ export function ShiftStackPanel({
               onChange={(e) => setColormap(e.target.value as ColormapName)}
               className="bg-transparent font-medium text-cyan-200 focus:outline-none"
             >
-              <option value="inferno" className="bg-[#090D16]">Inferno</option>
-              <option value="viridis" className="bg-[#090D16]">Viridis</option>
-              <option value="magma" className="bg-[#090D16]">Magma</option>
-              <option value="grayscale" className="bg-[#090D16]">Grayscale</option>
+              {COLORMAP_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value} className="bg-[#090D16]">
+                  {opt.label}
+                </option>
+              ))}
             </select>
           </label>
 

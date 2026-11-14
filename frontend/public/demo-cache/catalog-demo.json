@@ -12,8 +12,8 @@
         "WISE 0855-0714",
         "W0855"
       ],
-      "ra": 133.79513,
-      "dec": -7.24514,
+      "ra": 133.7602,
+      "dec": -7.2422,
       "object_class": "cold_brown_dwarf",
       "mag_ab_w2": 17.23,
       "pm_ra_cosdec_arcsec_yr": -8.118,
@@ -66,8 +66,8 @@
         "PX-2026-09",
         "Gezegen X"
       ],
-      "ra": 51.2,
-      "dec": 14.8,
+      "ra": 51.295473,
+      "dec": 14.832556,
       "object_class": "planet_x_candidate",
       "mag_ab_w2": 22.6,
       "pm_ra_cosdec_arcsec_yr": 97.124236,

@@ -1,5 +1,12 @@
 export type ColormapName = "inferno" | "viridis" | "magma" | "grayscale";
 
+export const COLORMAP_OPTIONS: { value: ColormapName; label: string }[] = [
+  { value: "inferno", label: "Inferno" },
+  { value: "viridis", label: "Viridis" },
+  { value: "magma", label: "Magma" },
+  { value: "grayscale", label: "Grayscale" },
+];
+
 type RGB = [number, number, number];
 
 const STOPS: Record<ColormapName, RGB[]> = {
@@ -114,31 +121,37 @@ export function renderSkyArrayToCanvas(
   }
 
   const span = Math.max(pHigh - pLow, 1e-6);
+  const invSpan = 1 / span;
+  const invHalfSpan = 2 / span;
   const lut = getColormapLut(colormap);
   const imgData = ctx.createImageData(width, height);
   const pixels = imgData.data;
 
   const asinhScale = 3.0;
-  const normMax = Math.asinh(asinhScale);
+  const invNormMax = 1 / Math.asinh(asinhScale);
+  const isSymmetric = Boolean(options?.symmetric);
 
   for (let row = 0; row < height; row++) {
     const canvasY = height - 1 - row;
+    const rowOffset = row * width;
+    const outRowOffset = canvasY * width;
     for (let col = 0; col < width; col++) {
-      const val = data[row * width + col];
+      const rawVal = data[rowOffset + col];
+      const val = Number.isFinite(rawVal) ? rawVal : isSymmetric ? 0 : pLow;
       let stretched: number;
-      if (options?.symmetric) {
-        const signed = Math.max(-1, Math.min(1, val / (span / 2)));
-        stretched = 0.5 + 0.5 * (Math.asinh(signed * asinhScale) / normMax);
+      if (isSymmetric) {
+        const signed = Math.max(-1, Math.min(1, val * invHalfSpan));
+        stretched = 0.5 + 0.5 * (Math.asinh(signed * asinhScale) * invNormMax);
       } else {
-        const linear = Math.max(0, Math.min(1, (val - pLow) / span));
-        stretched = Math.asinh(linear * asinhScale) / normMax;
+        const linear = Math.max(0, Math.min(1, (val - pLow) * invSpan));
+        stretched = Math.asinh(linear * asinhScale) * invNormMax;
       }
-      const idx = Math.max(0, Math.min(255, Math.round(stretched * 255)));
+      const idx = Math.max(0, Math.min(255, Math.round(stretched * 255))) * 3;
 
-      const outOffset = (canvasY * width + col) * 4;
-      pixels[outOffset] = lut[idx * 3];
-      pixels[outOffset + 1] = lut[idx * 3 + 1];
-      pixels[outOffset + 2] = lut[idx * 3 + 2];
+      const outOffset = (outRowOffset + col) * 4;
+      pixels[outOffset] = lut[idx];
+      pixels[outOffset + 1] = lut[idx + 1];
+      pixels[outOffset + 2] = lut[idx + 2];
       pixels[outOffset + 3] = 255;
     }
   }

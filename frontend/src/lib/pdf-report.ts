@@ -85,19 +85,38 @@ export async function generateAndDownloadDiscoveryPdf(params: {
   const { lang, coords, epoch, selectedObject, dataMode } = params;
   const isTr = lang === "tr";
 
+  const isPx = selectedObject?.id === "px-2026-09";
+  const orbitReq = isPx
+    ? { target_id: "px-2026-09" }
+    : {
+        observation: {
+          ra: coords.ra,
+          dec: coords.dec,
+          distance_au:
+            selectedObject?.distance_au ??
+            (selectedObject?.distance_pc ? selectedObject.distance_pc * 206265 : 520),
+          rate_arcsec_yr: Math.hypot(
+            selectedObject?.pm_ra_cosdec_arcsec_yr ?? 0,
+            selectedObject?.pm_dec_arcsec_yr ?? 0
+          ),
+          pa_deg: 275,
+          radial_velocity_km_s: 0,
+        },
+      };
+
   const [specRes, diffRes, stackRes, crossRes, aiRes, orbitRes] = await Promise.all([
     getSpectrum({ ra: coords.ra, dec: coords.dec, epoch }).catch(() => null),
     runDifference({ ra: coords.ra, dec: coords.dec }).catch(() => null),
     runShiftStack({
       ra: coords.ra,
       dec: coords.dec,
-      rate_arcsec_yr: selectedObject?.id === "px-2026-09" ? 110 : 8.15,
-      pa_deg: selectedObject?.id === "px-2026-09" ? 62 : 275,
-      distance_au: selectedObject?.id === "px-2026-09" ? 520 : null,
+      rate_arcsec_yr: isPx ? 110 : 8.15,
+      pa_deg: isPx ? 62 : 275,
+      distance_au: isPx ? 520 : null,
     }).catch(() => null),
     getCrossmatch({ ra: coords.ra, dec: coords.dec }).catch(() => null),
     classifyTarget({ ra: coords.ra, dec: coords.dec }).catch(() => null),
-    simulateOrbit({ target_id: "px-2026-09" }).catch(() => null),
+    simulateOrbit(orbitReq).catch(() => null),
   ]);
 
   const isSynthetic =
@@ -287,12 +306,14 @@ export async function generateAndDownloadDiscoveryPdf(params: {
 
   if (specRes?.data.wavelength_um && specRes.data.flux_ujy.length > 1) {
     const wls = specRes.data.wavelength_um;
-    const flx = specRes.data.flux_ujy;
-    const minF = Math.min(...flx);
-    const maxF = Math.max(...flx, minF + 1e-3);
+    const flx = specRes.data.flux_ujy.map((v) => (Number.isFinite(v) ? v : 0));
+    const finiteFlx = flx.filter((v) => Number.isFinite(v));
+    const minF = finiteFlx.length > 0 ? Math.min(...finiteFlx) : 0;
+    const maxF = finiteFlx.length > 0 ? Math.max(...finiteFlx, minF + 1e-3) : 1;
     lines.push("0.08 0.55 0.75 RG 1.5 w");
     wls.forEach((w, idx) => {
-      const px = boxLeft + ((w - 0.75) / (5.0 - 0.75)) * boxWidth;
+      const safeW = Number.isFinite(w) ? w : 0.75;
+      const px = boxLeft + ((safeW - 0.75) / (5.0 - 0.75)) * boxWidth;
       const py = boxBottom + 8 + ((flx[idx] - minF) / (maxF - minF)) * (boxHeight - 16);
       lines.push(`${px.toFixed(1)} ${py.toFixed(1)} ${idx === 0 ? "m" : "l"}`);
     });

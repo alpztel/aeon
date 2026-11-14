@@ -242,7 +242,15 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
   };
 
   useEffect(() => {
-    return () => stopSonification();
+    const container = plotRef.current;
+    return () => {
+      stopSonification();
+      if (container) {
+        import("plotly.js-dist-min")
+          .then((Plotly) => Plotly.purge(container))
+          .catch(() => {});
+      }
+    };
   }, []);
 
   const handleToggleSonify = () => {

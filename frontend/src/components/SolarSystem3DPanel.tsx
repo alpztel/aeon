@@ -83,11 +83,27 @@ export function SolarSystem3DPanel({
 
   useEffect(() => {
     let active = true;
-    simulateOrbit({
-      target_id: "px-2026-09",
-      horizons_years: [1, 5, 10],
-      samples_per_year: 24,
-    })
+    const isPx = !selectedObject || selectedObject.id === "px-2026-09";
+    const req = isPx
+      ? { target_id: "px-2026-09", horizons_years: [1, 5, 10], samples_per_year: 24 }
+      : {
+          observation: {
+            ra: coords.ra,
+            dec: coords.dec,
+            distance_au:
+              selectedObject.distance_au ??
+              (selectedObject.distance_pc ? selectedObject.distance_pc * 206265 : 520),
+            rate_arcsec_yr: Math.hypot(
+              selectedObject.pm_ra_cosdec_arcsec_yr ?? 0,
+              selectedObject.pm_dec_arcsec_yr ?? 0
+            ),
+            pa_deg: 275,
+            radial_velocity_km_s: 0,
+          },
+          horizons_years: [1, 5, 10],
+          samples_per_year: 24,
+        };
+    simulateOrbit(req)
       .then(({ data, fromCache: cached }) => {
         if (!active) return;
         setOrbit(data);
@@ -101,7 +117,7 @@ export function SolarSystem3DPanel({
     return () => {
       active = false;
     };
-  }, [dict.orbit.error]);
+  }, [coords.ra, coords.dec, selectedObject, dict.orbit.error]);
 
   // Build Three.js scene
   useEffect(() => {
@@ -285,6 +301,19 @@ export function SolarSystem3DPanel({
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       dom.removeEventListener("wheel", onWheel);
+      scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.geometry) {
+          mesh.geometry.dispose();
+        }
+        if (mesh.material) {
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => m.dispose());
+          } else {
+            mesh.material.dispose();
+          }
+        }
+      });
       renderer.dispose();
     };
   }, [orbit, logScale]);
@@ -298,10 +327,12 @@ export function SolarSystem3DPanel({
           <h2 className="text-sm font-semibold uppercase tracking-wider text-white">
             {dict.orbit.title}
           </h2>
-          <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-rose-300">
-            <AlertTriangle className="h-3 w-3" />
-            {dict.badges.synthetic}
-          </span>
+          {(selectedObject?.is_synthetic ?? true) && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-rose-300">
+              <AlertTriangle className="h-3 w-3" />
+              {dict.badges.synthetic}
+            </span>
+          )}
           {fromCache && (
             <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
               {dict.header.dataMode.offline_cache}
