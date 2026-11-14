@@ -238,6 +238,23 @@ test.describe("medium: error paths", () => {
     await page.screenshot({ path: `${SHOTS}/A11-no-spectrum.png` });
   });
 
+  test("A11b spectrum service down or too slow: says so, Retry classifies", async ({ page }) => {
+    let down = true;
+    await page.route(CLASSIFY, (route: Route) => (down
+      ? route.fulfill({ status: 200, headers: CORS, body: fake("main_sequence_star", { spectrum_source: "unavailable", spectrum_snr_median: null }) })
+      : route.continue()));
+    await open(page);
+    await openClassify(page);
+    await expect(card(page)).toHaveAttribute("data-ai-state", "spectrum-unavailable");
+    await expect(card(page).getByRole("alert")).toContainText("The spectrum service is not answering right now");
+    await expect(card(page).getByText(/Top Predicted Class/)).toHaveCount(0);
+    await expect(bars(page)).toHaveCount(0);
+    await page.screenshot({ path: `${SHOTS}/A11b-spectrum-unavailable.png` });
+    down = false;
+    await card(page).getByRole("button", { name: "Retry" }).click();
+    await expect(card(page)).toHaveAttribute("data-ai-state", "ready");
+  });
+
   test("A12 low S/N spectrum carries a caution", async ({ page }) => {
     await page.route(CLASSIFY, (route: Route) => route.fulfill({ status: 200, headers: CORS, body: fake("planet_x_candidate", { spectrum_snr_median: 0.4 }) }));
     await open(page);
