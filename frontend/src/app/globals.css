@@ -1,27 +1,87 @@
 @import "tailwindcss";
 
+/* AEON "Gözlemevi" design language — see frontend/DESIGN.md */
 :root {
-  --aeon-bg: #030712;
-  --aeon-surface: #090d16;
-  --aeon-amber: #f59e0b;
-  --aeon-cyan: #22d3ee;
-  --aeon-violet: #a78bfa;
-  --aeon-danger: #f43f5e;
-  --aeon-text: #f1f5f9;
-  --aeon-muted: #94a3b8;
-  --aeon-border: rgba(255, 255, 255, 0.08);
+  --aeon-bg: #050506;
+  --aeon-surface: rgba(14, 14, 16, 0.72);
+  --aeon-surface-solid: #0e0e10;
+  --aeon-line: rgba(236, 232, 227, 0.1);
+  --aeon-line-strong: rgba(236, 232, 227, 0.2);
+  --aeon-text: #ece8e3;
+  --aeon-muted: #8e877f;
+  --aeon-signal: #ff5a1f;
+  --aeon-ice: #9db4f0;
+  --aeon-ok: #5fd39a;
+  --aeon-warn: #f2b544;
+  --aeon-danger: #ff4d5e;
+  --aeon-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --aeon-inspector-w: min(560px, 100vw);
 }
 
 @theme inline {
   --color-background: var(--aeon-bg);
-  --color-surface: var(--aeon-surface);
+  --color-surface: var(--aeon-surface-solid);
   --color-foreground: var(--aeon-text);
-  --color-amber: var(--aeon-amber);
-  --color-cyan: var(--aeon-cyan);
-  --color-violet: var(--aeon-violet);
+  --color-signal: var(--aeon-signal);
+  --color-ice: var(--aeon-ice);
+  --color-muted: var(--aeon-muted);
+  --color-line: var(--aeon-line);
   --color-danger: var(--aeon-danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-instrument-serif);
+}
+
+/* One accent: the existing panels' amber / cyan / violet / slate utilities are remapped onto the
+   signal-orange, ice-blue and warm-grey scales so every module speaks the same palette. */
+@theme {
+  --color-amber-50: #fff3ed;
+  --color-amber-100: #ffe2d3;
+  --color-amber-200: #ffc3a6;
+  --color-amber-300: #ff9d70;
+  --color-amber-400: #ff7a45;
+  --color-amber-500: #ff5a1f;
+  --color-amber-600: #e8440c;
+  --color-amber-700: #bf350a;
+  --color-amber-800: #982b0e;
+  --color-amber-900: #7a2610;
+  --color-amber-950: #421006;
+
+  --color-cyan-50: #f2f5fe;
+  --color-cyan-100: #e3eafd;
+  --color-cyan-200: #cdd9fb;
+  --color-cyan-300: #b0c3f6;
+  --color-cyan-400: #9db4f0;
+  --color-cyan-500: #7c95e6;
+  --color-cyan-600: #6276d8;
+  --color-cyan-700: #5262c2;
+  --color-cyan-800: #44519d;
+  --color-cyan-900: #3c487c;
+  --color-cyan-950: #262d4b;
+
+  --color-sky-200: #cdd9fb;
+  --color-sky-300: #b0c3f6;
+  --color-sky-400: #9db4f0;
+  --color-sky-500: #7c95e6;
+
+  --color-violet-100: #ece8e3;
+  --color-violet-200: #d9d3cc;
+  --color-violet-300: #c9c2f2;
+  --color-violet-400: #b3aaf0;
+  --color-violet-500: #9389e0;
+  --color-violet-600: #7a6fd0;
+
+  --color-slate-50: #f7f5f2;
+  --color-slate-100: #ece8e3;
+  --color-slate-200: #d9d3cc;
+  --color-slate-300: #c2bbb3;
+  --color-slate-400: #a39b92;
+  --color-slate-500: #8e877f;
+  --color-slate-600: #6e6861;
+  --color-slate-700: #55504a;
+  --color-slate-800: #3a3632;
+  --color-slate-900: #24221f;
+  --color-slate-950: #141311;
 }
 
 html,
@@ -31,16 +91,215 @@ body {
   color-scheme: dark;
 }
 
-.aeon-panel {
-  background: rgba(9, 13, 22, 0.78);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--aeon-border);
+body {
+  font-feature-settings: "ss01", "cv11";
 }
 
-.aeon-mono {
-  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-variant-numeric: tabular-nums;
+::selection {
+  background: rgba(255, 90, 31, 0.35);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--aeon-ice);
+  outline-offset: 2px;
+}
+
+/* Custom components live in the components layer so Tailwind utilities can still override them. */
+@layer components {
+  /* ---------- surfaces ---------- */
+  .aeon-panel {
+    background: var(--aeon-surface);
+    backdrop-filter: blur(20px) saturate(120%);
+    -webkit-backdrop-filter: blur(20px) saturate(120%);
+    border: 1px solid var(--aeon-line);
+    border-radius: 14px;
+  }
+
+  .aeon-glass {
+    background: rgba(10, 10, 12, 0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--aeon-line);
+  }
+
+  /* ---------- type ---------- */
+  .aeon-mono {
+    font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .aeon-label {
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-size: 10.5px;
+    line-height: 1.2;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--aeon-muted);
+  }
+
+  .aeon-display {
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+  }
+
+  .aeon-caption {
+    font-family: var(--font-instrument-serif), Georgia, serif;
+    font-style: italic;
+    letter-spacing: 0.005em;
+  }
+
+  /* ---------- controls ---------- */
+  .aeon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    height: 32px;
+    padding: 0 0.85rem;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 160ms var(--aeon-ease), border-color 160ms var(--aeon-ease),
+      color 160ms var(--aeon-ease), opacity 160ms;
+  }
+  .aeon-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .aeon-btn-primary {
+    background: var(--aeon-signal);
+    color: #140803;
+  }
+  .aeon-btn-primary:hover:not(:disabled) {
+    background: #ff7038;
+  }
+  .aeon-btn-line {
+    border: 1px solid var(--aeon-line-strong);
+    color: var(--aeon-text);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .aeon-btn-line:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(236, 232, 227, 0.32);
+  }
+  .aeon-btn-ghost {
+    color: var(--aeon-muted);
+  }
+  .aeon-btn-ghost:hover:not(:disabled) {
+    color: var(--aeon-text);
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .aeon-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    color: var(--aeon-muted);
+    transition: background-color 160ms var(--aeon-ease), color 160ms var(--aeon-ease);
+  }
+  .aeon-icon-btn:hover {
+    color: var(--aeon-text);
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .aeon-kbd {
+    font-family: var(--font-geist-mono), monospace;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 5px;
+    border: 1px solid var(--aeon-line-strong);
+    color: var(--aeon-muted);
+  }
+
+}
+
+/* Unlayered on purpose: must beat the modules' own padding / radius utilities. */
+/* Inside the inspector the module sections become flat: no nested cards. */
+.aeon-inspector .aeon-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* ---------- motion ---------- */
+@keyframes aeon-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes aeon-slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes aeon-sheet-up {
+  from {
+    transform: translateY(32px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes aeon-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+.aeon-fade-up {
+  animation: aeon-fade-up 400ms var(--aeon-ease) both;
+}
+.aeon-slide-in {
+  animation: aeon-slide-in 280ms var(--aeon-ease) both;
+}
+@media (max-width: 767px) {
+  .aeon-slide-in {
+    animation-name: aeon-sheet-up;
+  }
+}
+.aeon-progress {
+  position: relative;
+  height: 1px;
+  overflow: hidden;
+  background: var(--aeon-line);
+}
+.aeon-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--aeon-ice);
+  animation: aeon-progress 1.1s var(--aeon-ease) infinite;
+}
+
+/* thin scrollbars on dark surfaces */
+.aeon-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(236, 232, 227, 0.18) transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

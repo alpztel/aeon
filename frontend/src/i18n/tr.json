@@ -4,6 +4,55 @@
     "subtitle": "Astrofizik Keşif İşletim Sistemi",
     "challenge": "NASA Space Apps 2026 · Planet X & SPHEREx"
   },
+  "shell": {
+    "searchPlaceholder": "Hedef veya RA, Dec ara",
+    "searchHint": "Katalog adı, tanımlayıcı ya da derece cinsinden RA Dec",
+    "quickTargets": "Demo hedefler",
+    "target": "Hedef",
+    "fieldPosition": "Alan konumu",
+    "tools": "Analiz araçları",
+    "toolNames": {
+      "diff": "Görüntü Farkı",
+      "spectrum": "102-Bant Tayf",
+      "classify": "Yapay Zekâ Sınıflandırma",
+      "crossmatch": "Çapraz Eşleme ve SED",
+      "stack": "Kaydır ve Yığ",
+      "orbit": "3B Yörünge",
+      "candidates": "Aday Havuzu"
+    },
+    "toolHints": {
+      "diff": "Hareket eden kaynaklar iki dönem arasında ± dipol olarak belirir.",
+      "spectrum": "Moleküler soğurma bantlarıyla 0.75–5.0 µm fotometri.",
+      "classify": "1D-CNN sınıf olasılıkları ve ViT anomali skoru.",
+      "crossmatch": "Gaia, WISE ve MAST karşılıkları ile geniş bant SED.",
+      "stack": "Tek pozda görünmeyen sönük gezginleri ortaya çıkarır.",
+      "orbit": "REBOUND öngörüsü ve astrometrik yörünge uydurma.",
+      "candidates": "Topluluk gönderimleri, oylar ve sıralama."
+    },
+    "expand": "Paneli genişlet",
+    "collapse": "Paneli daralt",
+    "close": "Paneli kapat",
+    "epoch": "Tarama dönemi",
+    "viewSettings": "Görünüm ayarları",
+    "alerts": "Canlı uyarılar",
+    "noAlerts": "Şu an canlı bildirim yok.",
+    "tour": "Rehberli tur",
+    "welcomeKicker": "NASA Space Apps 2026 · Planet X ve SPHEREx",
+    "welcomeTitle": "Kızılötesi gökyüzünde hareket edeni bul.",
+    "welcomeBody": "AEON, SPHEREx benzeri 102 bantlı tarama verisini keşfe dönüştürür: dönemleri karşılaştır, sönük gezginleri yığ, tayfları oku ve yörüngeleri öngör. Her sayı hesaplanır; her sentetik nesne etiketlenir.",
+    "howTo": [
+      "Bir hedef ara ya da demo hedeflerden birini seç.",
+      "Sağdaki raydan bir analiz aracı aç.",
+      "Hareketi görmek için alttaki tarama dönemlerini kaydır."
+    ],
+    "explore": "Serbestçe keşfet",
+    "startTour": "Rehberli turu başlat",
+    "dontShow": "Bir daha gösterme",
+    "step": "Adım",
+    "skip": "Atla",
+    "loading": "Yükleniyor",
+    "pmShort": "ÖD"
+  },
   "header": {
     "demoTour": "Jüri Demo Turu",
     "shortcuts": "Kısayollar",
