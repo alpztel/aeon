@@ -1307,6 +1307,15 @@
               1000
             ],
             "description": "blind-search: distance range searched on a grid uniform in parallax (1/d), spaced so the parallax mismatch stays below ~1.2 px. null = no distance axis (no parallax)."
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "uniform",
+              "spherex"
+            ],
+            "default": "uniform",
+            "description": "shift-stack / blind-search frame times: uniform over 2026, or only while the field's solar elongation is 90 +- 10 deg (SPHEREx-like visit windows)."
           }
         }
       },
@@ -1467,6 +1476,20 @@
                 }
               }
             }
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "uniform",
+              "spherex"
+            ]
+          },
+          "astrometry": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Astrometry"
+            },
+            "description": "Independent positions measured on sub-stacks of consecutive frames along the track; usable as orbit/simulate detections."
           }
         }
       },
@@ -1563,7 +1586,7 @@
       },
       "OrbitRequest": {
         "type": "object",
-        "description": "Either `elements` or `observation` must be given.",
+        "description": "Exactly one of detections, elements, observation or target_id.",
         "properties": {
           "elements": {
             "type": "object",
@@ -1651,6 +1674,15 @@
             "default": 24,
             "minimum": 1,
             "maximum": 365
+          },
+          "detections": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/Astrometry"
+            },
+            "description": "Geocentric astrometry; a heliocentric state is fitted by least squares (Earth parallax included) and forecast with REBOUND."
           }
         }
       },
@@ -1758,6 +1790,47 @@
           "input": {
             "type": "object",
             "additionalProperties": true
+          },
+          "fit": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Orbit-determination summary when detections were given",
+            "properties": {
+              "distance_au": {
+                "type": "number"
+              },
+              "distance_err_au": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "rate_arcsec_yr": {
+                "type": "number"
+              },
+              "rate_err_arcsec_yr": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "pa_deg": {
+                "type": "number"
+              },
+              "rms_residual_arcsec": {
+                "type": "number"
+              },
+              "reduced_chi2": {
+                "type": "number"
+              },
+              "converged": {
+                "type": "boolean"
+              },
+              "elements": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
           }
         }
       },
@@ -1859,6 +1932,37 @@
           },
           "notes": {
             "type": "string"
+          }
+        }
+      },
+      "Astrometry": {
+        "type": "object",
+        "required": [
+          "t",
+          "ra",
+          "dec",
+          "sigma_arcsec"
+        ],
+        "properties": {
+          "t": {
+            "type": "number",
+            "description": "decimal year"
+          },
+          "ra": {
+            "type": "number"
+          },
+          "dec": {
+            "type": "number"
+          },
+          "sigma_arcsec": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "snr": {
+            "type": "number"
+          },
+          "n_frames": {
+            "type": "integer"
           }
         }
       }
