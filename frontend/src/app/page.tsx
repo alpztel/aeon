@@ -1,17 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Layers, Radar } from "lucide-react";
+import { Layers, Orbit, Radar } from "lucide-react";
 import { DifferencePanel } from "@/components/DifferencePanel";
 import { Header } from "@/components/Header";
 import { ShiftStackPanel } from "@/components/ShiftStackPanel";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { SkyMapPanel } from "@/components/SkyMapPanel";
+import { SolarSystem3DPanel } from "@/components/SolarSystem3DPanel";
 import { SpectrumPanel } from "@/components/SpectrumPanel";
 import { useI18n } from "@/i18n/context";
 import {
   getHealth,
   searchCatalog,
+  type AstrometryPoint,
   type CatalogObject,
   type DataMode,
   type Epoch,
@@ -23,12 +25,14 @@ export default function HomePage() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [diffOpen, setDiffOpen] = useState(true);
   const [stackOpen, setStackOpen] = useState(true);
+  const [orbitOpen, setOrbitOpen] = useState(true);
   const [epoch, setEpoch] = useState<Epoch>("2026-Q1");
   const [coords, setCoords] = useState<{ ra: number; dec: number }>({
     ra: 133.79513,
     dec: -7.24514,
   });
   const [selectedObject, setSelectedObject] = useState<CatalogObject | null>(null);
+  const [astrometry, setAstrometry] = useState<AstrometryPoint[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -68,6 +72,9 @@ export default function HomePage() {
       } else if (e.key === "s" || e.key === "S") {
         e.preventDefault();
         setStackOpen((prev) => !prev);
+      } else if (e.key === "3") {
+        e.preventDefault();
+        setOrbitOpen((prev) => !prev);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -119,6 +126,19 @@ export default function HomePage() {
             <Radar className="h-3.5 w-3.5" />
             <span>{dict.stack.toggle}</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setOrbitOpen((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+              orbitOpen
+                ? "border-cyan-400/50 bg-cyan-500/20 text-cyan-200"
+                : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            <Orbit className="h-3.5 w-3.5" />
+            <span>{dict.orbit.toggle}</span>
+          </button>
         </div>
 
         {diffOpen && (
@@ -132,7 +152,19 @@ export default function HomePage() {
         />
 
         {stackOpen && (
-          <ShiftStackPanel coords={coords} selectedObject={selectedObject} />
+          <ShiftStackPanel
+            coords={coords}
+            selectedObject={selectedObject}
+            onAstrometryReady={setAstrometry}
+          />
+        )}
+
+        {orbitOpen && (
+          <SolarSystem3DPanel
+            coords={coords}
+            selectedObject={selectedObject}
+            astrometry={astrometry}
+          />
         )}
       </main>
       <ShortcutsModal

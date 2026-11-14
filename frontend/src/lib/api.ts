@@ -12,6 +12,9 @@ export type DifferenceResult = components["schemas"]["DifferenceResult"];
 export type ShiftStackResult = components["schemas"]["ShiftStackResult"];
 export type BlindSearchResult = components["schemas"]["BlindSearchResult"];
 export type Detection = components["schemas"]["Detection"];
+export type AstrometryPoint = components["schemas"]["Astrometry"];
+export type OrbitRequest = components["schemas"]["OrbitRequest"];
+export type OrbitResult = components["schemas"]["OrbitResult"];
 
 export type DataMode = "fits_archive" | "physical_model" | "offline_cache";
 
@@ -236,7 +239,9 @@ export async function getSpectrum(
   }
 }
 
-function buildAnalysisBody(partial: Partial<AnalysisRequest> & { ra: number; dec: number }): AnalysisRequest {
+function buildAnalysisBody(
+  partial: Partial<AnalysisRequest> & { ra: number; dec: number }
+): AnalysisRequest {
   return {
     ra: partial.ra,
     dec: partial.dec,
@@ -252,6 +257,10 @@ function buildAnalysisBody(partial: Partial<AnalysisRequest> & { ra: number; dec
     rate_range_arcsec_yr: partial.rate_range_arcsec_yr ?? [20, 200],
     pa_range_deg: partial.pa_range_deg ?? [30, 90],
     grid: partial.grid ?? 5,
+    distance_au: partial.distance_au === undefined ? null : partial.distance_au,
+    distance_range_au:
+      partial.distance_range_au === undefined ? [250, 1000] : partial.distance_range_au,
+    cadence: partial.cadence ?? "uniform",
   };
 }
 
@@ -314,6 +323,32 @@ export async function runBlindSearch(
       const cached = await fetchDemoCache<BlindSearchResult>(`blind-${id}.json`);
       if (cached) return { data: cached, fromCache: true };
     }
+    throw err;
+  }
+}
+
+export async function simulateOrbit(
+  req: Partial<OrbitRequest>
+): Promise<{ data: OrbitResult; fromCache: boolean }> {
+  const body: OrbitRequest = {
+    horizons_years: req.horizons_years ?? [1, 5, 10],
+    samples_per_year: req.samples_per_year ?? 24,
+    ...(req.target_id ? { target_id: req.target_id } : {}),
+    ...(req.observation ? { observation: req.observation } : {}),
+    ...(req.elements ? { elements: req.elements } : {}),
+    ...(req.detections ? { detections: req.detections } : {}),
+  };
+
+  try {
+    const data = await fetchJson<OrbitResult>("/api/v1/orbit/simulate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { data, fromCache: false };
+  } catch (err) {
+    const cached = await fetchDemoCache<OrbitResult>("orbit-px-2026-09.json");
+    if (cached) return { data: cached, fromCache: true };
     throw err;
   }
 }

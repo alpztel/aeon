@@ -14,6 +14,7 @@ import { useI18n } from "@/i18n/context";
 import {
   runBlindSearch,
   runShiftStack,
+  type AstrometryPoint,
   type BlindSearchResult,
   type CatalogObject,
   type ShiftStackResult,
@@ -23,6 +24,7 @@ import { renderSkyArrayToCanvas, type ColormapName } from "@/lib/colormaps";
 interface ShiftStackPanelProps {
   coords: { ra: number; dec: number };
   selectedObject: CatalogObject | null;
+  onAstrometryReady?: (points: AstrometryPoint[]) => void;
 }
 
 function SnrGrid({
@@ -85,7 +87,7 @@ function SnrGrid({
                           }}
                           className={`aeon-mono w-full rounded px-1.5 py-1.5 font-medium transition hover:ring-1 hover:ring-cyan-400 ${
                             isPeak
-                              ? "ring-2 ring-amber-400 text-white font-bold"
+                              ? "ring-2 ring-amber-400 font-bold text-white"
                               : "text-slate-100"
                           }`}
                         >
@@ -104,11 +106,18 @@ function SnrGrid({
   );
 }
 
-export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps) {
+export function ShiftStackPanel({
+  coords,
+  selectedObject,
+  onAstrometryReady,
+}: ShiftStackPanelProps) {
   const { dict } = useI18n();
 
   const [rate, setRate] = useState<number>(110);
   const [pa, setPa] = useState<number>(62);
+  const [useParallax, setUseParallax] = useState<boolean>(true);
+  const [distanceAu, setDistanceAu] = useState<number>(520);
+  const [cadence, setCadence] = useState<"uniform" | "spherex">("uniform");
   const [combine, setCombine] = useState<"mean" | "median">("mean");
   const [colormap, setColormap] = useState<ColormapName>("inferno");
 
@@ -121,17 +130,20 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
   const singleCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const stackedCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Run initial shift-stack whenever target coordinates change
   useEffect(() => {
     let active = true;
-    const defaultRate = selectedObject?.id === "px-2026-09" ? 110 : 8.15;
-    const defaultPa = selectedObject?.id === "px-2026-09" ? 62 : 275;
+    const isPx = selectedObject?.id === "px-2026-09";
+    const defaultRate = isPx ? 110 : 8.15;
+    const defaultPa = isPx ? 62 : 275;
+    const defaultDist = isPx ? 520 : null;
 
     runShiftStack({
       ra: coords.ra,
       dec: coords.dec,
       rate_arcsec_yr: defaultRate,
       pa_deg: defaultPa,
+      distance_au: defaultDist,
+      cadence: "uniform",
       n_frames: 24,
       combine: "mean",
     })
@@ -139,7 +151,12 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
         if (!active) return;
         setRate(data.rate_arcsec_yr ?? defaultRate);
         setPa(data.pa_deg ?? defaultPa);
+        setUseParallax(data.distance_au !== null && data.distance_au !== undefined);
+        if (data.distance_au) setDistanceAu(Math.round(data.distance_au));
         setStackResult(data);
+        if (data.astrometry && onAstrometryReady) {
+          onAstrometryReady(data.astrometry);
+        }
         setFromCache(cached);
         setError(null);
       })
@@ -151,7 +168,7 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
     return () => {
       active = false;
     };
-  }, [coords.ra, coords.dec, selectedObject?.id, dict.stack.error]);
+  }, [coords.ra, coords.dec, selectedObject?.id, dict.stack.error, onAstrometryReady]);
 
   useEffect(() => {
     if (!stackResult) return;
@@ -178,7 +195,11 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
     }
   }, [stackResult, colormap]);
 
-  const executeStack = async (nextRate: number, nextPa: number) => {
+  const executeStack = async (
+    nextRate: number,
+    nextPa: number,
+    nextDist: number | null
+  ) => {
     setLoading(true);
     setError(null);
     try {
@@ -187,10 +208,15 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
         dec: coords.dec,
         rate_arcsec_yr: nextRate,
         pa_deg: nextPa,
+        distance_au: nextDist,
+        cadence,
         n_frames: 24,
         combine,
       });
       setStackResult(data);
+      if (data.astrometry && onAstrometryReady) {
+        onAstrometryReady(data.astrometry);
+      }
       setFromCache(cached);
     } catch {
       setError(dict.stack.error);
@@ -208,14 +234,23 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
         dec: coords.dec,
         n_frames: 24,
         combine,
+        cadence,
         rate_range_arcsec_yr: [20, 200],
         pa_range_deg: [30, 90],
+        distance_range_au: useParallax ? [250, 1000] : null,
         grid: 5,
       });
       setBlindResult(data);
       setStackResult(data.best);
       if (data.best.rate_arcsec_yr !== undefined) setRate(Math.round(data.best.rate_arcsec_yr));
       if (data.best.pa_deg !== undefined) setPa(Math.round(data.best.pa_deg));
+      if (data.best.distance_au !== undefined && data.best.distance_au !== null) {
+        setUseParallax(true);
+        setDistanceAu(Math.round(data.best.distance_au));
+      }
+      if (data.best.astrometry && onAstrometryReady) {
+        onAstrometryReady(data.best.astrometry);
+      }
       setFromCache(cached);
     } catch {
       setError(dict.stack.error);
@@ -227,6 +262,29 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
   const snrSingle = stackResult?.snr_single_frame ?? 0;
   const snrStacked = stackResult?.snr_stacked ?? 0;
   const snrGain = stackResult?.snr_gain ?? (snrSingle > 0 ? snrStacked / snrSingle : 0);
+
+  // Compute SVG polyline points for the apparent geocentric parallax track
+  const trackPoints = (() => {
+    const pts = stackResult?.track;
+    if (!pts || pts.length < 2) return null;
+    const ras = pts.map((p) => p.ra);
+    const decs = pts.map((p) => p.dec);
+    const minRa = Math.min(...ras);
+    const maxRa = Math.max(...ras);
+    const minDec = Math.min(...decs);
+    const maxDec = Math.max(...decs);
+    const spanRa = Math.max(maxRa - minRa, 1e-5);
+    const spanDec = Math.max(maxDec - minDec, 1e-5);
+
+    return pts
+      .map((p) => {
+        // Sky convention: East is left (higher RA on left), North is up (higher Dec on top)
+        const x = 180 - ((p.ra - minRa) / spanRa) * 160;
+        const y = 70 - ((p.dec - minDec) / spanDec) * 56;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(" ");
+  })();
 
   return (
     <section className="aeon-panel rounded-2xl p-4 sm:p-5">
@@ -267,7 +325,7 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
 
           <button
             type="button"
-            onClick={() => executeStack(rate, pa)}
+            onClick={() => executeStack(rate, pa, useParallax ? distanceAu : null)}
             disabled={loading}
             className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/35 bg-cyan-500/15 px-3 py-1.5 font-medium text-cyan-200 transition hover:bg-cyan-500/25 disabled:opacity-50"
           >
@@ -287,8 +345,8 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
         </div>
       </div>
 
-      {/* Sliders: Rate & PA & Combine */}
-      <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-white/10 bg-black/30 p-3.5 md:grid-cols-3">
+      {/* Sliders: Rate, PA, Trial Distance (Parallax), Cadence & Combine */}
+      <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-white/10 bg-black/30 p-3.5 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="mb-1 flex justify-between text-xs">
             <span className="text-slate-400">{dict.stack.rate}</span>
@@ -321,27 +379,80 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
           />
         </div>
 
-        <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="text-slate-400">{dict.stack.combine}:</span>
-          <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-0.5">
-            <button
-              type="button"
-              onClick={() => setCombine("mean")}
-              className={`rounded-md px-2.5 py-1 transition ${
-                combine === "mean" ? "bg-violet-500/25 text-violet-200" : "text-slate-400"
-              }`}
-            >
-              {dict.stack.mean}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCombine("median")}
-              className={`rounded-md px-2.5 py-1 transition ${
-                combine === "median" ? "bg-violet-500/25 text-violet-200" : "text-slate-400"
-              }`}
-            >
-              {dict.stack.median}
-            </button>
+        <div>
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 text-slate-400">
+              <input
+                type="checkbox"
+                checked={useParallax}
+                onChange={(e) => setUseParallax(e.target.checked)}
+                className="accent-violet-400"
+              />
+              <span>{dict.stack.distance}</span>
+            </label>
+            <span className="aeon-mono font-semibold text-violet-300">
+              {useParallax ? `${distanceAu} AU` : dict.stack.noParallax}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={200}
+            max={1200}
+            step={10}
+            disabled={!useParallax}
+            value={distanceAu}
+            onChange={(e) => setDistanceAu(Number(e.target.value))}
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-white/15 accent-violet-400 disabled:opacity-40"
+          />
+        </div>
+
+        <div className="flex flex-col justify-between gap-2 text-xs">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-slate-400">{dict.stack.cadence}:</span>
+            <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-0.5">
+              <button
+                type="button"
+                onClick={() => setCadence("uniform")}
+                className={`rounded-md px-2 py-0.5 text-[11px] transition ${
+                  cadence === "uniform" ? "bg-cyan-500/25 text-cyan-200" : "text-slate-400"
+                }`}
+              >
+                {dict.stack.cadenceUniform}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCadence("spherex")}
+                className={`rounded-md px-2 py-0.5 text-[11px] transition ${
+                  cadence === "spherex" ? "bg-cyan-500/25 text-cyan-200" : "text-slate-400"
+                }`}
+              >
+                {dict.stack.cadenceSpherex}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-slate-400">{dict.stack.combine}:</span>
+            <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-0.5">
+              <button
+                type="button"
+                onClick={() => setCombine("mean")}
+                className={`rounded-md px-2 py-0.5 text-[11px] transition ${
+                  combine === "mean" ? "bg-violet-500/25 text-violet-200" : "text-slate-400"
+                }`}
+              >
+                {dict.stack.mean}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCombine("median")}
+                className={`rounded-md px-2 py-0.5 text-[11px] transition ${
+                  combine === "median" ? "bg-violet-500/25 text-violet-200" : "text-slate-400"
+                }`}
+              >
+                {dict.stack.median}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -390,7 +501,7 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
           </div>
         </div>
 
-        {/* S/N Gain + Heatmaps */}
+        {/* S/N Gain + Parallax Loop Preview */}
         <div className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 lg:col-span-4">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -426,6 +537,22 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
               </div>
             </div>
 
+            {trackPoints && (
+              <div className="rounded-xl border border-white/10 bg-black/40 p-2.5">
+                <div className="mb-1 text-[11px] font-medium text-slate-400">
+                  {dict.stack.parallaxTrack}
+                </div>
+                <svg viewBox="0 0 200 84" className="h-20 w-full">
+                  <polyline
+                    fill="none"
+                    stroke="#22d3ee"
+                    strokeWidth="2"
+                    points={trackPoints}
+                  />
+                </svg>
+              </div>
+            )}
+
             {blindResult && (
               <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-200">
                 <div className="flex items-center gap-1.5 font-semibold">
@@ -434,8 +561,11 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
                 </div>
                 <p className="aeon-mono mt-1 text-sm">
                   {blindResult.best.rate_arcsec_yr?.toFixed(1)}″/yr · PA{" "}
-                  {blindResult.best.pa_deg?.toFixed(1)}° (S/N{" "}
-                  {blindResult.best.snr_stacked.toFixed(2)})
+                  {blindResult.best.pa_deg?.toFixed(1)}°
+                  {blindResult.best.distance_au
+                    ? ` · ${blindResult.best.distance_au.toFixed(0)} AU`
+                    : ""}{" "}
+                  (S/N {blindResult.best.snr_stacked.toFixed(2)})
                 </p>
               </div>
             )}
@@ -445,33 +575,82 @@ export function ShiftStackPanel({ coords, selectedObject }: ShiftStackPanelProps
         </div>
       </div>
 
-      {/* 5x5 Blind Search Heatmaps */}
+      {/* 5x5 Blind Search Heatmaps + Distance Profile */}
       {blindResult && (
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <SnrGrid
-            title={dict.stack.coarseGrid}
-            grid={blindResult.grid}
-            rates={blindResult.rates_arcsec_yr}
-            pas={blindResult.pas_deg}
-            onSelectVector={(r, p) => {
-              setRate(Math.round(r));
-              setPa(Math.round(p));
-              executeStack(r, p);
-            }}
-          />
-          {blindResult.refined?.grid && (
+        <div className="mt-4 space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <SnrGrid
-              title={dict.stack.refinedGrid}
-              grid={blindResult.refined.grid}
-              rates={blindResult.refined.rates_arcsec_yr}
-              pas={blindResult.refined.pas_deg}
+              title={dict.stack.coarseGrid}
+              grid={blindResult.grid}
+              rates={blindResult.rates_arcsec_yr}
+              pas={blindResult.pas_deg}
               onSelectVector={(r, p) => {
                 setRate(Math.round(r));
                 setPa(Math.round(p));
-                executeStack(r, p);
+                executeStack(r, p, useParallax ? distanceAu : null);
               }}
             />
-          )}
+            {blindResult.refined?.grid && (
+              <SnrGrid
+                title={dict.stack.refinedGrid}
+                grid={blindResult.refined.grid}
+                rates={blindResult.refined.rates_arcsec_yr}
+                pas={blindResult.refined.pas_deg}
+                onSelectVector={(r, p) => {
+                  setRate(Math.round(r));
+                  setPa(Math.round(p));
+                  executeStack(r, p, useParallax ? distanceAu : null);
+                }}
+              />
+            )}
+          </div>
+
+          {blindResult.distances_au &&
+            blindResult.distance_profile &&
+            blindResult.distances_au.length > 0 && (
+              <div className="rounded-xl border border-white/10 bg-black/40 p-3">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  {dict.stack.distanceProfile}
+                </h3>
+                <div className="flex flex-wrap items-end gap-2 pt-2">
+                  {blindResult.distances_au.map((d, idx) => {
+                    const snr = blindResult.distance_profile?.[idx] ?? 0;
+                    const maxProf = Math.max(...(blindResult.distance_profile ?? [1]), 1);
+                    const pct = Math.max(12, Math.round((snr / maxProf) * 100));
+                    const isBest = snr === maxProf;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => {
+                          setUseParallax(true);
+                          setDistanceAu(Math.round(d));
+                          executeStack(rate, pa, d);
+                        }}
+                        className="group flex flex-1 min-w-[54px] flex-col items-center gap-1"
+                      >
+                        <span className="aeon-mono text-[10px] text-slate-300">
+                          {snr.toFixed(1)}
+                        </span>
+                        <div className="flex h-20 w-full items-end rounded bg-white/5 p-1">
+                          <div
+                            style={{ height: `${pct}%` }}
+                            className={`w-full rounded transition ${
+                              isBest
+                                ? "bg-amber-400"
+                                : "bg-violet-400/60 group-hover:bg-cyan-400"
+                            }`}
+                          />
+                        </div>
+                        <span className="aeon-mono text-[10px] text-slate-400">
+                          {d.toFixed(0)} AU
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
         </div>
       )}
     </section>

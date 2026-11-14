@@ -225,6 +225,7 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /** @description Positions (ra, dec) are apparent geocentric positions at the requested epoch (proper motion + Earth parallax for objects with a known distance). */
         CatalogObject: {
             id: string;
             name: string;
@@ -321,7 +322,7 @@ export interface components {
             /** @default 2026-Q3 */
             epoch_2: components["schemas"]["Epoch"];
             /**
-             * @description shift-stack: apparent sky rate
+             * @description shift-stack: heliocentric angular rate (arcsec/yr). With distance_au set, the apparent (geocentric) track adds Earth's reflex parallax.
              * @default 0
              */
             rate_arcsec_yr: number;
@@ -353,6 +354,25 @@ export interface components {
             pa_range_deg: number[];
             /** @default 5 */
             grid: number;
+            /**
+             * @description shift-stack: trial geocentric distance in AU for Earth-parallax digital tracking. null = no parallax (linear motion only, appropriate for objects beyond ~10^4 AU or parallax-corrected frames).
+             * @default null
+             */
+            distance_au: number | null;
+            /**
+             * @description blind-search: distance range searched on a grid uniform in parallax (1/d), spaced so the parallax mismatch stays below ~1.2 px. null = no distance axis (no parallax).
+             * @default [
+             *       250,
+             *       1000
+             *     ]
+             */
+            distance_range_au: number[] | null;
+            /**
+             * @description shift-stack / blind-search frame times: uniform over 2026, or only while the field's solar elongation is 90 +- 10 deg (SPHEREx-like visit windows).
+             * @default uniform
+             * @enum {string}
+             */
+            cadence: "uniform" | "spherex";
         };
         Detection: {
             x?: number;
@@ -391,14 +411,26 @@ export interface components {
             peak?: components["schemas"]["Detection"];
             /** @description Reference epoch (decimal year) at which the stacked image is registered */
             t_ref?: number;
+            /** @description 'geocentric (Earth parallax tracked)' when distance_au is set, otherwise 'heliocentric (no parallax)' */
             motion_frame?: string;
+            distance_au?: number | null;
+            /** @description Predicted apparent (geocentric) position of the hypothesis at each frame time */
+            track?: {
+                t: number;
+                ra: number;
+                dec: number;
+            }[];
+            /** @enum {string} */
+            cadence?: "uniform" | "spherex";
+            /** @description Independent positions measured on sub-stacks of consecutive frames along the track; usable as orbit/simulate detections. */
+            astrometry?: components["schemas"]["Astrometry"][];
         };
         BlindSearchResult: {
             /** @constant */
             method: "blind-search";
             rates_arcsec_yr?: number[];
             pas_deg?: number[];
-            /** @description S/N, indexed [rate_index][pa_index] */
+            /** @description S/N indexed [rate_index][pa_index], at the best distance */
             grid: number[][];
             best: components["schemas"]["ShiftStackResult"];
             /** @description Finer grid centred on the coarse optimum */
@@ -407,8 +439,13 @@ export interface components {
                 pas_deg?: number[];
                 grid?: number[][];
             } | null;
+            /** @description Distance grid searched (null when no distance axis) */
+            distances_au?: number[] | null;
+            /** @description Best S/N over the rate x PA grid at each distance */
+            distance_profile?: number[] | null;
+            n_hypotheses?: number;
         };
-        /** @description Either `elements` or `observation` must be given. */
+        /** @description Exactly one of detections, elements, observation or target_id. */
         OrbitRequest: {
             elements?: {
                 a_au: number;
@@ -444,6 +481,8 @@ export interface components {
             horizons_years: number[];
             /** @default 24 */
             samples_per_year: number;
+            /** @description Geocentric astrometry; a heliocentric state is fitted by least squares (Earth parallax included) and forecast with REBOUND. */
+            detections?: components["schemas"]["Astrometry"][];
         };
         OrbitResult: {
             /** @description e.g. rebound-4.x/ias15 or numpy-leapfrog */
@@ -475,6 +514,22 @@ export interface components {
             input?: {
                 [key: string]: unknown;
             };
+            /** @description Orbit-determination summary when detections were given */
+            fit?: {
+                distance_au?: number;
+                distance_err_au?: number | null;
+                rate_arcsec_yr?: number;
+                rate_err_arcsec_yr?: number | null;
+                pa_deg?: number;
+                rms_residual_arcsec?: number;
+                reduced_chi2?: number;
+                converged?: boolean;
+                elements?: {
+                    [key: string]: unknown;
+                };
+            } & {
+                [key: string]: unknown;
+            };
         };
         StateSample: {
             /** @description years since epoch_start */
@@ -504,6 +559,15 @@ export interface components {
             /** Format: uri */
             github_issue_url?: string | null;
             notes?: string;
+        };
+        Astrometry: {
+            /** @description decimal year */
+            t: number;
+            ra: number;
+            dec: number;
+            sigma_arcsec: number;
+            snr?: number;
+            n_frames?: number;
         };
     };
     responses: {
