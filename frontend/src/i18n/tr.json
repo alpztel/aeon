@@ -225,7 +225,7 @@
       "PX-2026-09'a git, kör tarama yap ve 3B yörüngeyi aç"
     ],
     "executedActions": "Uygulanan Arayüz Aksiyonları",
-    "classifyTitle": "1D-CNN Tayf Sınıflandırıcı & PatchAnomalyViT",
+    "classifyTitle": "Fizik-Rehberli 1D-CNN Tayf Sınıflandırıcı & ZOGY Anomali Denetçisi",
     "topClass": "En Yüksek Olasılıklı Sınıf",
     "anomalyScore": "ViT Anomali Skoru",
     "highAnomaly": "Yüksek Keşif Önceliği",

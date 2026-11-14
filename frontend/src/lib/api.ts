@@ -20,7 +20,28 @@ export type Candidate = components["schemas"]["Candidate"];
 export type AiCommandResponse =
   operations["aiCommand"]["responses"]["200"]["content"]["application/json"];
 export type AiClassifyResponse =
-  operations["aiClassify"]["responses"]["200"]["content"]["application/json"];
+  operations["aiClassify"]["responses"]["200"]["content"]["application/json"] & {
+    physics_diagnostics?: {
+      teff_k?: number;
+      log_g_cgs?: number;
+      w1_ab_mag?: number;
+      w2_ab_mag?: number;
+      w1_minus_w2_ab?: number;
+      ch4_3_3um_index?: number;
+      h2o_2_7um_index?: number;
+      co_4_67um_index?: number;
+      spectral_recon_rms?: number;
+      best_template_class?: ObjectClass;
+    } | null;
+    astroclip_zogy?: {
+      astroclip_similarity?: number;
+      cross_modal_tension?: number;
+      zogy_peak_snr?: number;
+      dipole_polarity_score?: number;
+      cosmic_ray_veto?: boolean;
+      is_moving_dipole?: boolean;
+    } | null;
+  };
 export type CrossmatchResult =
   operations["missionsCrossmatch"]["responses"]["200"]["content"]["application/json"];
 export type GcnAlert =
@@ -619,12 +640,48 @@ export async function classifyTarget(params: {
   image?: SkyImage;
   ra?: number;
   dec?: number;
+  epoch?: Epoch;
 }): Promise<{ data: AiClassifyResponse; fromCache: boolean }> {
-  // No offline substitute: class probabilities and anomaly scores only come from the ai-engine.
+  let fluxUjy = params.flux_ujy;
+  let skyImage = params.image;
+
+  // Pre-resolve spectrum + cutout on the client when only (ra, dec) are supplied.
+  // This avoids ai-engine's 2.5s upstream timeout on uncached FITS archive spectra
+  // and ensures PatchAnomalyViT + AstroCLIP-ZOGY receive the real 2D sky cutout.
+  if (
+    params.ra !== undefined &&
+    params.dec !== undefined &&
+    (!fluxUjy || !skyImage)
+  ) {
+    const ep = params.epoch ?? "2026-Q1";
+    const [specRes, cutRes] = await Promise.all([
+      fluxUjy
+        ? Promise.resolve(null)
+        : getSpectrum({ ra: params.ra, dec: params.dec, epoch: ep }).catch(() => null),
+      skyImage
+        ? Promise.resolve(null)
+        : getSkyCutout({ ra: params.ra, dec: params.dec, epoch: ep, size_px: 32 }).catch(
+            () => null
+          ),
+    ]);
+    if (!fluxUjy && specRes?.data?.flux_ujy?.length === 102) {
+      fluxUjy = specRes.data.flux_ujy;
+    }
+    if (!skyImage && cutRes?.data) {
+      skyImage = cutRes.data;
+    }
+  }
+
+  const payload: Record<string, unknown> = {};
+  if (fluxUjy) payload.flux_ujy = fluxUjy;
+  if (skyImage) payload.image = skyImage;
+  if (params.ra !== undefined) payload.ra = params.ra;
+  if (params.dec !== undefined) payload.dec = params.dec;
+
   const data = await fetchJson<AiClassifyResponse>("/api/v1/ai/classify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ flux_ujy: params.flux_ujy, image: params.image }),
+    body: JSON.stringify(payload),
   });
   return { data, fromCache: false };
 }
