@@ -9,7 +9,7 @@ Durum: ✅ tamam · 🔄 sürüyor · ⏳ sırada
 | 2 | **Dünya paralaksına duyarlı Planet X araması (dijital izleme)**: görünür (geosentrik) konumlar, deneme uzaklığı ekseni, uzaklık × hız × KA kör taraması | 520 AU'daki bir cismin görünür hareketine yıllık ~±400″ paralaks hâkimdir; doğrusal shift-stack gerçek gökyüzünde çalışmaz | ✅ PR #3/#4 |
 | 3 | Çok dönemli tespitlerden yörünge belirleme (en küçük kareler → REBOUND başlangıç durumu, belirsizlik elipsi) | Keşiften yörüngeye tek tık | ✅ `lider/roadmap` |
 | 4 | Performans: işleme/küp önbelleği, gzip, isteğe bağlı float32-base64 görüntü kodlaması | Demo sırasında < 1 sn yanıt | ✅ `lider/roadmap` (gzip + önbellek; base64 kodlama sözleşme önerisi olarak bekliyor) |
-| 5 | Üretim dağıtımı: DigitalOcean + Docker Compose + Nginx TLS + GitHub Actions deploy (`deploy/`, lead dalı) | `api.aeon.tech` canlı | ⏳ |
+| 5 | Üretim dağıtımı: DigitalOcean + Docker Compose + Nginx TLS + GitHub Actions deploy (`deploy/`, lead dalı) | `api.a-eon.engineer` canlı | ⏳ |
 | 6 | Ağ geçidi uçtan uca testleri (3 servis birlikte) | Entegrasyon güvencesi | ⏳ |
 | 7 | Gerçekçi SPHEREx kadansı (alanın yılda ~2 görünürlük penceresi) | Bilimsel gerçekçilik | ✅ `lider/roadmap` (`cadence: spherex`) |
 | 8 | Son entegrasyon, tüm PR'ların birleşmesi, v1.0 sürümü | Jüri teslimi | ⏳ |

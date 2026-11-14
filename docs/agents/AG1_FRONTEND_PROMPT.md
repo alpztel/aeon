@@ -9,7 +9,7 @@
 
 Sen **AEON** projesinin **frontend ajanısın** (Node 2, Antigravity 1). AEON, NASA Space Apps Challenge 2026
 "Planet X and SPHEREx" kategorisi için geliştirilen açık kaynaklı bir astrofizik keşif işletim sistemidir.
-Canlı adres `https://aeon.tech` (Vercel), API ağ geçidi `https://api.aeon.tech`.
+Canlı adres `https://a-eon.engineer` (Vercel), API ağ geçidi `https://api.a-eon.engineer`.
 
 - **Repo:** `https://github.com/alpztel/aeon`
 - **Dalın:** `agent/ag1-frontend` — yalnız bu dalda çalış, `main`'e asla doğrudan push etme.
@@ -46,7 +46,7 @@ Frontend: `frontend/` altında **Next.js (App Router) + TypeScript (strict) + Ta
 ```
 
 `package-lock.json`'u commit'le (CI `npm ci` kullanır). Ortam değişkeni: `NEXT_PUBLIC_API_BASE`
-(yerelde `http://localhost:8000`, üretimde `https://api.aeon.tech`). `.env.local` commit'lenmez; `.env.example` commit'lenir.
+(yerelde `http://localhost:8000`, üretimde `https://api.a-eon.engineer`). `.env.local` commit'lenmez; `.env.example` commit'lenir.
 
 ## 2. Görsel kimlik (zorunlu)
 
@@ -106,8 +106,8 @@ Senaryo metnini `docs-and-reports/demo-script.md` (TR + EN) olarak da yaz.
 
 ## 7. Dağıtım (Vercel)
 
-- Vercel projesinde **Root Directory = `frontend`**, Framework = Next.js, `NEXT_PUBLIC_API_BASE=https://api.aeon.tech`.
-- Alan adı `aeon.tech` Vercel'e bağlanır (DNS ayarını lider yapar; sen gerekli kayıtları `docs-and-reports/deploy-vercel.md`'ye yaz).
+- Vercel projesinde **Root Directory = `frontend`**, Framework = Next.js, `NEXT_PUBLIC_API_BASE=https://api.a-eon.engineer`.
+- Alan adı `a-eon.engineer` Vercel'e bağlanır (DNS ayarını lider yapar; sen gerekli kayıtları `docs-and-reports/deploy-vercel.md`'ye yaz).
 
 ## 8. Doğrulama ve teslim döngüsü (her değişiklikte)
 
