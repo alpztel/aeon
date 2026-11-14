@@ -1,4 +1,4 @@
-# Dağıtım — api.aeon.tech (DigitalOcean)
+# Dağıtım — api.a-eon.engineer (DigitalOcean)
 
 ## Bileşenler
 | Dosya | Görev |
@@ -13,7 +13,7 @@
 
 ## İlk kurulum (lider, bir kez)
 1. DigitalOcean'da Ubuntu 24.04 droplet aç (≥ 2 GB RAM; GitHub Student Pack kredisi).
-2. DNS: `api.aeon.tech` için droplet IP'sine **A kaydı**; `aeon.tech` Vercel'e bağlı kalır.
+2. DNS: `api.a-eon.engineer` için droplet IP'sine **A kaydı**; `a-eon.engineer` Vercel'e bağlı kalır.
 3. Droplet'te root olarak:
    ```bash
    curl -fsSL https://raw.githubusercontent.com/alpztel/aeon/main/deploy/scripts/bootstrap-droplet.sh | bash -s -- <letsencrypt-e-postan>
@@ -24,7 +24,7 @@
 
 ## Günlük akış
 - PR açılınca `ci-guard` + `e2e` çalışır. `main`'e birleştirme → `deploy` iş akışı droplet'i günceller
-  ve `https://api.aeon.tech/api/v1/health` duman testini yapar.
+  ve `https://api.a-eon.engineer/api/v1/health` duman testini yapar.
 - Elle: `cd /opt/aeon && docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build`
 - Sertifika yenilemesi otomatik; Nginx'in yeni sertifikayı alması için ayda bir
   `docker compose ... exec nginx nginx -s reload` (ya da cron).

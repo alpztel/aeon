@@ -208,7 +208,7 @@ class CandidateStore:
             f"- **Sinyal/Gürültü (`snr`):** `{snr:.2f}`\n"
             f"- **Gönderen:** `{_neutralise(cand.get('submitted_by', 'anonymous'), 64)}`\n"
             f"- **Notlar (kullanıcı metni):**\n\n```text\n{_neutralise(cand.get('notes', '-'), 1000)}\n```\n"
-            f"- **AEON Gökyüzü Bağlantısı:** https://aeon.tech/?ra={ra:.5f}&dec={dec:.5f}\n"
+            f"- **AEON Gökyüzü Bağlantısı:** https://www.a-eon.engineer/?ra={ra:.5f}&dec={dec:.5f}\n"
         )
 
         if not token:

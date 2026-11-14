@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# One-time setup of an Ubuntu 24.04 droplet for api.aeon.tech. Run as root:
+# One-time setup of an Ubuntu 24.04 droplet for api.a-eon.engineer. Run as root:
 #   curl -fsSL https://raw.githubusercontent.com/alpztel/aeon/main/deploy/scripts/bootstrap-droplet.sh | bash -s -- you@example.com
-# Prerequisite: an A record api.aeon.tech -> this droplet's IP.
+# Prerequisite: an A record api.a-eon.engineer -> this droplet's IP.
 set -euo pipefail
 EMAIL="${1:?usage: bootstrap-droplet.sh <letsencrypt-email>}"
-DOMAIN=api.aeon.tech
+DOMAIN=api.a-eon.engineer
 DIR=/opt/aeon
 
 apt-get update -y

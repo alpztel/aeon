@@ -24,7 +24,7 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in os.environ.get("AEON_CORS_ORIGINS", "https://aeon.tech,http://localhost:3000").split(",")],
+    allow_origins=[o.strip() for o in os.environ.get("AEON_CORS_ORIGINS", "https://www.a-eon.engineer,https://a-eon.engineer,http://localhost:3000").split(",")],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],

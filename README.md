@@ -1,6 +1,6 @@
 # AEON — Astrophysical Discovery OS
 
-**NASA Space Apps Challenge 2026 · Planet X and SPHEREx** · [aeon.tech](https://aeon.tech) · API: `https://api.aeon.tech`
+**NASA Space Apps Challenge 2026 · Planet X and SPHEREx** · [a-eon.engineer](https://www.a-eon.engineer) · API: `https://api.a-eon.engineer`
 
 AEON turns SPHEREx 102-band near-infrared sky data (0.75–5.0 µm) into discoveries in seconds. It reads
 **real SPHEREx DR1 spectral images from NASA/IPAC IRSA**, finds faint moving objects with
@@ -58,7 +58,7 @@ flagged `is_synthetic: true` everywhere. WISE 0855 (coldest known brown dwarf, 8
 ## Architecture
 
 ```
-Browser ── aeon.tech (Vercel, Next.js) ──► api.aeon.tech (Nginx, DigitalOcean)
+Browser ── a-eon.engineer (Vercel, Next.js) ──► api.a-eon.engineer (Nginx, DigitalOcean)
                                              ├─ health, catalog, sky, spectrum,
                                              │  analysis, orbit            → backend :8000
                                              ├─ /api/v1/ai/*               → ai-engine :8100
@@ -133,7 +133,7 @@ Full stack: `docker compose -f deploy/docker-compose.yml up -d --build`, then
 ### Sırada
 - Frontend (PR #6) incelemesi ve birleştirilmesi
 - AI ekibinin servisleri: Astro-LLM, 1D-CNN/ViT, Gaia/WISE/MAST, GCN, aday havuzu, GitHub botu
-- DigitalOcean droplet + `api.aeon.tech` DNS, Vercel'de `aeon.tech`
+- DigitalOcean droplet + `api.a-eon.engineer` DNS, Vercel'de `a-eon.engineer`
 
 ### Ekip
 İstanbul Medeniyet Üniversitesi Fizik Mühendisliği — Alperen (lider), Mucteba Özdemir, Ece, Filiz, Asya.

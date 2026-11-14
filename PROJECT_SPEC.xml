@@ -2,7 +2,7 @@
 <!-- AEON master specification. Machine-readable companion to AGENTS.md and openapi.json.
      Changes only via PR reviewed by @alpztel. -->
 <project name="AEON" version="1.0.0" challenge="NASA Space Apps Challenge 2026 - Planet X and SPHEREx"
-         repo="https://github.com/alpztel/aeon" site="https://aeon.tech" api="https://api.aeon.tech" license="MIT">
+         repo="https://github.com/alpztel/aeon" site="https://a-eon.engineer" api="https://api.a-eon.engineer" license="MIT">
 
   <mission>
     <tr>SPHEREx'in 102 bantlık yakın-kızılötesi gökyüzü verisini saniyeler içinde keşfe dönüştüren, açık kaynaklı, yapay zeka destekli astrofizik keşif işletim sistemi.</tr>
@@ -78,8 +78,8 @@
   </design>
 
   <infrastructure>
-    <frontend host="Vercel" domain="aeon.tech"/>
-    <backend host="DigitalOcean Droplet" runtime="Docker Compose + Nginx" domain="api.aeon.tech"/>
+    <frontend host="Vercel" domain="a-eon.engineer"/>
+    <backend host="DigitalOcean Droplet" runtime="Docker Compose + Nginx" domain="api.a-eon.engineer"/>
     <catalog engine="DuckDB in-memory"/>
     <candidates engine="MongoDB Atlas"/>
     <models host="Hugging Face Spaces"/>

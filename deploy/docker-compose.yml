@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       AEON_DATA_DIR: /data/fits
-      AEON_CORS_ORIGINS: https://aeon.tech,http://localhost:3000
+      AEON_CORS_ORIGINS: https://www.a-eon.engineer,https://a-eon.engineer,http://localhost:3000
     volumes:
       - fits-data:/data/fits
     expose: ["8000"]
