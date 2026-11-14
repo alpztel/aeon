@@ -83,3 +83,45 @@ def test_linear_track_matches_rate():
 
     ra, dec = ephem.track(10.0, 0.0, 2026.5, [2026.5, 2027.5], 3600.0, 90.0, None)
     assert abs((ra[1] - ra[0]) - 1.0) < 1e-6 and abs(dec[1]) < 1e-9   # 1 deg east in 1 yr
+
+
+def test_propagate_circular_orbit():
+    from aeon.orbit_fit import propagate
+
+    r = propagate(np.array([1.0, 0, 0]), np.array([0, 2 * np.pi, 0]), np.array([0.25, 1.0, -0.5]))
+    assert np.allclose(r[0], [0, 1, 0], atol=2e-3) and np.allclose(r[1], [1, 0, 0], atol=2e-3)
+    assert np.allclose(r[2], [-1, 0, 0], atol=2e-3)
+
+
+def test_orbit_fit_recovers_distance_from_parallax():
+    from aeon import ephem, orbit_fit
+
+    times = np.linspace(2026.05, 2026.95, 6)
+    ra, dec = ephem.track(150.0, 5.0, 2026.5, times, 60.0, 200.0, 300.0)
+    f = orbit_fit.fit([{"t": t, "ra": a, "dec": d, "sigma_arcsec": 0.3} for t, a, d in zip(times, ra, dec)])
+    s = f["summary"]
+    assert abs(s["distance_au"] - 300) < 3 and abs(s["rate_arcsec_yr"] - 60) < 2 and s["rms_residual_arcsec"] < 0.3
+
+
+def test_spherex_visibility_windows():
+    from aeon import ephem
+
+    ecl = ephem.spherex_visible_times(51.3, 14.8, 2026.0, 2027.0)
+    gaps = np.diff(ecl)
+    assert 0.02 < len(ecl) / 730 < 0.25 and gaps.max() > 0.3          # two short windows
+    pole = ephem.spherex_visible_times(270.0, 66.56, 2026.0, 2027.0)  # north ecliptic pole
+    assert len(pole) > 700                                             # visible all year
+
+
+def test_static_sky_template_keeps_slow_mover():
+    from aeon.analysis import remove_static_sky
+
+    rng = np.random.default_rng(0)
+    frames = rng.normal(100, 1, (8, 32, 32))
+    times = np.array([0.0, 0.01, 0.02, 0.03, 0.5, 0.51, 0.52, 0.53])
+    for i in range(4):                       # object parked in window 1, elsewhere in window 2
+        frames[i, 10, 10] += 50
+    for i in range(4, 8):
+        frames[i, 20, 20] += 50
+    res = remove_static_sky(frames, times)
+    assert res[:4, 10, 10].mean() > 40       # a global median would have removed about half of it

@@ -29,3 +29,23 @@ def assert_schema(payload, schema_name: str):
     schema = {**CONTRACT, "$ref": f"#/components/schemas/{schema_name}"}
     errors = sorted(Draft202012Validator(schema).iter_errors(payload), key=lambda e: list(e.path))
     assert not errors, "\n".join(f"{list(e.path)}: {e.message}" for e in errors[:10])
+
+
+def pytest_addoption(parser):
+    parser.addoption("--run-network", action="store_true", default=False,
+                     help="run tests marked @pytest.mark.network (they contact IRSA)")
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "network: needs internet access to NASA/IPAC IRSA (skipped by default)")
+
+
+def pytest_collection_modifyitems(config, items):
+    import os
+
+    if config.getoption("--run-network") or os.environ.get("AEON_NETWORK_TESTS") == "1":
+        return
+    skip = pytest.mark.skip(reason="network test: use --run-network or AEON_NETWORK_TESTS=1")
+    for item in items:
+        if "network" in item.keywords:
+            item.add_marker(skip)
