@@ -71,6 +71,8 @@ jobs:
         run: |
           pip install -r requirements.txt
           pytest -q
+          # Azure ingest package reuses backend/aeon (offline tests, archives and Azure are faked)
+          pytest -q -p no:cacheprovider ../deploy/azure
 
   frontend-build:
     name: frontend lint + build

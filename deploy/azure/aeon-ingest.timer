@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly AEON data ingest (SPHEREx adds data weekly; IRSA SIA lags about a day)
+
+[Timer]
+OnCalendar=Mon *-*-* 06:00:00 UTC
+# Run at boot if the VM was off at the scheduled time.
+Persistent=true
+# Spread load on the public archives.
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target
