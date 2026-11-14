@@ -1,0 +1,51 @@
+name: frontend-torture
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["torture/**", "frontend/**", ".github/workflows/frontend-torture.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  torture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: Start core backend
+        run: |
+          pip install -r backend/requirements.txt
+          cd backend && nohup uvicorn aeon.main:app --port 8000 > ../backend.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS localhost:8000/api/v1/health && break; sleep 2; done
+      - name: Build and start frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_BASE: http://localhost:8000
+        run: |
+          npm ci
+          npm run build
+          nohup npm start -- -p 3000 > ../frontend.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS localhost:3000 >/dev/null && break; sleep 2; done
+      - name: Torture tests
+        working-directory: torture
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+          npx playwright test || true
+          node -e "const r=require('./results.json');const t=[];const w=s=>{(s.suites||[]).forEach(w);(s.specs||[]).forEach(p=>p.tests.forEach(x=>{const res=x.results.at(-1)||{};t.push([p.title,res.status,(res.error&&res.error.message||'').split('\n')[0].slice(0,220)])}))};r.suites.forEach(w);for(const [n,s,e] of t)console.log('TORTURE|'+s+'|'+n+'|'+e);const f=t.filter(x=>x[1]!=='passed'&&x[1]!=='skipped').length;console.log('TORTURE_SUMMARY|'+(t.length-f)+'/'+t.length+' passed');"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: torture-report
+          path: |
+            torture/results.json
+            torture/test-results/
+            backend.log
+            frontend.log
