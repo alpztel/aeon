@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, model_validator
 
@@ -26,7 +28,18 @@ app.add_middleware(
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["Server-Timing"],
 )
+# Image arrays compress ~4-6x; the frontend's fetch() decompresses transparently.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
+
+
+@app.middleware("http")
+async def server_timing(request: Request, call_next):
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - t0) * 1000:.1f}"
+    return response
 
 
 def _guard(fn, *args, **kwargs):
@@ -48,7 +61,8 @@ class AnalysisRequest(BaseModel):
     pa_deg: float = 0.0
     n_frames: int = Field(24, ge=2, le=64)
     combine: Literal["mean", "median"] = "mean"
-    distance_au: float | None = Field(None, gt=0, le=1e6)
+    distance_au: float | None = Field(None, ge=2, le=1e6)
+    cadence: Literal["uniform", "spherex"] = "uniform"
     distance_range_au: tuple[float, float] | None = (250.0, 1000.0)
     rate_range_arcsec_yr: tuple[float, float] = (20.0, 200.0)
     pa_range_deg: tuple[float, float] = (30.0, 90.0)
@@ -73,7 +87,15 @@ class Observation(BaseModel):
     radial_velocity_km_s: float = 0.0
 
 
+class Detection(BaseModel):
+    t: float = Field(ge=1900, le=2200, description="decimal year")
+    ra: float = Field(ge=0, le=360)
+    dec: float = Field(ge=-90, le=90)
+    sigma_arcsec: float = Field(1.0, gt=0, le=3600)
+
+
 class OrbitRequest(BaseModel):
+    detections: list[Detection] | None = Field(None, min_length=3, max_length=500)
     elements: Elements | None = None
     observation: Observation | None = None
     target_id: str | None = None
@@ -82,8 +104,8 @@ class OrbitRequest(BaseModel):
 
     @model_validator(mode="after")
     def _one_source(self):
-        if not (self.elements or self.observation or self.target_id):
-            raise ValueError("Provide elements, observation or target_id")
+        if not (self.elements or self.observation or self.target_id or self.detections):
+            raise ValueError("Provide detections, elements, observation or target_id")
         return self
 
 
