@@ -114,8 +114,8 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
           type: "scatter",
           mode: "lines+markers",
           name: `${dict.spectrum.currentCurve} (${epoch})`,
-          line: { color: "#22d3ee", width: 2 },
-          marker: { color: "#22d3ee", size: 4 },
+          line: { color: "#9db4f0", width: 2 },
+          marker: { color: "#9db4f0", size: 4 },
           error_y: {
             type: "data",
             array: spectrum.flux_err_ujy,
@@ -138,7 +138,7 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
           type: "scatter",
           mode: "lines",
           name: `${dict.spectrum.pinnedLabel} (${pinned.label})`,
-          line: { color: "#f59e0b", width: 1.75, dash: "dash" },
+          line: { color: "#ff5a1f", width: 1.75, dash: "dash" },
           hovertemplate: "λ = %{x:.3f} µm<br>Ref = %{y:.2f} µJy<extra></extra>",
         });
       }
@@ -146,6 +146,7 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
       const shapes: import("plotly.js-dist-min").Shape[] = [];
       const annotations: import("plotly.js-dist-min").Annotation[] = [];
 
+      let labelRow = 0;
       for (const feat of spectrum.absorption_features ?? []) {
         if (!feat.molecule || feat.center_um === undefined) continue;
         const meta = MOLECULE_BANDS[feat.molecule];
@@ -161,15 +162,20 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
           fillcolor: meta.color,
           line: { width: 1, color: meta.border, dash: feat.detected ? "solid" : "dot" },
         });
-        annotations.push({
-          x: feat.center_um,
-          y: 0.96,
-          xref: "x",
-          yref: "paper",
-          text: `${meta.label} (${feat.center_um.toFixed(2)} µm)`,
-          showarrow: false,
-          font: { color: "#e2e8f0", size: 10 },
-        });
+        // Label detected bands only, staggered over three rows so neighbours never overlap;
+        // wavelengths and depths are listed under the chart.
+        if (feat.detected) {
+          annotations.push({
+            x: feat.center_um,
+            y: [0.98, 0.9, 0.82][labelRow++ % 3],
+            xref: "x",
+            yref: "paper",
+            text: meta.label,
+            showarrow: false,
+            font: { color: "#ece8e3", size: 10 },
+            bgcolor: "rgba(5,5,6,0.7)",
+          });
+        }
       }
 
       if (playingBand !== null && spectrum.wavelength_um[playingBand] !== undefined) {
@@ -182,7 +188,7 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
           x1: wl,
           y0: 0,
           y1: 1,
-          line: { width: 2, color: "#f59e0b" },
+          line: { width: 2, color: "#ff5a1f" },
         });
       }
 
@@ -191,9 +197,9 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
         traces,
         {
           paper_bgcolor: "rgba(0,0,0,0)",
-          plot_bgcolor: "rgba(3,7,18,0.65)",
+          plot_bgcolor: "rgba(255,255,255,0.015)",
           margin: { l: 56, r: 20, t: 24, b: 46 },
-          font: { color: "#cbd5e1", size: 11 },
+          font: { color: "#c2bbb3", size: 11 },
           xaxis: {
             title: { text: dict.spectrum.xAxis },
             gridcolor: "rgba(255,255,255,0.06)",
@@ -302,7 +308,7 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
     selectedObject?.is_synthetic || spectrum?.matched_object?.is_synthetic;
 
   return (
-    <section className="aeon-panel rounded-2xl p-4 sm:p-5">
+    <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -406,7 +412,7 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
         <div ref={plotRef} className="h-full w-full" />
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-xs">
-            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#090D16]/90 px-3 py-2 text-xs text-slate-200">
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0E0E10]/90 px-3 py-2 text-xs text-slate-200">
               <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
               <span>{dict.spectrum.loading}</span>
             </div>

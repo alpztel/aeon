@@ -56,7 +56,7 @@ export function ClassificationCard({
   const topClass = result?.top_class;
 
   return (
-    <section className="aeon-panel rounded-2xl p-4 sm:p-5">
+    <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
       {unavailable && (
         <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           {dict.ai.serviceUnavailable}
@@ -92,9 +92,9 @@ export function ClassificationCard({
       </div>
 
       {result && (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
+      <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-12">
         {/* 5 Class Probability Bars */}
-        <div className="space-y-2.5 md:col-span-8">
+        <div className="space-y-2.5 @2xl:col-span-8">
           {ALL_CLASSES.map((cls) => {
             const p = result?.probabilities?.[cls] ?? 0;
             const pct = Math.round(p * 100);
@@ -125,7 +125,7 @@ export function ClassificationCard({
         </div>
 
         {/* PatchAnomalyViT Gauge */}
-        <div className="flex flex-col justify-between rounded-xl border border-white/10 bg-black/40 p-4 md:col-span-4">
+        <div className="flex flex-col justify-between rounded-xl border border-white/10 bg-black/40 p-4 @2xl:col-span-4">
           <div>
             <span className="text-xs font-medium text-slate-400">
               {dict.ai.anomalyScore}

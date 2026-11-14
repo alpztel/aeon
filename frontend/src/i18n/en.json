@@ -4,6 +4,55 @@
     "subtitle": "Astrophysical Discovery OS",
     "challenge": "NASA Space Apps 2026 · Planet X & SPHEREx"
   },
+  "shell": {
+    "searchPlaceholder": "Search a target or RA, Dec",
+    "searchHint": "Catalog name, designation, or RA Dec in degrees",
+    "quickTargets": "Demo targets",
+    "target": "Target",
+    "fieldPosition": "Field position",
+    "tools": "Analysis tools",
+    "toolNames": {
+      "diff": "Image Difference",
+      "spectrum": "102-Band Spectrum",
+      "classify": "AI Classification",
+      "crossmatch": "Cross-Match & SED",
+      "stack": "Shift & Stack",
+      "orbit": "3D Orbit",
+      "candidates": "Candidate Pool"
+    },
+    "toolHints": {
+      "diff": "Moving sources show up as ± dipoles between two epochs.",
+      "spectrum": "0.75–5.0 µm photometry with molecular absorption bands.",
+      "classify": "1D-CNN class probabilities and ViT anomaly score.",
+      "crossmatch": "Gaia, WISE and MAST counterparts with the broadband SED.",
+      "stack": "Recover faint movers below single-frame S/N.",
+      "orbit": "REBOUND forecast and astrometric orbit fit.",
+      "candidates": "Community submissions, votes and leaderboard."
+    },
+    "expand": "Widen panel",
+    "collapse": "Narrow panel",
+    "close": "Close panel",
+    "epoch": "Survey epoch",
+    "viewSettings": "View settings",
+    "alerts": "Live alerts",
+    "noAlerts": "No live notices right now.",
+    "tour": "Guided tour",
+    "welcomeKicker": "NASA Space Apps 2026 · Planet X & SPHEREx",
+    "welcomeTitle": "Find what moves in the infrared sky.",
+    "welcomeBody": "AEON turns SPHEREx-like 102-band survey data into discoveries: compare epochs, stack faint movers, read spectra and forecast orbits. Every number is computed; every synthetic object is labelled.",
+    "howTo": [
+      "Search a target, or pick one of the demo targets.",
+      "Open an analysis tool from the right-hand rail.",
+      "Scrub the survey epochs at the bottom to see motion."
+    ],
+    "explore": "Explore freely",
+    "startTour": "Start guided tour",
+    "dontShow": "Don't show this again",
+    "step": "Step",
+    "skip": "Skip",
+    "loading": "Loading",
+    "pmShort": "PM"
+  },
   "header": {
     "demoTour": "Jury Demo Tour",
     "shortcuts": "Shortcuts",

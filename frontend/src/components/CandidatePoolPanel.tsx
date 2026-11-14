@@ -95,7 +95,7 @@ export function CandidatePoolPanel({
   };
 
   return (
-    <section className="aeon-panel rounded-2xl p-4 sm:p-5">
+    <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -144,14 +144,14 @@ export function CandidatePoolPanel({
       {/* Submit Current Target Form */}
       <form
         onSubmit={handleSubmitCandidate}
-        className="mb-4 flex flex-col gap-2 rounded-xl border border-white/10 bg-black/30 p-3 sm:flex-row sm:items-center"
+        className="mb-4 flex flex-col gap-2 rounded-xl border border-white/10 bg-black/30 p-3 @xl:flex-row @xl:items-center"
       >
         <input
           type="text"
           value={observer}
           onChange={(e) => setObserver(e.target.value)}
           placeholder={dict.community.observerPlaceholder}
-          className="rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none sm:w-44"
+          className="rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none @xl:w-44"
         />
         <input
           type="text"
@@ -173,7 +173,7 @@ export function CandidatePoolPanel({
       </form>
 
       {/* Candidates Leaderboard */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-3">
         {candidates.length === 0 && (
           <p className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-slate-400">
             {fromCache ? dict.community.offlineEmpty : dict.community.empty}
