@@ -120,6 +120,245 @@
       "gaia": [],
       "wise": [],
       "mast_overlap": []
+    },
+    "luhman-16": {
+      "id": "luhman-16",
+      "name": "WISE J104915.57-531906.1 (Luhman 16AB)",
+      "ra_ref": 162.3282,
+      "dec_ref": -53.3184,
+      "ra_2026": 162.3077,
+      "dec_2026": -53.31686,
+      "match_radius_deg": 0.06,
+      "is_synthetic": false,
+      "gaia": [
+        {
+          "source_id": "5353626573555963392",
+          "ra": 162.3077,
+          "dec": -53.31686,
+          "phot_g_mean_mag": 16.201,
+          "phot_bp_mean_mag": 19.42,
+          "phot_rp_mean_mag": 14.31,
+          "parallax_mas": 501.557,
+          "pmra_mas_yr": -2759.0,
+          "pmdec_mas_yr": 354.0,
+          "catalog": "Gaia DR3",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "wise": [
+        {
+          "designation": "J104915.57-531906.1",
+          "ra": 162.3282,
+          "dec": -53.3184,
+          "w1mpro": 7.84,
+          "w1sigmpro": 0.023,
+          "w2mpro": 7.31,
+          "w2sigmpro": 0.02,
+          "w3mpro": 6.21,
+          "w3sigmpro": 0.015,
+          "w4mpro": 5.79,
+          "w4sigmpro": 0.038,
+          "catalog": "AllWISE",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "mast_overlap": [
+        {
+          "mission": "JWST",
+          "obs_id": "jw01386-o002_t001_nirspec",
+          "instrument": "NIRSpec",
+          "filter": "PRISM/CLEAR",
+          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=Luhman%2016"
+        },
+        {
+          "mission": "HST",
+          "obs_id": "ibtp01010",
+          "instrument": "WFC3/IR",
+          "filter": "G141",
+          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=Luhman%2016"
+        }
+      ]
+    },
+    "wise-1828": {
+      "id": "wise-1828",
+      "name": "WISEPA J182831.08+265037.8",
+      "ra_ref": 277.1295,
+      "dec_ref": 26.84383,
+      "ra_2026": 277.13447,
+      "dec_2026": 26.84459,
+      "match_radius_deg": 0.05,
+      "is_synthetic": false,
+      "gaia": [],
+      "wise": [
+        {
+          "designation": "J182831.08+265037.8",
+          "ra": 277.1295,
+          "dec": 26.84383,
+          "w1mpro": 17.68,
+          "w1sigmpro": 0.21,
+          "w2mpro": 14.353,
+          "w2sigmpro": 0.045,
+          "w3mpro": 12.14,
+          "w3sigmpro": 0.28,
+          "w4mpro": null,
+          "catalog": "AllWISE / CatWISE2020",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "mast_overlap": [
+        {
+          "mission": "JWST",
+          "obs_id": "jw01189-o012_t001_nircam",
+          "instrument": "NIRCam",
+          "filter": "F480M",
+          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=WISE%201828"
+        }
+      ]
+    },
+    "barnard": {
+      "id": "barnard",
+      "name": "Barnard's Star",
+      "ra_ref": 269.45208,
+      "dec_ref": 4.69339,
+      "ra_2026": 269.44631,
+      "dec_2026": 4.76818,
+      "match_radius_deg": 0.1,
+      "is_synthetic": false,
+      "gaia": [
+        {
+          "source_id": "4472832130942575872",
+          "ra": 269.45208,
+          "dec": 4.69339,
+          "phot_g_mean_mag": 8.194,
+          "phot_bp_mean_mag": 9.792,
+          "phot_rp_mean_mag": 6.958,
+          "parallax_mas": 546.976,
+          "pmra_mas_yr": -798.58,
+          "pmdec_mas_yr": 10328.12,
+          "catalog": "Gaia DR3",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "wise": [
+        {
+          "designation": "J175748.49+044136.2",
+          "ra": 269.45208,
+          "dec": 4.69339,
+          "w1mpro": 4.38,
+          "w1sigmpro": 0.05,
+          "w2mpro": 4.12,
+          "w2sigmpro": 0.04,
+          "w3mpro": 4.03,
+          "w3sigmpro": 0.015,
+          "w4mpro": 3.95,
+          "w4sigmpro": 0.022,
+          "catalog": "AllWISE",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "mast_overlap": [
+        {
+          "mission": "HST",
+          "obs_id": "ob4t01010",
+          "instrument": "STIS",
+          "filter": "E140M",
+          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=Barnard%20Star"
+        }
+      ]
+    },
+    "tw-hya": {
+      "id": "tw-hya",
+      "name": "TW Hydrae",
+      "ra_ref": 165.46587,
+      "dec_ref": -34.70473,
+      "ra_2026": 165.46587,
+      "dec_2026": -34.70473,
+      "match_radius_deg": 0.05,
+      "is_synthetic": false,
+      "gaia": [
+        {
+          "source_id": "5401795662560500352",
+          "ra": 165.46587,
+          "dec": -34.70473,
+          "phot_g_mean_mag": 10.489,
+          "phot_bp_mean_mag": 11.214,
+          "phot_rp_mean_mag": 9.574,
+          "parallax_mas": 16.628,
+          "pmra_mas_yr": -68.21,
+          "pmdec_mas_yr": -13.91,
+          "catalog": "Gaia DR3",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "wise": [
+        {
+          "designation": "J110151.90-344217.0",
+          "ra": 165.46587,
+          "dec": -34.70473,
+          "w1mpro": 7.012,
+          "w1sigmpro": 0.031,
+          "w2mpro": 6.861,
+          "w2sigmpro": 0.021,
+          "w3mpro": 4.289,
+          "w3sigmpro": 0.015,
+          "w4mpro": 1.112,
+          "w4sigmpro": 0.019,
+          "catalog": "AllWISE",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "mast_overlap": [
+        {
+          "mission": "JWST",
+          "obs_id": "jw01282-o018_t001_miri",
+          "instrument": "MIRI",
+          "filter": "MRS",
+          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=TW%20Hya"
+        }
+      ]
+    },
+    "18-sco": {
+      "id": "18-sco",
+      "name": "18 Scorpii",
+      "ra_ref": 243.90529,
+      "dec_ref": -8.36944,
+      "ra_2026": 243.90529,
+      "dec_2026": -8.36944,
+      "match_radius_deg": 0.05,
+      "is_synthetic": false,
+      "gaia": [
+        {
+          "source_id": "4345775217221821312",
+          "ra": 243.90529,
+          "dec": -8.36944,
+          "phot_g_mean_mag": 5.341,
+          "phot_bp_mean_mag": 5.668,
+          "phot_rp_mean_mag": 4.862,
+          "parallax_mas": 70.737,
+          "pmra_mas_yr": 231.18,
+          "pmdec_mas_yr": -495.52,
+          "catalog": "Gaia DR3",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "wise": [
+        {
+          "designation": "J161537.27-082209.9",
+          "ra": 243.90529,
+          "dec": -8.36944,
+          "w1mpro": 4.02,
+          "w1sigmpro": 0.06,
+          "w2mpro": 3.89,
+          "w2sigmpro": 0.04,
+          "w3mpro": 4.01,
+          "w3sigmpro": 0.015,
+          "w4mpro": 3.98,
+          "w4sigmpro": 0.025,
+          "catalog": "AllWISE",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "mast_overlap": []
     }
   }
 }

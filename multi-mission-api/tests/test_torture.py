@@ -190,3 +190,28 @@ def test_concurrent_duplicate_submission_race_condition(client, monkeypatch):
     ids = {r.json()["id"] for r in resps}
     assert len(ids) == 1, f"TOCTOU race condition created multiple candidate IDs: {ids}"
     assert len(gh_calls) == 1, f"TOCTOU race condition opened {len(gh_calls)} duplicate GitHub issues!"
+
+
+@pytest.mark.parametrize(
+    "ra,dec,expect_unmatched_ir",
+    [
+        (133.79513, -7.24514, True),   # wise-0855 (Y dwarf, no Gaia optical)
+        (277.12950, 26.84383, True),   # wise-1828 (Y dwarf, no Gaia optical)
+        (51.295473, 14.8325559, True), # px-2026-09 (synthetic Planet X candidate)
+        (76.95642, 30.40142, False),   # rw-aur (Gaia DR3 + AllWISE)
+        (162.30770, -53.31686, False), # luhman-16 (Gaia DR3 + AllWISE + JWST)
+        (269.45208, 4.69339, False),   # barnard (Gaia DR3 + AllWISE + HST)
+        (165.46587, -34.70473, False), # tw-hya (Gaia DR3 + AllWISE + JWST MIRI)
+        (243.90529, -8.36944, False),  # 18-sco (Gaia DR3 + AllWISE)
+    ],
+)
+@respx.mock
+def test_all_eight_catalog_targets_archival_crossmatch(client, ra, dec, expect_unmatched_ir):
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(503))
+
+    r = client.get("/api/v1/missions/crossmatch", params={"ra": ra, "dec": dec, "radius_arcsec": 6.0})
+    assert r.status_code == 200
+    body = r.json()
+    assert_path_response_schema(body, "/api/v1/missions/crossmatch", "get")
+    assert body["unmatched_ir_candidate"] is expect_unmatched_ir
+

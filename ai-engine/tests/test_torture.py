@@ -202,3 +202,38 @@ def test_training_pipeline_reproducible_metrics():
     for cls_name, f1 in metrics["f1_per_class"].items():
         assert f1 >= 0.90, (cls_name, metrics)
 
+
+@respx.mock
+def test_sexagesimal_hms_dms_and_context_aware_commands(client, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    respx.get("http://localhost:8000/api/v1/catalog/search").mock(return_value=Response(503))
+
+    # 1. Sexagesimal coordinates of WISE 0855: 08h55m10.83s -07d14m42.5s -> RA=133.795125, Dec=-7.245139
+    r_sexag = client.post(
+        "/api/v1/ai/command",
+        json={"message": "Fly to 08h55m10.83s -07d14m42.5s and open spectrum"},
+    )
+    assert r_sexag.status_code == 200
+    actions = r_sexag.json()["actions"]
+    fly = next(a for a in actions if a["type"] == "FLY_TO")
+    assert abs(fly["params"]["ra"] - 133.795125) < 1e-3
+    assert abs(fly["params"]["dec"] - (-7.245139)) < 1e-3
+
+    # 2. Context-aware target resolution when message omits target name
+    r_ctx = client.post(
+        "/api/v1/ai/command",
+        json={
+            "message": "Tayfı aç ve 3D yörüngeyi göster",
+            "lang": "tr",
+            "context": {"selected_target": "rw-aur"},
+        },
+    )
+    assert r_ctx.status_code == 200
+    ctx_actions = r_ctx.json()["actions"]
+    spec_act = next(a for a in ctx_actions if a["type"] == "OPEN_SPECTRUM")
+    orb_act = next(a for a in ctx_actions if a["type"] == "OPEN_3D_ORBIT")
+    assert spec_act["params"]["target_id"] == "rw-aur"
+    assert abs(spec_act["params"]["ra"] - 76.95642) < 1e-3
+    assert orb_act["params"]["target_id"] == "rw-aur"
+
+

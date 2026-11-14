@@ -102,6 +102,20 @@ def train_and_evaluate(seed: int = 2026) -> dict:
     with torch.no_grad():
         preds = torch.argmax(cnn(torch.from_numpy(x_test)), dim=-1).numpy()
 
+    # Self-supervised training of PatchAnomalyViT on smooth/noisy background cutouts
+    rng = np.random.default_rng(seed + 1)
+    bg_cutouts = rng.normal(0.0, 1.0, size=(64, 64, 64)).astype(np.float32)
+    bg_tensor = torch.from_numpy(bg_cutouts)
+    vit_opt = optim.AdamW(vit.parameters(), lr=2e-3, weight_decay=1e-4)
+    vit.train()
+    for _ in range(10):
+        vit_opt.zero_grad()
+        mse_loss, _ = vit(bg_tensor)
+        loss_v = mse_loss.mean()
+        loss_v.backward()
+        vit_opt.step()
+    vit.eval()
+
     n_cls = len(OBJECT_CLASSES)
     conf = np.zeros((n_cls, n_cls), dtype=int)
     for yt, yp in zip(y_test, preds):

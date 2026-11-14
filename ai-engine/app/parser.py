@@ -326,7 +326,32 @@ def _extract_target(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _parse_sexagesimal(text: str) -> tuple[float, float] | None:
+    """Parse HMS + DMS coordinates such as '08h55m10.83s -07d14m42.5s' or '05:07:49.54 +30:24:05.1'."""
+    m_hms = re.search(
+        r"\b([0-2]?[0-9])\s*[h:]\s*([0-5][0-9])\s*[m:]\s*([0-5][0-9](?:\.[0-9]+)?)\s*s?\s+"
+        r"([+\-])\s*([0-8]?[0-9]|90)\s*[d°:]\s*([0-5][0-9])\s*[m':]\s*([0-5][0-9](?:\.[0-9]+)?)\s*[s\"]?",
+        text,
+        re.IGNORECASE,
+    )
+    if not m_hms:
+        return None
+    rh, rm, rs = float(m_hms.group(1)), float(m_hms.group(2)), float(m_hms.group(3))
+    sign = -1.0 if m_hms.group(4) == "-" else 1.0
+    dd, dm, ds = float(m_hms.group(5)), float(m_hms.group(6)), float(m_hms.group(7))
+    if rh >= 24.0 or dd > 90.0 or (dd == 90.0 and (dm > 0 or ds > 0)):
+        return None
+    ra_deg = round(15.0 * (rh + rm / 60.0 + rs / 3600.0), 6)
+    dec_deg = round(sign * (dd + dm / 60.0 + ds / 3600.0), 6)
+    if 0.0 <= ra_deg <= 360.0 and -90.0 <= dec_deg <= 90.0:
+        return ra_deg, dec_deg
+    return None
+
+
 def _extract_coords(text: str) -> tuple[float, float] | None:
+    sexag = _parse_sexagesimal(text)
+    if sexag is not None:
+        return sexag
     m_labeled = re.search(
         r"ra\s*[:=]?\s*([0-9]+(?:\.[0-9]+)?)\s*[,;/\s]+\s*dec\s*[:=]?\s*([+\-]?[0-9]+(?:\.[0-9]+)?)",
         text,
@@ -366,9 +391,16 @@ def parse_rule_based(message: str, lang: str | None = None, context: dict[str, A
     target = _extract_target(text)
     coords = _extract_coords(text)
 
-    ra = target["ra"] if target else (coords[0] if coords else ctx.get("ra"))
-    dec = target["dec"] if target else (coords[1] if coords else ctx.get("dec"))
-    target_id = target["id"] if target else ctx.get("target_id")
+    # Fallback to context target if no explicit target or coordinate is in the message
+    ctx_target_id = ctx.get("target_id") or ctx.get("selected_target")
+    if target is None and coords is None and isinstance(ctx_target_id, str) and ctx_target_id in KNOWN_TARGETS:
+        ctx_t = dict(KNOWN_TARGETS[ctx_target_id])
+    else:
+        ctx_t = None
+
+    ra = target["ra"] if target else (coords[0] if coords else (ctx.get("ra") if ctx.get("ra") is not None else (ctx_t["ra"] if ctx_t else None)))
+    dec = target["dec"] if target else (coords[1] if coords else (ctx.get("dec") if ctx.get("dec") is not None else (ctx_t["dec"] if ctx_t else None)))
+    target_id = target["id"] if target else (ctx_target_id if isinstance(ctx_target_id, str) else None)
 
     candidates: list[tuple[int, dict[str, Any]]] = []
 
