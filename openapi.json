@@ -472,6 +472,18 @@
                   },
                   "image": {
                     "$ref": "#/components/schemas/Image"
+                  },
+                  "ra": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 360,
+                    "description": "ICRS right ascension (deg); used with dec when flux_ujy is absent"
+                  },
+                  "dec": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90,
+                    "description": "ICRS declination (deg)"
                   }
                 }
               }
@@ -508,13 +520,31 @@
                       "additionalProperties": {
                         "type": "string"
                       }
+                    },
+                    "spectrum_source": {
+                      "type": "string",
+                      "enum": [
+                        "request",
+                        "archive",
+                        "none",
+                        "unavailable"
+                      ],
+                      "description": "request: flux_ujy from the request; archive: read from the core backend by (ra, dec); none: the backend has no usable spectrum at this position; unavailable: the backend could not be reached or did not answer in time (retry later). For none and unavailable the probabilities are an uninformative uniform prior"
+                    },
+                    "spectrum_snr_median": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "Median per-band S/N of the archive spectrum (null otherwise)"
                     }
                   }
                 }
               }
             }
           }
-        }
+        },
+        "description": "Send at least one of flux_ujy, image, or the pair (ra, dec). With only (ra, dec) the engine reads the 102-band spectrum of that position from the core backend; spectrum_source tells which spectrum was used."
       }
     },
     "/api/v1/missions/crossmatch": {

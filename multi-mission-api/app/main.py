@@ -10,12 +10,16 @@ Implements:
 
 from __future__ import annotations
 
+import math
 import os
 import time
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from . import __version__
@@ -58,6 +62,23 @@ async def server_timing(request: Request, call_next):
     response = await call_next(request)
     response.headers["Server-Timing"] = f"missions;dur={(time.perf_counter() - t0) * 1000:.1f}"
     return response
+
+
+def _json_safe(value):
+    """NaN / Infinity cannot be written as JSON; echo them back as text instead."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    # The default handler echoes the rejected input; a NaN / Infinity in it made the 422 itself fail (500).
+    return JSONResponse(status_code=422, content={"detail": _json_safe(jsonable_encoder(exc.errors()))})
 
 
 class CandidateInput(BaseModel):

@@ -237,7 +237,16 @@
     "highAnomaly": "High Discovery Priority",
     "normalAnomaly": "Nominal Field / Catalog",
     "models": "Models",
-    "serviceUnavailable": "AI engine not connected — no classification is shown until it responds."
+    "serviceUnavailable": "AI engine is unreachable right now — no classification is shown until it responds.",
+    "classifying": "Classifying…",
+    "retry": "Retry",
+    "requestRejected": "The AI engine rejected this request",
+    "noSpectrum": "No usable spectrum at this position — nothing was classified.",
+    "spectrumUnavailable": "The spectrum service is not answering right now — nothing was classified.",
+    "sourceArchive": "Archive spectrum",
+    "sourceRequest": "Supplied spectrum",
+    "snrMedian": "median S/N",
+    "lowSnr": "The spectrum has a low median S/N: read the class probabilities with caution."
   },
   "community": {
     "gcnLabel": "NASA GCN Live Notices",

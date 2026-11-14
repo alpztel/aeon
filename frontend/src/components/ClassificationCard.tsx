@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { AlertTriangle, Cpu, Sparkles } from "lucide-react";
+import { AlertTriangle, Cpu, RotateCw, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import {
+  ApiError,
   classifyTarget,
+  isServiceDown,
   type AiClassifyResponse,
   type CatalogObject,
   type ObjectClass,
@@ -13,6 +15,20 @@ import {
 interface ClassificationCardProps {
   coords: { ra: number; dec: number };
   selectedObject: CatalogObject | null;
+}
+
+// One finished request. `key` ties it to the position (and retry) it answers, so a slow answer for
+// an earlier target can never be shown for the current one, and "loading" needs no extra state.
+type Outcome =
+  | { key: string; kind: "ready"; result: AiClassifyResponse; fromCache: boolean }
+  | { key: string; kind: "unreachable" }
+  | { key: string; kind: "rejected"; detail: string };
+
+const LOW_SNR = 3;
+
+/** The engine's numbers are shown as they are, but never trusted to be numbers: clamp to [0, 1]. */
+function unit(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 }
 
 const ALL_CLASSES: ObjectClass[] = [
@@ -29,37 +45,97 @@ export function ClassificationCard({
 }: ClassificationCardProps) {
   const { dict } = useI18n();
 
-  const [result, setResult] = useState<AiClassifyResponse | null>(null);
-  const [fromCache, setFromCache] = useState(false);
-  const [unavailable, setUnavailable] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const key = `${coords.ra},${coords.dec},${attempt}`;
 
   useEffect(() => {
     let active = true;
     classifyTarget({ ra: coords.ra, dec: coords.dec })
-      .then(({ data, fromCache: cached }) => {
-        if (!active) return;
-        setResult(data);
-        setFromCache(cached);
-        setUnavailable(false);
+      .then(({ data, fromCache }) => {
+        if (active) setOutcome({ key, kind: "ready", result: data, fromCache });
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!active) return;
-        setResult(null);
-        setUnavailable(true);
+        if (isServiceDown(err)) setOutcome({ key, kind: "unreachable" });
+        else setOutcome({ key, kind: "rejected", detail: err instanceof ApiError ? err.message : "" });
       });
     return () => {
       active = false;
     };
-  }, [coords.ra, coords.dec]);
+  }, [coords.ra, coords.dec, key]);
 
-  const anomaly = result?.anomaly_score ?? 0;
-  const topClass = result?.top_class;
+  const current = outcome?.key === key ? outcome : null;
+  const loading = current === null;
+  const answered = current?.kind === "ready" ? current.result : null;
+  const fromCache = current?.kind === "ready" && current.fromCache;
+  // No spectrum, no image: the engine only returns a uniform prior. That is not a classification.
+  // (Engines older than `spectrum_source` signal the same case with physics_diagnostics: null.)
+  const noSpectrum =
+    answered?.spectrum_source === "none" ||
+    (answered != null &&
+      answered.spectrum_source === undefined &&
+      (answered as { physics_diagnostics?: unknown }).physics_diagnostics === null);
+  // The backend holding the spectra was down or too slow: worth another try, unlike an empty position.
+  const spectrumDown = answered?.spectrum_source === "unavailable";
+  const result = answered && !noSpectrum && !spectrumDown ? answered : null;
+  const rawSnr = result?.spectrum_snr_median;
+  const snr = typeof rawSnr === "number" && Number.isFinite(rawSnr) ? rawSnr : null;
+  const source =
+    result?.spectrum_source === "request"
+      ? dict.ai.sourceRequest
+      : result?.spectrum_source === "archive"
+        ? dict.ai.sourceArchive
+        : null;
+
+  const aiState =
+    current === null ? "loading" : noSpectrum ? "no-spectrum" : spectrumDown ? "spectrum-unavailable" : current.kind;
+
+  const anomaly = unit(result?.anomaly_score);
+  const topClass = result?.top_class && ALL_CLASSES.includes(result.top_class) ? result.top_class : undefined;
+
+  const retryButton = (
+    <button
+      type="button"
+      onClick={() => setAttempt((n) => n + 1)}
+      className="aeon-btn aeon-btn-line h-7 shrink-0 px-2.5 text-[11px]"
+    >
+      <RotateCw className="h-3 w-3" />
+      {dict.ai.retry}
+    </button>
+  );
 
   return (
-    <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
-      {unavailable && (
-        <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          {dict.ai.serviceUnavailable}
+    <section className="aeon-panel rounded-2xl p-4 @xl:p-5" aria-busy={loading} data-ai-state={aiState}>
+      {current?.kind === "unreachable" && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <span>{dict.ai.serviceUnavailable}</span>
+          {retryButton}
+        </div>
+      )}
+      {current?.kind === "rejected" && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+          <span className="min-w-0 break-words">
+            {dict.ai.requestRejected}
+            {current.detail ? `: ${current.detail}` : ""}
+          </span>
+          {retryButton}
+        </div>
+      )}
+      {spectrumDown && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <span>{dict.ai.spectrumUnavailable}</span>
+          {retryButton}
+        </div>
+      )}
+      {noSpectrum && (
+        <p role="status" className="mb-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+          {dict.ai.noSpectrum}
+        </p>
+      )}
+      {loading && (
+        <p role="status" className="mb-3 text-xs text-slate-400">
+          {dict.ai.classifying}
         </p>
       )}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -92,11 +168,23 @@ export function ClassificationCard({
       </div>
 
       {result && (
+      <>
+      {source && (
+        <p className="aeon-mono mb-3 text-[11px] text-slate-400">
+          {source}
+          {snr !== null && ` · ${dict.ai.snrMedian} ${snr.toFixed(1)}`}
+        </p>
+      )}
+      {snr !== null && snr < LOW_SNR && (
+        <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {dict.ai.lowSnr}
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-12">
         {/* 5 Class Probability Bars */}
         <div className="space-y-2.5 @2xl:col-span-8">
           {ALL_CLASSES.map((cls) => {
-            const p = result?.probabilities?.[cls] ?? 0;
+            const p = unit(result?.probabilities?.[cls]);
             const pct = Math.round(p * 100);
             const isTop = cls === topClass;
             return (
@@ -162,6 +250,7 @@ export function ClassificationCard({
           )}
         </div>
       </div>
+      </>
       )}
     </section>
   );

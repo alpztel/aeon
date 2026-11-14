@@ -71,8 +71,13 @@ export function CandidatePoolPanel({
         classifyTarget({ ra: coords.ra, dec: coords.dec }).catch(() => null),
         runDifference({ ra: coords.ra, dec: coords.dec }).catch(() => null),
       ]);
+      // Without a spectrum the engine only returns an uninformative prior: do not submit it as a measurement.
+      const ai =
+        aiRes && aiRes.data.spectrum_source !== "none" && aiRes.data.spectrum_source !== "unavailable"
+          ? aiRes.data
+          : null;
       const measuredSnr = diffRes?.data.detections?.[0]?.snr ?? 5.0;
-      const measuredAnomaly = aiRes?.data.anomaly_score ?? 0.5;
+      const measuredAnomaly = ai?.anomaly_score ?? 0.5;
       const notePrefix = selectedObject?.is_synthetic ? "[SYNTHETIC TEST] " : "";
       const { data: created } = await submitOrVoteCandidate({
         action: "submit",
@@ -80,7 +85,7 @@ export function CandidatePoolPanel({
           ra: coords.ra,
           dec: coords.dec,
           object_class:
-            selectedObject?.object_class ?? aiRes?.data.top_class ?? "planet_x_candidate",
+            selectedObject?.object_class ?? ai?.top_class ?? "planet_x_candidate",
           anomaly_score: measuredAnomaly,
           snr: measuredSnr,
           submitted_by: observer.trim() || "Citizen-Scientist",
