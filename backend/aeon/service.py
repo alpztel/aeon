@@ -13,7 +13,7 @@ from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 
 from . import __version__, analysis, bands, ephem, orbit, orbit_fit, photometry, sky
-from .archive import FitsArchive
+from .archive import FitsArchive, Frame, target_wcs
 from .catalog import ENTRIES, ENTRIES_BY_ID, CatalogEntry, get_catalog, position_at
 from .epochs import DEFAULT_EPOCH, SURVEY_END, SURVEY_START, epoch_year
 
@@ -44,6 +44,7 @@ def health() -> dict:
             "photometry": "photutils",
             "fits": "astropy",
             "archive_images": str(len(get_archive().images)),
+            "archive_spherex_frames": str(get_archive().n_spherex),
         },
     }
 
@@ -81,7 +82,8 @@ def entry_public(e: CatalogEntry, t_year: float, sep: float | None = None) -> di
     }
 
 
-def image_payload(img: np.ndarray, w: WCS, epoch: str | None, band: int | None, unit: str = "uJy/pixel") -> dict:
+def image_payload(img: np.ndarray, w: WCS, epoch: str | None, band: int | None, unit: str = "uJy/pixel",
+                  provenance: dict | None = None) -> dict:
     scale = float(np.mean(proj_plane_pixel_scales(w.celestial)) * 3600.0)
     ny, nx = img.shape
     ra, dec = w.all_pix2world([[(nx - 1) / 2, (ny - 1) / 2]], 0)[0]
@@ -95,6 +97,7 @@ def image_payload(img: np.ndarray, w: WCS, epoch: str | None, band: int | None, 
                 if k.startswith(("CTYPE", "CRVAL", "CRPIX", "CDELT", "CUNIT", "PC", "RADESYS"))},
         "stats": {"min": float(finite.min()), "max": float(finite.max()), "median": float(np.median(finite)),
                   "std": float(np.std(finite))},
+        **({"provenance": provenance} if provenance else {}),
     }
 
 
@@ -103,15 +106,74 @@ def _psf_sigma_px(band: int | None, scale: float) -> float:
     return fwhm / 2.3548 / scale
 
 
-def epoch_image(ra: float, dec: float, epoch: str, size_px: int, scale: float, band: int | None) -> tuple[np.ndarray, WCS, dict]:
+MIN_ARCHIVE_COVERAGE = 0.5      # fraction of the requested cutout that must hold real pixels
+
+
+def _frame_info(f: Frame) -> dict:
+    img = f.image
+    return {"file": img.path.name, "obs_id": img.obs_id, "detector": img.detector, "date_obs": img.date_obs,
+            "wavelength_um": None if f.wavelength_um is None else round(f.wavelength_um, 5),
+            "bandwidth_um": None if f.bandwidth_um is None else round(f.bandwidth_um, 5), "band": f.band}
+
+
+def archive_stack(frames: list[Frame], ra: float, dec: float, size_px: int, scale: float, epoch: str,
+                  band: int | None) -> tuple[np.ndarray, WCS, dict] | None:
+    """Mean of the archive frames resampled onto the requested north-up grid (uJy/pixel).
+
+    band=None on SPHEREx data is the contract's "all-band mean": the plain mean over every frame
+    (each frame sees one LVF wavelength at the target). Returns None if the frames cover less than
+    MIN_ARCHIVE_COVERAGE of the cutout or miss its centre."""
+    arch = get_archive()
+    imgs, used = [], []
+    for f in frames:
+        im, _, w = arch.resampled(f.image, ra, dec, size_px, scale)
+        if np.isfinite(im).any():
+            imgs.append(im)
+            used.append(f)
+    if not imgs:
+        return None
+    with np.errstate(all="ignore"):
+        stack = np.nanmean(np.array(imgs), axis=0) if len(imgs) > 1 else imgs[0]
+    cov = float(np.isfinite(stack).mean())
+    c = size_px // 2
+    if cov < MIN_ARCHIVE_COVERAGE or not np.isfinite(stack[c - 1:c + 1, c - 1:c + 1]).all():
+        return None
+    n_fill = int((~np.isfinite(stack)).sum())
+    stack = np.where(np.isfinite(stack), stack, np.nanmedian(stack))
+    fwhms = [f.image.psf_fwhm_arcsec for f in used if f.image.psf_fwhm_arcsec]
+    fwhm = float(np.median(fwhms)) if fwhms else (sky.BROADBAND_FWHM_ARCSEC if band is None else float(sky.psf_fwhm_arcsec(bands.WAVELENGTH_UM[band])))
+    # Resampling to a coarser/finer grid broadens the PSF by ~the larger of the two pixel sizes.
+    native = float(np.median([f.image.scale_arcsec for f in used]))
+    fwhm_eff = math.hypot(fwhm, 0.5 * max(native, scale))
+    spherex = [f for f in used if f.image.kind == "spherex"]
+    years = [f.image.decimal_year for f in used if f.image.decimal_year is not None]
+    lams = [f.wavelength_um for f in spherex]
+    prov = {
+        "source": "IRSA SPHEREx Level 2 spectral images" if spherex else "FITS archive",
+        "n_frames": len(used), "epoch_rule": "calendar quarter of the observation date",
+        "obs_date_range": [min(f.image.date_obs for f in used if f.image.date_obs), max(f.image.date_obs for f in used if f.image.date_obs)] if years else None,
+        "obs_decimal_year_mean": round(float(np.mean(years)), 4) if years else None,
+        "wavelength_range_um": [round(min(lams), 4), round(max(lams), 4)] if lams else None,
+        "combine": "mean of frames resampled to the requested north-up TAN grid (bilinear, surface brightness conserving)",
+        "masked_flags": "TRANSIENT OVERFLOW SUR_ERROR NONFUNC MISSING_DATA HOT COLD NONLINEAR PERSIST OUTLIER CROSSTALK GHOST* STREAK BLOOM SNOWBALL HALO" if spherex else None,
+        "filled_pixels": n_fill, "coverage": round(cov, 4), "native_pixel_scale_arcsec": round(native, 4),
+        "frames": [_frame_info(f) for f in used[:12]],
+    }
+    meta = {"source": "fits_archive", "file": used[0].image.path.name, "psf_sigma_px": fwhm_eff / 2.3548 / scale,
+            "pixel_scale_arcsec": scale, "provenance": prov, "decimal_year": prov["obs_decimal_year_mean"]}
+    return stack, target_wcs(ra, dec, size_px, scale), meta
+
+
+def epoch_image(ra: float, dec: float, epoch: str, size_px: int, scale: float, band: int | None,
+                allowed_bands: set[int] | None = None, use_archive: bool = True) -> tuple[np.ndarray, WCS, dict]:
     """Raw (background-included) image for one epoch from the archive or the sky model."""
     arch = get_archive()
-    if band is None and arch.available:
-        hit = arch.find(ra, dec, epoch)
-        if hit is not None:
-            img, w = arch.cutout(hit, ra, dec, size_px)
-            return img, w, {"source": "fits_archive", "file": hit.path.name, "psf_sigma_px": _psf_sigma_px(None, hit.scale_arcsec),
-                            "pixel_scale_arcsec": hit.scale_arcsec}
+    if use_archive and arch.available:
+        frames = arch.frames(ra, dec, epoch, band, allowed_bands)
+        if frames:
+            got = archive_stack(frames, ra, dec, size_px, scale, epoch, band)
+            if got is not None:
+                return got
     img, w, meta = sky.render(ra, dec, sky.epoch_subtimes(epoch_year(epoch)), size_px, scale, band, seed_tag=f"epoch-{epoch}")
     meta.update(source="physical_model", pixel_scale_arcsec=scale)
     return img, w, meta
@@ -166,15 +228,133 @@ def cutout(ra: float, dec: float, epoch: str, size_px: int, scale: float, band: 
     img, w, meta = epoch_image(ra, dec, epoch, size_px, scale, band)
     sub, bkg, std = photometry.background_subtract(img)
     if as_fits:
-        hdul = sky.to_fits(sub, w, {"AEONEPOC": epoch, "BKGLEVEL": bkg, "BKGSTD": std, "DATAMODE": meta["source"],
-                                     "BAND": -1 if band is None else band})
+        extra = {"AEONEPOC": epoch, "BKGLEVEL": bkg, "BKGSTD": std, "DATAMODE": meta["source"],
+                 "BAND": -1 if band is None else band}
+        prov = meta.get("provenance")
+        if prov:
+            extra.update({"TELESCOP": "SPHEREx" if prov["wavelength_range_um"] else "unknown",
+                          "ORIGIN": "AEON from IRSA SPHEREx L2" if prov["wavelength_range_um"] else "AEON FITS archive",
+                          "NFRAMES": prov["n_frames"], "DATEOBS1": (prov["obs_date_range"] or ["", ""])[0],
+                          "DATEOBS2": (prov["obs_date_range"] or ["", ""])[1]})
+            if prov["wavelength_range_um"]:
+                extra.update({"WAVEMIN": prov["wavelength_range_um"][0], "WAVEMAX": prov["wavelength_range_um"][1]})
+        hdul = sky.to_fits(sub, w, extra)
         buf = io.BytesIO()
         hdul.writeto(buf)
         return buf.getvalue()
-    out = image_payload(sub, w, epoch, band)
+    out = image_payload(sub, w, epoch, band, provenance=meta.get("provenance"))
     out["background"] = {"level": bkg, "std": std}
     out["data_mode"] = meta["source"]
     return out
+
+
+MIN_REAL_SPECTRUM_BANDS = 34     # a real spectrum needs >= 1/3 of the 102 AEON bands
+SPECTRUM_STAMP_PX = 25
+
+
+def _archive_spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float, hit) -> tuple[dict | None, str]:
+    """Real SPHEREx spectrum: forced photometry at the target on every LVF frame of the epoch that
+    covers it, binned onto the AEON bands. Returns (result or None, reason)."""
+    arch = get_archive()
+    if not arch.n_spherex:
+        return None, "no SPHEREx frames in AEON_DATA_DIR"
+    frames = [f for f in arch.frames(ra, dec, epoch) if f.image.kind == "spherex"]
+    if not frames:
+        return None, f"no SPHEREx frame covers this position in {epoch}"
+    ra_c, dec_c = ra, dec
+    if hit:     # moving targets: put the aperture where the object was when SPHEREx looked
+        t_obs = float(np.median([f.image.decimal_year for f in frames if f.image.decimal_year is not None]))
+        ra_c, dec_c = ephem.apparent_position(hit[0], t_obs)
+        frames = [f for f in arch.frames(ra_c, dec_c, epoch) if f.image.kind == "spherex"]
+    meas = []
+    rejected = 0
+    phot = None
+    for f in frames:
+        scale = f.image.scale_arcsec
+        stamp, x, y = arch.native_stamp(f.image, ra_c, dec_c, SPECTRUM_STAMP_PX // 2)
+        sigma = (f.image.psf_fwhm_arcsec or float(sky.psf_fwhm_arcsec(f.wavelength_um))) / 2.3548 / scale
+        res = photometry.forced_point(stamp, x, y, aperture_arcsec / scale, sigma)
+        fl, er = float(res["flux"]), float(res["err"])
+        if not (np.isfinite(fl) and np.isfinite(er) and er > 0):
+            rejected += 1           # flagged pixel in the aperture, or annulus off the frame
+            continue
+        phot = res
+        meas.append((f.band, f.wavelength_um, f.bandwidth_um, fl, er, f))
+    by_band: dict[int, list] = {}
+    for m in meas:
+        if m[0] is not None:
+            by_band.setdefault(m[0], []).append(m)
+    if len(by_band) < MIN_REAL_SPECTRUM_BANDS:
+        return None, (f"only {len(by_band)} of 102 bands covered by unflagged SPHEREx frames in {epoch} "
+                      f"(need {MIN_REAL_SPECTRUM_BANDS}; {len(frames)} frames, {rejected} rejected)")
+    rows = []
+    for b, ms in sorted(by_band.items()):
+        wts = np.array([1.0 / m[4] ** 2 for m in ms])
+        fl = float(np.sum(wts * np.array([m[3] for m in ms])) / wts.sum())
+        rows.append((float(np.mean([m[1] for m in ms])), float(np.mean([m[2] for m in ms])), fl,
+                     float(1.0 / math.sqrt(wts.sum())), b, len(ms)))
+    rows.sort()
+    lam_m = np.array([r[0] for r in rows])
+    flux_m = np.array([r[2] for r in rows])
+    err_m = np.array([r[3] for r in rows])
+    # The contract fixes 102 bands. Measured bands carry the real photometry; the others are filled
+    # by log-wavelength interpolation between the nearest measured bands (nearest value outside the
+    # measured range) with an inflated error, and are flagged in pipeline.measured.
+    measured = np.zeros(bands.N_BANDS, dtype=bool)
+    lam = bands.WAVELENGTH_UM.astype(float).copy()
+    bw = bands.BANDWIDTH_UM.astype(float).copy()
+    flux = np.empty(bands.N_BANDS)
+    err = np.empty(bands.N_BANDS)
+    for r in rows:
+        measured[r[4]] = True
+        lam[r[4]], bw[r[4]], flux[r[4]], err[r[4]] = r[0], r[1], r[2], r[3]
+    miss = ~measured
+    if miss.any():
+        ll = np.log(lam_m)
+        flux[miss] = np.interp(np.log(lam[miss]), ll, flux_m)
+        e_interp = np.interp(np.log(lam[miss]), ll, err_m)
+        # neighbour spread as extra uncertainty
+        idx = np.clip(np.searchsorted(ll, np.log(lam[miss])), 1, len(ll) - 1)
+        spread = np.abs(flux_m[idx] - flux_m[idx - 1])
+        err[miss] = np.hypot(e_interp, spread) * 2.0
+    t = epoch_year(epoch)
+    used = [m[5] for m in meas]
+    dates = sorted(f.image.date_obs for f in used if f.image.date_obs)
+    return {
+        "ra": round(ra_c, 7), "dec": round(dec_c, 7), "epoch": epoch,
+        "wavelength_um": [round(float(v), 5) for v in lam],
+        "bandwidth_um": [round(float(v), 5) for v in bw],
+        "flux_ujy": [round(float(v), 4) for v in flux],
+        "flux_err_ujy": [round(float(v), 4) for v in err],
+        "snr_median": round(float(np.median(flux_m / np.maximum(err_m, 1e-12))), 3),
+        "matched_object": entry_public(hit[0], t, _sep_arcsec(ra, dec, ra_c, dec_c)) if hit else None,
+        "absorption_features": photometry.absorption_features(flux_m, err_m, lam_m),
+        "pipeline": {
+            "data_mode": "fits_archive",
+            "source": "IRSA SPHEREx Level 2 spectral images (linear variable filter)",
+            "method": ("photutils forced aperture photometry on the native (unresampled) pixels of each LVF frame "
+                       "at the target, annulus background, Gaussian aperture correction from the frame's "
+                       "PSF_FWHM; inverse-variance mean of the frames falling in each AEON band"),
+            "wavelength_note": ("measured bands: wavelength_um is the mean real LVF wavelength at the target "
+                                "(WCS-WAVE); unmeasured bands: AEON band centre"),
+            "measured": [bool(v) for v in measured],
+            "n_bands_measured": int(measured.sum()),
+            "unmeasured_fill": ("log-wavelength interpolation between nearest measured bands (nearest value "
+                                "outside the measured range), error = 2 x hypot(interpolated error, neighbour "
+                                "difference); NOT a measurement"),
+            "n_frames": len(frames), "n_frames_used": len(meas), "n_frames_rejected": rejected,
+            "n_bands_total": bands.N_BANDS,
+            "frames_per_band": [int(next((r[5] for r in rows if r[4] == k), 0)) for k in range(bands.N_BANDS)],
+            "obs_date_range": [dates[0], dates[-1]] if dates else None,
+            "aperture_px": round(phot["aperture_px"], 3) if phot else None,
+            "annulus_px": [round(v, 3) for v in phot["annulus_px"]] if phot else None,
+            "recentered": bool(hit) and _sep_arcsec(ra, dec, ra_c, dec_c) > 0.01,
+            "pixel_scale_arcsec": round(float(np.median([f.image.scale_arcsec for f in used])), 4),
+            "limitations": ("SPHEREx PSF is undersampled and non-Gaussian; the Gaussian aperture correction is "
+                            "approximate; 6.15\" pixels blend nearby sources into the aperture. absorption_features and "
+                            "snr_median use measured bands only."),
+        },
+    }, "ok"
 
 
 def spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float) -> dict:
@@ -185,6 +365,12 @@ def spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float) -> dict:
 def _spectrum_cached(ra: float, dec: float, epoch: str, aperture_arcsec: float) -> dict:
     t = epoch_year(epoch)
     hit = resolve_target(ra, dec, t, tol_arcsec=max(aperture_arcsec, 2 * sky.NATIVE_PIXEL_SCALE))
+    archive_note = None
+    if get_archive().available:
+        real, why = _archive_spectrum(ra, dec, epoch, aperture_arcsec, hit)
+        if real is not None:
+            return real
+        archive_note = why
     ra_c, dec_c = (hit[1], hit[2]) if hit else (ra, dec)
     cube, w, meta = sky.render_cube(ra_c, dec_c, sky.epoch_subtimes(t), seed_tag=f"cube-{epoch}")
     phot = photometry.extract_spectrum(cube, w, ra_c, dec_c, aperture_arcsec, meta["psf_sigma_px"])
@@ -204,6 +390,7 @@ def _spectrum_cached(ra: float, dec: float, epoch: str, aperture_arcsec: float) 
             "aperture_px": round(phot["aperture_px"], 3), "annulus_px": [round(v, 3) for v in phot["annulus_px"]],
             "recentered": bool(hit) and _sep_arcsec(ra, dec, ra_c, dec_c) > 0.01,
             "pixel_scale_arcsec": sky.NATIVE_PIXEL_SCALE,
+            **({"archive_fallback_reason": archive_note} if archive_note else {}),
         },
     }
 
@@ -288,6 +475,23 @@ def _stack_payload(r: dict, band: int | None, n_frames: int, times: np.ndarray, 
         "peak": r["peak"],
         "astrometry": r.get("astrometry", []),
     }
+
+
+def _difference_archive_plan(ra: float, dec: float, e1: str, e2: str, band: int | None) -> tuple[bool, set[int] | None]:
+    """Use the archive only if it covers both epochs. For SPHEREx all-band images restrict both
+    epochs to the AEON bands observed in both, so the two means see the same wavelengths."""
+    arch = get_archive()
+    if not arch.available:
+        return False, None
+    f1, f2 = arch.frames(ra, dec, e1, band), arch.frames(ra, dec, e2, band)
+    if not f1 or not f2:
+        return False, None
+    b1 = {f.band for f in f1 if f.band is not None}
+    b2 = {f.band for f in f2 if f.band is not None}
+    if band is None and b1 and b2:
+        common = b1 & b2
+        return (True, common) if common else (False, None)
+    return True, None
 
 
 def _shift_stack(req: dict) -> dict:
@@ -394,20 +598,29 @@ def run_analysis(method: str, req: dict) -> dict:
         e1, e2 = req.get("epoch_1") or DEFAULT_EPOCH, req.get("epoch_2") or "2026-Q3"
         if e1 == e2:
             raise RequestError("epoch_1 and epoch_2 must differ.")
-        i1, w, m1 = epoch_image(ra, dec, e1, size, scale, band)
-        i2, w2, m2 = epoch_image(ra, dec, e2, size, scale, band)
+        use_arch, allowed = _difference_archive_plan(ra, dec, e1, e2, band)
+        i1, w, m1 = epoch_image(ra, dec, e1, size, scale, band, allowed, use_arch)
+        i2, w2, m2 = epoch_image(ra, dec, e2, size, scale, band, allowed, use_arch)
+        if m1["source"] != m2["source"]:          # never difference real data against the model
+            i1, w, m1 = epoch_image(ra, dec, e1, size, scale, band, use_archive=False)
+            i2, w2, m2 = epoch_image(ra, dec, e2, size, scale, band, use_archive=False)
         if i1.shape != i2.shape:
             raise RequestError("Epoch images have different shapes; cannot difference.")
         ps = m1.get("psf_sigma_px", _psf_sigma_px(band, scale))
         d = analysis.difference(i1, i2, w, ps)
         a, b = d["background_subtracted"]
-        return {
+        out = {
             "method": "difference",
-            "image_1": image_payload(a, w, e1, band), "image_2": image_payload(b, w, e2, band),
+            "image_1": image_payload(a, w, e1, band, provenance=m1.get("provenance")),
+            "image_2": image_payload(b, w, e2, band, provenance=m2.get("provenance")),
             "difference": image_payload(d["difference"], w, None, band),
             "detections": d["detections"], "noise_sigma": round(d["noise_sigma"], 5),
             "dt_years": round(epoch_year(e2) - epoch_year(e1), 4), "data_mode": m1["source"],
         }
+        if m1.get("decimal_year") is not None and m2.get("decimal_year") is not None:
+            # Real observation dates differ from the nominal quarter centres; report the true baseline.
+            out["dt_years_observed"] = round(m2["decimal_year"] - m1["decimal_year"], 4)
+        return out
     if method == "shift-stack":
         return _shift_stack(req)
     if method == "blind-search":
