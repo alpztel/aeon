@@ -15,9 +15,12 @@ function trackErrors(page: Page) {
   return errors;
 }
 
+// Wait for the app's own "ready" signals instead of network idle (the page may keep background traffic).
 async function settle(page: Page) {
-  await page.waitForLoadState("networkidle");
-  await expect(page.getByText("Rendering sky cutout...")).toHaveCount(0);
+  await page.waitForLoadState("domcontentloaded");
+  await expect(page.getByText("Connecting...")).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.getByText("Rendering sky cutout...")).toHaveCount(0, { timeout: 45_000 });
+  await page.waitForTimeout(500);
 }
 
 test("T01 loads with backend data mode and no runtime errors", async ({ page }) => {
@@ -181,4 +184,17 @@ test("T13 colormap cycling changes pixels and never throws", async ({ page }) =>
   }
   expect(seen.size).toBe(4);
   expect(errors).toEqual([]);
+});
+
+
+test("T14 page goes quiet after load (no polling / refetch loops)", async ({ page }) => {
+  const urls: string[] = [];
+  await page.goto("/");
+  await settle(page);
+  await page.waitForTimeout(8000);                 // let first-load panels finish
+  page.on("request", (r) => urls.push(`${r.method()} ${r.url().replace(/\?.*/, "")}`));
+  await page.waitForTimeout(10_000);
+  const counts: Record<string, number> = {};
+  for (const u of urls) counts[u] = (counts[u] ?? 0) + 1;
+  expect(urls.length, `requests in 10 s of idle: ${JSON.stringify(counts)}`).toBeLessThan(5);
 });
