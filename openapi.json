@@ -1084,6 +1084,11 @@
                 "type": "number"
               }
             }
+          },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Present when the image comes from archive files: source, n_frames, obs_date_range, obs_decimal_year_mean, coverage, masked flags, per-frame info."
           }
         }
       },
@@ -1178,7 +1183,40 @@
           },
           "pipeline": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "properties": {
+              "data_mode": {
+                "type": "string",
+                "enum": [
+                  "fits_archive",
+                  "physical_model"
+                ]
+              },
+              "measured": {
+                "type": "array",
+                "items": {
+                  "type": "boolean"
+                },
+                "minItems": 102,
+                "maxItems": 102,
+                "description": "Per band: true = real measurement; false = interpolated fill (NOT a measurement; plot differently, e.g. hollow markers)."
+              },
+              "n_bands_measured": {
+                "type": "integer"
+              },
+              "unmeasured_fill": {
+                "type": "string"
+              },
+              "obs_date_range": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -1387,6 +1425,10 @@
               "fits_archive",
               "physical_model"
             ]
+          },
+          "dt_years_observed": {
+            "type": "number",
+            "description": "True baseline between the mean observation dates of the two archive images (may differ from dt_years, which uses nominal quarter centres)."
           }
         }
       },
