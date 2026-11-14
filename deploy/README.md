@@ -1,4 +1,4 @@
-# Dağıtım — api.aeon.tech (DigitalOcean)
+# Dağıtım — api.a-eon.engineer (DigitalOcean)
 
 ## Bileşenler
 | Dosya | Görev |
@@ -13,7 +13,7 @@
 
 ## İlk kurulum (lider, bir kez)
 1. DigitalOcean'da Ubuntu 24.04 droplet aç (≥ 2 GB RAM; GitHub Student Pack kredisi).
-2. DNS: `api.aeon.tech` için droplet IP'sine **A kaydı**; `aeon.tech` Vercel'e bağlı kalır.
+2. DNS: `api.a-eon.engineer` için droplet IP'sine **A kaydı**; `a-eon.engineer` Vercel'e bağlı kalır.
 3. Droplet'te root olarak:
    ```bash
    curl -fsSL https://raw.githubusercontent.com/alpztel/aeon/main/deploy/scripts/bootstrap-droplet.sh | bash -s -- <letsencrypt-e-postan>
@@ -24,7 +24,7 @@
 
 ## Günlük akış
 - PR açılınca `ci-guard` + `e2e` çalışır. `main`'e birleştirme → `deploy` iş akışı droplet'i günceller
-  ve `https://api.aeon.tech/api/v1/health` duman testini yapar.
+  ve `https://api.a-eon.engineer/api/v1/health` duman testini yapar.
 - Elle: `cd /opt/aeon && docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build`
 - Sertifika yenilemesi otomatik; Nginx'in yeni sertifikayı alması için ayda bir
   `docker compose ... exec nginx nginx -s reload` (ya da cron).
@@ -34,3 +34,16 @@
 docker compose -f deploy/docker-compose.yml up -d --build
 pip install pytest httpx jsonschema && AEON_GATEWAY_URL=http://localhost pytest -q deploy/e2e
 ```
+
+## Bellek ve işçi ayarları (2 GB droplet)
+
+| Değişken | Varsayılan | Not |
+|---|---|---|
+| `WEB_CONCURRENCY` | 2 | backend web işçisi |
+| `AEON_HEAVY_WORKERS` | 1 | işçi başına ağır iş süreci (kör tarama, yörünge uydurma) |
+| `AI_WEB_CONCURRENCY` | 1 | AI motoru web işçisi; her ek işçi ~170 MB |
+| `OMP_NUM_THREADS` | 1 | AI motorunda torch iş parçacığı; küçük 1D-CNN için fazlası CPU'yu boşa harcar |
+| `AEON_CATALOG_CACHE_TTL` | 600 | AI motorunun katalog sorgu önbelleği (s) |
+| `AEON_UPSTREAM_BACKOFF_S` | 5 | backend hata/zaman aşımı sonrası AI motorunun bekleme süresi (s) |
+
+Stres testinde (c150) tüm sistemin tepe belleği ~1,8 GB'dır; droplet büyütülürse önce `AI_WEB_CONCURRENCY=2` açın.

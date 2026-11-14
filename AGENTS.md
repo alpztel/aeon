@@ -38,7 +38,7 @@ a path outside that branch's allow-list fails CI.
 ## 3. Service topology
 
 ```
-Browser ── https://aeon.tech (Vercel, Next.js)  ──►  https://api.aeon.tech (Nginx, DigitalOcean)
+Browser ── https://a-eon.engineer (Vercel, Next.js)  ──►  https://api.a-eon.engineer (Nginx, DigitalOcean)
                                                        ├─ /api/v1/health, catalog, sky, spectrum,
                                                        │   analysis, orbit          → backend:8000
                                                        ├─ /api/v1/ai/*              → ai-engine:8100
@@ -47,7 +47,7 @@ Browser ── https://aeon.tech (Vercel, Next.js)  ──►  https://api.aeon.
 ```
 
 Ports: backend `8000`, ai-engine `8100`, multi-mission-api `8200`. See `deploy/docker-compose.yml`.
-Every service exposes its own OpenAPI at `/docs` and must accept CORS from `https://aeon.tech` and
+Every service exposes its own OpenAPI at `/docs` and must accept CORS from `https://a-eon.engineer` and
 `http://localhost:3000`.
 
 ## 4. Shared conventions

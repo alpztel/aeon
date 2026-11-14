@@ -43,7 +43,7 @@ jobs:
         if: env.HAS_SECRETS == 'true'
         run: |
           for i in $(seq 1 20); do
-            curl -fsS https://api.aeon.tech/api/v1/health && exit 0
+            curl -fsS https://api.a-eon.engineer/api/v1/health && exit 0
             sleep 15
           done
           exit 1

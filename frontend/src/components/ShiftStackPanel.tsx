@@ -301,7 +301,7 @@ export function ShiftStackPanel({
   })();
 
   return (
-    <section className="aeon-panel rounded-2xl p-4 sm:p-5">
+    <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -331,7 +331,7 @@ export function ShiftStackPanel({
               className="bg-transparent font-medium text-cyan-200 focus:outline-none"
             >
               {COLORMAP_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value} className="bg-[#090D16]">
+                <option key={opt.value} value={opt.value} className="bg-[#0E0E10]">
                   {opt.label}
                 </option>
               ))}
@@ -361,7 +361,7 @@ export function ShiftStackPanel({
       </div>
 
       {/* Sliders: Rate, PA, Trial Distance (Parallax), Cadence & Combine */}
-      <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-white/10 bg-black/30 p-3.5 md:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-white/10 bg-black/30 p-3.5 @2xl:grid-cols-2 @4xl:grid-cols-4">
         <div>
           <div className="mb-1 flex justify-between text-xs">
             <span className="text-slate-400">{dict.stack.rate}</span>
@@ -479,8 +479,8 @@ export function ShiftStackPanel({
       )}
 
       {/* Side-by-side Single vs Stacked + S/N Gain */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="overflow-hidden rounded-xl border border-white/10 bg-black/50 p-3 lg:col-span-4">
+      <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-12">
+        <div className="overflow-hidden rounded-xl border border-white/10 bg-black/50 p-3 @4xl:col-span-4">
           <div className="mb-2 flex items-center justify-between text-xs">
             <span className="font-medium text-slate-300">{dict.stack.singleFrame}</span>
             <span className="aeon-mono rounded bg-white/10 px-2 py-0.5 text-[11px] text-slate-300">
@@ -495,7 +495,7 @@ export function ShiftStackPanel({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-amber-400/35 bg-black/50 p-3 lg:col-span-4">
+        <div className="overflow-hidden rounded-xl border border-amber-400/35 bg-black/50 p-3 @4xl:col-span-4">
           <div className="mb-2 flex items-center justify-between text-xs">
             <span className="font-semibold text-amber-200">{dict.stack.stackedFrame}</span>
             <span
@@ -517,12 +517,12 @@ export function ShiftStackPanel({
         </div>
 
         {/* S/N Gain + Parallax Loop Preview */}
-        <div className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 lg:col-span-4">
+        <div className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 @4xl:col-span-4">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-400">{dict.stack.snrGain}</span>
               <span className="aeon-mono text-lg font-bold text-emerald-300">
-                ×{snrGain.toFixed(2)}
+                {snrSingle > 0 && snrGain > 0 ? `×${snrGain.toFixed(2)}` : "—"}
               </span>
             </div>
 
@@ -560,7 +560,7 @@ export function ShiftStackPanel({
                 <svg viewBox="0 0 200 84" className="h-20 w-full">
                   <polyline
                     fill="none"
-                    stroke="#22d3ee"
+                    stroke="#9db4f0"
                     strokeWidth="2"
                     points={trackPoints}
                   />
@@ -593,7 +593,7 @@ export function ShiftStackPanel({
       {/* 5x5 Blind Search Heatmaps + Distance Profile */}
       {blindResult && (
         <div className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2">
             <SnrGrid
               title={dict.stack.coarseGrid}
               grid={blindResult.grid}

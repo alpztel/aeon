@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
+from concurrent.futures import ProcessPoolExecutor
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Path, Query, Request
@@ -24,7 +26,7 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in os.environ.get("AEON_CORS_ORIGINS", "https://aeon.tech,http://localhost:3000").split(",")],
+    allow_origins=[o.strip() for o in os.environ.get("AEON_CORS_ORIGINS", "https://www.a-eon.engineer,https://a-eon.engineer,http://localhost:3000").split(",")],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
@@ -40,6 +42,36 @@ async def server_timing(request: Request, call_next):
     response = await call_next(request)
     response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - t0) * 1000:.1f}"
     return response
+
+
+# Heavy jobs (blind search, orbit fits, very large stacks) run in a separate process pool so they
+# cannot starve light requests of the GIL. A bounded queue answers 503 + Retry-After when full.
+HEAVY_WORKERS = int(os.environ.get("AEON_HEAVY_WORKERS", "1"))
+HEAVY_QUEUE = int(os.environ.get("AEON_HEAVY_QUEUE", "4"))
+_heavy_pool: ProcessPoolExecutor | None = None
+_heavy_slots: asyncio.Semaphore | None = None
+
+
+def _pool() -> ProcessPoolExecutor:
+    global _heavy_pool
+    if _heavy_pool is None:
+        _heavy_pool = ProcessPoolExecutor(max_workers=HEAVY_WORKERS)
+    return _heavy_pool
+
+
+async def _run_heavy(fn, *args):
+    global _heavy_slots
+    if HEAVY_WORKERS <= 0:                      # inline mode (tests, tiny hosts)
+        return _guard(fn, *args)
+    if _heavy_slots is None:
+        _heavy_slots = asyncio.Semaphore(HEAVY_QUEUE)
+    if _heavy_slots.locked():
+        raise HTTPException(status_code=503, detail="Heavy-job queue is full; retry shortly.", headers={"Retry-After": "10"})
+    async with _heavy_slots:
+        try:
+            return await asyncio.get_running_loop().run_in_executor(_pool(), fn, *args)
+        except service.RequestError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _guard(fn, *args, **kwargs):
@@ -155,10 +187,16 @@ def get_spectrum(
 
 
 @app.post("/api/v1/analysis/{method}", tags=["core"])
-def run_analysis(req: AnalysisRequest, method: Literal["difference", "shift-stack", "blind-search"] = Path()):
-    return _guard(service.run_analysis, method, req.model_dump())
+async def run_analysis(req: AnalysisRequest, method: Literal["difference", "shift-stack", "blind-search"] = Path()):
+    body = req.model_dump()
+    if service.is_heavy_analysis(method, body):
+        return await _run_heavy(service.run_analysis, method, body)
+    return await asyncio.to_thread(_guard, service.run_analysis, method, body)
 
 
 @app.post("/api/v1/orbit/simulate", tags=["core"])
-def simulate_orbit(req: OrbitRequest):
-    return _guard(service.simulate_orbit, req.model_dump())
+async def simulate_orbit(req: OrbitRequest):
+    body = req.model_dump()
+    if service.is_heavy_orbit(body):
+        return await _run_heavy(service.simulate_orbit, body)
+    return await asyncio.to_thread(_guard, service.simulate_orbit, body)

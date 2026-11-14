@@ -4,7 +4,15 @@ services:
     restart: unless-stopped
     environment:
       AEON_DATA_DIR: /data/fits
-      AEON_CORS_ORIGINS: https://aeon.tech,http://localhost:3000
+      AEON_CORS_ORIGINS: https://www.a-eon.engineer,https://a-eon.engineer,http://localhost:3000
+      # Memory profile for a 2 GB droplet: 2 web workers + 1 heavy-job process each (4 processes).
+      WEB_CONCURRENCY: "2"
+      AEON_HEAVY_WORKERS: "1"
+      AEON_TRACKER_CACHE_MB: "64"
+      AEON_TILE_CACHE: "96"
+      AEON_TILE_SED_CACHE: "16"
+      AEON_SPECTRUM_CACHE: "128"
+      MALLOC_ARENA_MAX: "2"
     volumes:
       - fits-data:/data/fits
     expose: ["8000"]
@@ -12,6 +20,12 @@ services:
   ai-engine:
     build: ../ai-engine
     restart: unless-stopped
+    # Web workers (AI_WEB_CONCURRENCY, default 1: each extra one costs ~170 MB on the 2 GB droplet) and one torch thread each
+    # (the 1D CNN is tiny, so extra OpenMP threads only oversubscribe the CPU).
+    command: ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8100 --workers $${AI_WEB_CONCURRENCY:-1}"]
+    environment:
+      OMP_NUM_THREADS: "1"
+      MALLOC_ARENA_MAX: "2"
     env_file:
       - path: .env
         required: false   # secrets live only on the droplet; CI and fresh clones have none

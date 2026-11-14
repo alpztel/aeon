@@ -130,6 +130,21 @@ def high_z_galaxy(mag_ab_w2: float, z: float = 2.0) -> np.ndarray:
     return _normalise(cont, mag_ab_w2)
 
 
+def high_z_galaxies(mag_ab_w2: np.ndarray, z: np.ndarray) -> np.ndarray:
+    """Vectorised high_z_galaxy for many galaxies: returns (N, 102) uJy."""
+    lam = bands.WAVELENGTH_UM
+    mag = np.atleast_1d(np.asarray(mag_ab_w2, dtype=float))
+    zz = np.atleast_1d(np.asarray(z, dtype=float))
+    rest = lam[None, :] / (1.0 + zz[:, None])                       # (N, 102)
+    x = np.clip(HC_OVER_K_UM_K / (rest * 3800.0), 1e-6, 700.0)
+    cont = (1.0 / rest**3) / np.expm1(x)
+    cont *= np.where(rest < 0.40, 0.35, 1.0)
+    cont *= 1.0 + 0.25 * np.exp(-0.5 * ((rest - 1.6) / 0.25) ** 2)
+    cont *= 1.0 + 0.6 * np.exp(-0.5 * ((rest - 3.3) / 0.02) ** 2)
+    ref = np.array([np.interp(W2_UM, lam, row) for row in cont])
+    return cont / np.maximum(ref, 1e-300)[:, None] * bands.ab_to_ujy(mag)[:, None]
+
+
 def model_flux(object_class: str, mag_ab_w2: float, t_year: float, teff_k: float | None = None,
                redshift: float | None = None) -> np.ndarray:
     if object_class == "cold_brown_dwarf":

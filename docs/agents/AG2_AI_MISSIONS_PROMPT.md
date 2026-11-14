@@ -42,7 +42,7 @@ ai-engine/                         multi-mission-api/
 ```
 
 - `Dockerfile` son satırı: `CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8100"]` (diğeri 8200).
-- CORS: `https://aeon.tech`, `http://localhost:3000`, `https://*.vercel.app`.
+- CORS: `https://a-eon.engineer`, `http://localhost:3000`, `https://*.vercel.app`.
 - Her servis `GET /healthz` (sözleşme dışı, yalnız Docker sağlık kontrolü için) sunabilir.
 - Core backend'e (`backend/`) **HTTP ile** eriş: ortam değişkeni `AEON_CORE_URL` (yerelde `http://localhost:8000`,
   Docker'da `http://backend:8000`). Backend kodunu import etme veya kopyalama.

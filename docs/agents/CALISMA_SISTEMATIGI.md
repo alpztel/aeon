@@ -131,7 +131,7 @@ Bilinmeyen bir `agent/*` dal adı CI'da reddedilir. Yeni dal gerekiyorsa liderde
 | Aşama | Node 1 (backend) | Node 2 (frontend) | Node 3 (AI + görevler) |
 |-------|------------------|-------------------|------------------------|
 | 1 | ✅ Çekirdek API (birleşti) · Gerçek SPHEREx verisi (IRSA) | İskelet, tasarım sistemi, TR/EN, harita + zaman çizelgesi | ai-engine + multi-mission-api iskeletleri, Dockerfile'lar, testler |
-| 2 | DigitalOcean kurulumu, `api.aeon.tech` | Tayf paneli, fark modu, shift-stack paneli | Gaia/WISE/MAST eşleştirme, GCN, aday havuzu |
+| 2 | DigitalOcean kurulumu, `api.a-eon.engineer` | Tayf paneli, fark modu, shift-stack paneli | Gaia/WISE/MAST eşleştirme, GCN, aday havuzu |
 | 3 | Performans, önbellek | 3D sahne, JWST PiP, Cmd+K | Astro-LLM, 1D-CNN, ViT, HF Space |
 | 4 | Entegrasyon testleri, tüm PR'lar | PDF rapor, Jüri Demo Turu, Vercel | GitHub Issue botu, son testler |
 

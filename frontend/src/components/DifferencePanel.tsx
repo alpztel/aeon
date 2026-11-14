@@ -104,7 +104,7 @@ export function DifferencePanel({ coords, selectedObject }: DifferencePanelProps
   }, [result, colormap]);
 
   return (
-    <section className="aeon-panel rounded-2xl p-4 sm:p-5">
+    <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
       {/* Header Controls */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -135,7 +135,7 @@ export function DifferencePanel({ coords, selectedObject }: DifferencePanelProps
               className="aeon-mono bg-transparent font-medium text-amber-200 focus:outline-none"
             >
               {EPOCHS.map((ep) => (
-                <option key={ep} value={ep} className="bg-[#090D16]">
+                <option key={ep} value={ep} className="bg-[#0E0E10]">
                   {ep}
                 </option>
               ))}
@@ -151,7 +151,7 @@ export function DifferencePanel({ coords, selectedObject }: DifferencePanelProps
               className="aeon-mono bg-transparent font-medium text-cyan-200 focus:outline-none"
             >
               {EPOCHS.map((ep) => (
-                <option key={ep} value={ep} className="bg-[#090D16]">
+                <option key={ep} value={ep} className="bg-[#0E0E10]">
                   {ep}
                 </option>
               ))}
@@ -167,7 +167,7 @@ export function DifferencePanel({ coords, selectedObject }: DifferencePanelProps
               className="bg-transparent font-medium text-cyan-200 focus:outline-none"
             >
               {COLORMAP_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value} className="bg-[#090D16]">
+                <option key={opt.value} value={opt.value} className="bg-[#0E0E10]">
                   {opt.label}
                 </option>
               ))}
@@ -197,7 +197,7 @@ export function DifferencePanel({ coords, selectedObject }: DifferencePanelProps
       )}
 
       {/* Three Canvases: I(t1), I(t2), Difference */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-3">
         <div className="overflow-hidden rounded-xl border border-white/10 bg-black/50 p-3">
           <div className="mb-2 flex items-center justify-between text-xs">
             <span className="font-medium text-slate-300">{dict.diff.image1}</span>
@@ -243,7 +243,7 @@ export function DifferencePanel({ coords, selectedObject }: DifferencePanelProps
 
       {/* Detections + Stats Footer */}
       {result && (
-        <div className="mt-4 flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3 sm:flex-row sm:items-center">
+        <div className="mt-4 flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3 @xl:flex-row @xl:items-center">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="font-medium text-slate-300">{dict.diff.detections}:</span>
             {result.detections.length === 0 ? (

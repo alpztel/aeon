@@ -10,7 +10,7 @@
   },
   "servers": [
     {
-      "url": "https://api.aeon.tech",
+      "url": "https://api.a-eon.engineer",
       "description": "Production gateway (DigitalOcean, Nginx)"
     },
     {

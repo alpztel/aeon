@@ -3,7 +3,7 @@
 Bu doküman, NASA Space Apps Challenge jürisine yapılacak **3 dakikalık canlı AEON sunumu** için saniyesi saniyesine tıklama adımlarını ve Türkçe / İngilizce sunum metinlerini içerir.
 
 > **Ön Hazırlık:**
-> - Tarayıcıda `https://aeon.tech` (veya `http://localhost:3000`) açık.
+> - Tarayıcıda `https://a-eon.engineer` (veya `http://localhost:3000`) açık.
 > - Üst bardaki veri modu rozeti (`FITS Arşivi` veya `Fiziksel Gökyüzü Modeli`) görünür durumda.
 > - Ses sistemi açık (Adım 1 veya Adım 2'de 102-bant spektral sonifikasyonu dinletmek için).
 

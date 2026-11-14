@@ -79,7 +79,7 @@ ENTRIES: tuple[CatalogEntry, ...] = (
         },
     ),
     CatalogEntry(
-        id="luhman-16", name="WISE J104915.57-531906.1", ra=162.32820, dec=-53.31840,
+        id="luhman-16", name="WISE J104915.57-531906.1", ra=162.31488, dec=-53.31836,  # designation position (J2010.5)
         object_class="cold_brown_dwarf", mag_ab_w2=10.6, ref_epoch=2010.5,
         pm_ra_cosdec_arcsec_yr=-2.759, pm_dec_arcsec_yr=0.354, distance_pc=2.0, teff_k=1300.0,
         aliases=("Luhman 16", "Luhman 16AB"),
@@ -110,8 +110,9 @@ ENTRIES: tuple[CatalogEntry, ...] = (
                      "tr": "Yüzü bize dönük ön-gezegen diskine sahip en yakın klasik T Tauri yıldızı."},
     ),
     CatalogEntry(
-        id="18-sco", name="18 Scorpii", ra=243.90529, dec=-8.36944, ref_epoch=2016.0,
+        id="18-sco", name="18 Scorpii", ra=243.90529, dec=-8.36944, ref_epoch=2000.0,
         object_class="main_sequence_star", mag_ab_w2=7.2, distance_pc=14.1, teff_k=5810.0,
+        pm_ra_cosdec_arcsec_yr=0.2322, pm_dec_arcsec_yr=-0.4952,  # J2000 position + proper motion
         aliases=("HD 146233", "18 Sco"),
         description={"en": "Solar twin; a reference main-sequence spectrum.",
                      "tr": "Güneş ikizi; referans anakol tayfı."},

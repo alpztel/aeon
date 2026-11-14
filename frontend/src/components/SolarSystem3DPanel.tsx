@@ -128,7 +128,7 @@ export function SolarSystem3DPanel({
     const height = container.clientHeight || 420;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x030712);
+    scene.background = new THREE.Color(0x050506);
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000);
     let spherical = { radius: 85, theta: Math.PI / 4, phi: Math.PI / 3.1 };
@@ -319,7 +319,7 @@ export function SolarSystem3DPanel({
   }, [orbit, logScale]);
 
   return (
-    <section className="aeon-panel rounded-2xl p-4 sm:p-5">
+    <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -383,17 +383,17 @@ export function SolarSystem3DPanel({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-12">
         {/* 3D Canvas */}
-        <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black lg:col-span-7">
+        <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black @4xl:col-span-7">
           <div ref={mountRef} className="h-[400px] w-full cursor-grab active:cursor-grabbing" />
-          <div className="border-t border-white/10 bg-[#090D16]/90 px-3 py-2 text-[11px] text-slate-400">
+          <div className="border-t border-white/10 bg-[#0E0E10]/90 px-3 py-2 text-[11px] text-slate-400">
             {dict.orbit.dragHint}
           </div>
         </div>
 
         {/* Horizons & Orbit Fit Telemetry */}
-        <div className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 lg:col-span-5">
+        <div className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 @4xl:col-span-5">
           <div className="space-y-3">
             {orbit && (
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">

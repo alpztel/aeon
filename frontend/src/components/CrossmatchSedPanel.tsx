@@ -22,9 +22,9 @@ interface CrossmatchSedPanelProps {
 }
 
 const SURVEY_COLORS: Record<string, string> = {
-  Gaia: "#38bdf8",
-  SPHEREx: "#22d3ee",
-  WISE: "#f59e0b",
+  Gaia: "#5fd39a",
+  SPHEREx: "#9db4f0",
+  WISE: "#ff5a1f",
 };
 
 export function CrossmatchSedPanel({
@@ -109,9 +109,9 @@ export function CrossmatchSedPanel({
         traces,
         {
           paper_bgcolor: "rgba(0,0,0,0)",
-          plot_bgcolor: "rgba(3,7,18,0.65)",
+          plot_bgcolor: "rgba(255,255,255,0.015)",
           margin: { l: 58, r: 20, t: 24, b: 46 },
-          font: { color: "#cbd5e1", size: 11 },
+          font: { color: "#c2bbb3", size: 11 },
           xaxis: {
             title: { text: dict.missions.sedX },
             gridcolor: "rgba(255,255,255,0.06)",
@@ -152,7 +152,7 @@ export function CrossmatchSedPanel({
   }, []);
 
   return (
-    <section className="aeon-panel rounded-2xl p-4 sm:p-5">
+    <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -203,9 +203,9 @@ export function CrossmatchSedPanel({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-12">
         {/* SED Plot */}
-        <div className="relative h-[300px] overflow-hidden rounded-xl border border-white/10 bg-black/40 lg:col-span-8">
+        <div className="relative h-[300px] overflow-hidden rounded-xl border border-white/10 bg-black/40 @4xl:col-span-8">
           <div ref={plotRef} className="h-full w-full" />
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-xs">
@@ -215,12 +215,14 @@ export function CrossmatchSedPanel({
         </div>
 
         {/* Counterpart Cards (Gaia DR3 + WISE) */}
-        <div className="flex flex-col justify-between gap-3 lg:col-span-4">
+        <div className="flex flex-col justify-between gap-3 @4xl:col-span-4">
           <div className="rounded-xl border border-white/10 bg-black/30 p-3.5 text-xs">
             <h3 className="mb-2 font-semibold uppercase tracking-wider text-sky-300">
               {dict.missions.gaiaTitle}
             </h3>
-            {!data?.gaia || data.gaia.length === 0 ? (
+            {!data ? (
+              <p className="text-slate-500">—</p>
+            ) : !data.gaia || data.gaia.length === 0 ? (
               <p className="text-slate-400">{dict.missions.noGaia}</p>
             ) : (
               <div className="aeon-mono space-y-1 text-[11px] text-slate-200">
@@ -242,7 +244,9 @@ export function CrossmatchSedPanel({
             <h3 className="mb-2 font-semibold uppercase tracking-wider text-amber-300">
               {dict.missions.wiseTitle}
             </h3>
-            {!data?.wise || data.wise.length === 0 ? (
+            {!data ? (
+              <p className="text-slate-500">—</p>
+            ) : !data.wise || data.wise.length === 0 ? (
               <p className="text-slate-400">{dict.missions.noWise}</p>
             ) : (
               <div className="aeon-mono space-y-1 text-[11px] text-slate-200">
