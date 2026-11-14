@@ -9,7 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 import math
 import time
 
+from httpx import Response
 import pytest
+import respx
 
 from app.active_learning import ActiveAnomalyDiscoveryEngine
 from app.sed_fitter import compute_kete_kbmod_kinematics, fit_multi_mission_sed, icrs_to_ecliptic_deg
@@ -75,8 +77,11 @@ def test_torture_active_learning_nan_inf_votes_and_concurrent_feedback():
     assert all(0.0 <= s <= 1.0 for s in scores)
 
 
+@respx.mock
 def test_torture_ecliptic_poles_and_kinematics(client):
     """Torture 3: North/South celestial poles, North Ecliptic Pole (RA=270, Dec=+66.5607), and crossmatch schema."""
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(503))
+
     # North Ecliptic Pole: (RA=270 deg, Dec=90 - 23.4392911 = 66.5607089 deg) -> beta_ecl ~ +90 deg
     _, beta_nep = icrs_to_ecliptic_deg(270.0, 66.5607089)
     assert abs(beta_nep - 90.0) < 0.01
@@ -93,8 +98,10 @@ def test_torture_ecliptic_poles_and_kinematics(client):
     assert body["sed_physics"]["spectral_regime"] == "ultracool_or_substellar"
 
 
+@respx.mock
 def test_optimization_benchmark_multi_mission_latency(client):
     """Optimization benchmark: crossmatch + SED fitter + kinematics must execute in < 10 ms average."""
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(503))
     client.get("/api/v1/missions/crossmatch", params={"ra": 76.95642, "dec": 30.40142})
     n_runs = 25
     t0 = time.perf_counter()
