@@ -20,6 +20,12 @@ services:
   ai-engine:
     build: ../ai-engine
     restart: unless-stopped
+    # Two web workers so one slow upstream call cannot hold the whole service; one torch thread each
+    # (the 1D CNN is tiny, so extra OpenMP threads only oversubscribe the CPU).
+    command: ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8100 --workers $${AI_WEB_CONCURRENCY:-2}"]
+    environment:
+      OMP_NUM_THREADS: "1"
+      MALLOC_ARENA_MAX: "2"
     env_file:
       - path: .env
         required: false   # secrets live only on the droplet; CI and fresh clones have none
