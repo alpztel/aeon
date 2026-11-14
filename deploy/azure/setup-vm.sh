@@ -5,7 +5,24 @@
 #
 # Re-running updates the code and the units. BLOB_ACCOUNT_URL may be left empty (local files only).
 set -euo pipefail
+# Never exit silently: name the failing line (run-command output only shows stdout/stderr).
+trap 'echo "setup-vm.sh: line $LINENO failed (exit $?)" >&2' ERR
 [ "$(id -u)" -eq 0 ] || { echo "run with sudo"; exit 1; }
+
+# Print the first disk that is completely empty: no partitions, no filesystem signature, not
+# mounted (the data disk provision.sh attaches). Prints nothing when there is none; never fails.
+find_empty_disk() {
+  local d
+  for d in $(lsblk -dpno NAME,TYPE 2>/dev/null | awk '$2=="disk" {print $1}'); do
+    if [ "$(lsblk -no NAME "$d" 2>/dev/null | wc -l)" -eq 1 ] &&
+       [ -z "$(lsblk -no MOUNTPOINT "$d" 2>/dev/null | tr -d '[:space:]')" ] &&
+       ! blkid -p "$d" >/dev/null 2>&1; then
+      echo "$d"
+      return 0
+    fi
+  done
+  return 0
+}
 
 REPO_SRC="$(cd "$(dirname "$0")/../.." && pwd)"
 # On re-runs keep the values from the previous install unless new ones are given.
@@ -33,13 +50,12 @@ id aeon >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nolo
 say "Data disk -> $DATA_DIR"
 if ! mountpoint -q /data; then
   # The empty data disk created by provision.sh (no partitions, not mounted).
-  DISK="$(lsblk -dpno NAME,TYPE,MOUNTPOINT | awk '$2=="disk" && $3=="" {print $1}' | while read -r d; do
-            [ -z "$(lsblk -no PARTTYPE "$d" | tr -d '[:space:]')" ] && ! blkid "$d" >/dev/null 2>&1 && echo "$d"; done | head -1)"
+  DISK="$(find_empty_disk)"
   if [ -n "$DISK" ]; then
     echo "formatting empty disk $DISK"
     mkfs.ext4 -q -L aeondata "$DISK"
     mkdir -p /data
-    echo "LABEL=aeondata /data ext4 defaults,nofail 0 2" >> /etc/fstab
+    grep -q "LABEL=aeondata" /etc/fstab || echo "LABEL=aeondata /data ext4 defaults,nofail 0 2" >> /etc/fstab
     mount /data
   else
     echo "no empty data disk found: using the OS disk for /data"

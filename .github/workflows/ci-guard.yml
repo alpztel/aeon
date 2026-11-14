@@ -73,6 +73,7 @@ jobs:
           pytest -q
           # Azure ingest package reuses backend/aeon (offline tests, archives and Azure are faked)
           pytest -q -p no:cacheprovider ../deploy/azure
+          bash ../deploy/azure/test_setup_disk.sh
 
   frontend-build:
     name: frontend lint + build
