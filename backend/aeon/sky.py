@@ -29,7 +29,8 @@ from astropy.wcs import WCS
 from scipy.special import erf
 
 from . import bands, spectra
-from .catalog import ENTRIES, CatalogEntry, position_at
+from .catalog import ENTRIES, CatalogEntry
+from .ephem import apparent_position
 
 NATIVE_PIXEL_SCALE = 6.2          # arcsec / pixel
 TELESCOPE_DIAMETER_M = 0.20
@@ -124,14 +125,35 @@ def _angsep_deg(ra1, dec1, ra2, dec2):
     return np.degrees(2 * np.arcsin(np.sqrt(np.clip(h, 0, 1))))
 
 
-def field_sources(ra: float, dec: float, radius_deg: float) -> dict[str, np.ndarray]:
-    parts = [_tile_sources(k, j) for k, j in _tiles_for(ra, dec, radius_deg)]
+@lru_cache(maxsize=512)
+def _tile_seds(k: int, j: int) -> np.ndarray:
+    """Band fluxes (N, 102) uJy of a tile's field population (stars: Planck; galaxies: z-model)."""
+    ra, _, mag, teff, is_gal = _tile_sources(k, j)
+    flux = np.zeros((len(ra), 102))
+    stars = ~is_gal
+    if stars.any():
+        flux[stars] = spectra.blackbody_bands(mag[stars], teff[stars])
+    for i in np.flatnonzero(is_gal):
+        z = 0.5 + (zlib.crc32(f"{ra[i]:.6f}".encode()) % 1000) / 1000 * 2.5
+        flux[i] = spectra.high_z_galaxy(mag[i], z)
+    return flux
+
+
+def field_sources(ra: float, dec: float, radius_deg: float, with_flux: bool = False) -> dict[str, np.ndarray]:
+    tiles = _tiles_for(ra, dec, radius_deg)
+    parts = [_tile_sources(k, j) for k, j in tiles]
     if not parts:
         empty = np.zeros(0)
-        return {"ra": empty, "dec": empty, "mag": empty, "teff": empty, "is_galaxy": empty.astype(bool)}
+        out = {"ra": empty, "dec": empty, "mag": empty, "teff": empty, "is_galaxy": empty.astype(bool)}
+        if with_flux:
+            out["flux"] = np.zeros((0, 102))
+        return out
     cat = [np.concatenate([p[i] for p in parts]) for i in range(5)]
     sel = _angsep_deg(ra, dec, cat[0], cat[1]) <= radius_deg
-    return {"ra": cat[0][sel], "dec": cat[1][sel], "mag": cat[2][sel], "teff": cat[3][sel], "is_galaxy": cat[4][sel]}
+    out = {"ra": cat[0][sel], "dec": cat[1][sel], "mag": cat[2][sel], "teff": cat[3][sel], "is_galaxy": cat[4][sel]}
+    if with_flux:
+        out["flux"] = np.concatenate([_tile_seds(k, j) for k, j in tiles])[sel]
+    return out
 
 
 def entry_flux(entry: CatalogEntry, t_year: float) -> np.ndarray:
@@ -140,15 +162,9 @@ def entry_flux(entry: CatalogEntry, t_year: float) -> np.ndarray:
 
 def sources_in_region(ra: float, dec: float, radius_deg: float, times: list[float]) -> SourceSet:
     nt = len(times)
-    f = field_sources(ra, dec, radius_deg)
+    f = field_sources(ra, dec, radius_deg, with_flux=True)
     n_field = len(f["ra"])
-    flux_field = np.zeros((n_field, 102))
-    stars = ~f["is_galaxy"]
-    if stars.any():
-        flux_field[stars] = spectra.blackbody_bands(f["mag"][stars], f["teff"][stars])
-    for i in np.flatnonzero(f["is_galaxy"]):
-        z = 0.5 + (zlib.crc32(f"{f['ra'][i]:.6f}".encode()) % 1000) / 1000 * 2.5
-        flux_field[i] = spectra.high_z_galaxy(f["mag"][i], z)
+    flux_field = f["flux"]
     ras = [np.repeat(f["ra"][:, None], nt, axis=1)]
     decs = [np.repeat(f["dec"][:, None], nt, axis=1)]
     fluxes = [np.repeat(flux_field[:, None, :], nt, axis=1)]
@@ -156,7 +172,7 @@ def sources_in_region(ra: float, dec: float, radius_deg: float, times: list[floa
 
     margin = radius_deg + 0.05
     for e in ENTRIES:
-        pos = [position_at(e, t) for t in times]
+        pos = [apparent_position(e, t) for t in times]
         if _angsep_deg(ra, dec, pos[0][0], pos[0][1]) > margin:
             continue
         ras.append(np.array([[p[0] for p in pos]]))
@@ -235,10 +251,23 @@ def render(ra: float, dec: float, times: list[float], size_px: int = 64,
         y = y.reshape(src.ra.shape)
         pad = 6 * sigma_px + 2
         inside = (x > -pad) & (x < size_px + pad) & (y > -pad) & (y < size_px + pad)
-        for i, ti in zip(*np.nonzero(inside)):
-            wx = _gauss_pixel_weights(x[i, ti], sigma_px, size_px)
-            wy = _gauss_pixel_weights(y[i, ti], sigma_px, size_px)
-            img += (flux[i, ti] / nt) * np.outer(wy, wx)
+        half = int(math.ceil(6 * sigma_px)) + 2
+        width = 2 * half + 1
+        ii, tt = np.nonzero(inside)
+        if len(ii):
+            # Vectorised windowed stamps: each source deposits a (width x width) pixel-integrated
+            # Gaussian around its position; out-of-frame pixels are dropped.
+            xs, ys = x[ii, tt], y[ii, tt]
+            x0 = np.floor(xs).astype(int) - half
+            y0 = np.floor(ys).astype(int) - half
+            wx = _gauss_pixel_weights(xs - x0, np.full(len(xs), sigma_px), width)      # (N, W)
+            wy = _gauss_pixel_weights(ys - y0, np.full(len(ys), sigma_px), width)
+            vals = (flux[ii, tt] / nt)[:, None, None] * wy[:, :, None] * wx[:, None, :]
+            off = np.arange(width)
+            rows = np.broadcast_to((y0[:, None] + off)[:, :, None], vals.shape)
+            cols = np.broadcast_to((x0[:, None] + off)[:, None, :], vals.shape)
+            ok = (rows >= 0) & (rows < size_px) & (cols >= 0) & (cols < size_px)
+            np.add.at(img, (rows[ok], cols[ok]), vals[ok])
     n_exp = EXPOSURES_PER_EPOCH if nt > 1 else 1
     sigma_ps = noise_sigma_ps if noise_sigma_ps is not None else point_source_sigma(band, n_exp)
     nea = max(4 * math.pi * sigma_px**2, 1.0)                 # noise-equivalent area, pixels

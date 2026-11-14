@@ -46,3 +46,40 @@ def test_fits_archive_cutout(tmp_path):
     cut, cw = arch.cutout(hit, 150.0, 2.0, 32)
     assert cut.shape == (32, 32)
     assert arch.find(150.0, 2.0, "2026-Q3") is None
+
+
+def test_earth_heliocentric_distance():
+    from aeon import ephem
+
+    r = np.linalg.norm(ephem.earth_helio([2026.0, 2026.25, 2026.5, 2026.75]), axis=1)
+    assert np.all((r > 0.983) & (r < 1.017))
+
+
+def test_parallax_ellipse_at_520_au():
+    # A stationary body at 520 AU near the ecliptic sweeps ~2 x 206265/520 = ~793" in a year.
+    from aeon import ephem
+
+    times = np.linspace(2026.0, 2027.0, 49)
+    ra, dec = ephem.track(51.3, 14.8, 2026.5, times, 0.0, 0.0, 520.0)
+    u = ephem.unit(ra, dec)
+    spread = np.degrees(np.arccos(np.clip(u @ u.T, -1, 1))).max() * 3600
+    amp = ephem.parallax_amplitude_arcsec(520.0)
+    assert 1.8 * amp < spread < 2.05 * amp
+
+
+def test_star_parallax_is_small():
+    from aeon import ephem
+    from aeon.catalog import ENTRIES_BY_ID, position_at
+
+    e = ENTRIES_BY_ID["wise-0855"]
+    a, b = ephem.apparent_position(e, 2026.3)
+    r, d = position_at(e, 2026.3)
+    sep = np.hypot((a - r) * np.cos(np.radians(d)), b - d) * 3600
+    assert 0.05 < sep < 0.5          # parallax 0.44"
+
+
+def test_linear_track_matches_rate():
+    from aeon import ephem
+
+    ra, dec = ephem.track(10.0, 0.0, 2026.5, [2026.5, 2027.5], 3600.0, 90.0, None)
+    assert abs((ra[1] - ra[0]) - 1.0) < 1e-6 and abs(dec[1]) < 1e-9   # 1 deg east in 1 yr
