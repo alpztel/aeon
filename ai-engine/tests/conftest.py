@@ -15,9 +15,18 @@ SERVICE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVICE_DIR))
 
 from app.main import app  # noqa: E402
+from app.parser import reset_http_state  # noqa: E402
 
 CONTRACT_PATH = SERVICE_DIR.parent / "openapi.json"
 CONTRACT: dict[str, Any] = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(autouse=True)
+def _fresh_upstream_state():
+    """Catalog cache and upstream back-off are process-wide; start every test clean."""
+    reset_http_state()
+    yield
+    reset_http_state()
 
 
 @pytest.fixture(scope="session")

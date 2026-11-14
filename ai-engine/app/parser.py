@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
+import time
+from collections import OrderedDict
 from typing import Any
 
 import httpx
@@ -258,18 +261,46 @@ def detect_lang(message: str, explicit_lang: str | None = None) -> str:
     return "en"
 
 
-def _lookup_catalog_remote_or_local(query: str) -> dict[str, Any] | None:
-    core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
-    try:
-        with httpx.Client(timeout=1.5) as client:
-            resp = client.get(f"{core_url}/api/v1/catalog/search", params={"q": query, "limit": 1})
-            if resp.status_code == 200:
-                data = resp.json()
-                results = data.get("results") or []
-                if results:
-                    return results[0]
-    except Exception:
-        pass
+# ---------------------------------------------------------------------------------------------
+# Upstream HTTP: one keep-alive client per process (a new TCP connection per call cost more than the
+# call itself under load), a TTL cache for catalog lookups (the catalog is static), and a short
+# back-off after an upstream failure so a saturated backend is not hit again by every command.
+_HTTP: httpx.Client | None = None
+_HTTP_LOCK = threading.Lock()
+_CATALOG_TTL_S = float(os.environ.get("AEON_CATALOG_CACHE_TTL", "600"))
+_CATALOG_MAX = 512
+_UPSTREAM_BACKOFF_S = float(os.environ.get("AEON_UPSTREAM_BACKOFF_S", "5"))
+_catalog_cache: "OrderedDict[tuple[str, str], tuple[float, dict[str, Any] | None]]" = OrderedDict()
+_catalog_lock = threading.Lock()
+_down_until: dict[str, float] = {}
+
+
+def http_client() -> httpx.Client:
+    """Process-wide keep-alive client (httpx.Client is safe to share between threads)."""
+    global _HTTP
+    if _HTTP is None:
+        with _HTTP_LOCK:
+            if _HTTP is None:
+                _HTTP = httpx.Client(timeout=2.5, limits=httpx.Limits(max_connections=32, max_keepalive_connections=16))
+    return _HTTP
+
+
+def upstream_available(base_url: str) -> bool:
+    return time.monotonic() >= _down_until.get(base_url, 0.0)
+
+
+def mark_upstream_down(base_url: str) -> None:
+    _down_until[base_url] = time.monotonic() + _UPSTREAM_BACKOFF_S
+
+
+def reset_http_state() -> None:
+    """Forget cached lookups and back-off timers (tests, config reloads)."""
+    with _catalog_lock:
+        _catalog_cache.clear()
+    _down_until.clear()
+
+
+def _lookup_catalog_local(query: str) -> dict[str, Any] | None:
     q_low = query.lower()
     for tid, info in KNOWN_TARGETS.items():
         if tid == q_low or any(re.search(pat, q_low) for pat in info["patterns"]):
@@ -277,43 +308,76 @@ def _lookup_catalog_remote_or_local(query: str) -> dict[str, Any] | None:
     return None
 
 
+def _lookup_catalog_remote_or_local(query: str) -> dict[str, Any] | None:
+    core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
+    key = (core_url, query.strip().lower())
+    now = time.monotonic()
+    with _catalog_lock:
+        hit = _catalog_cache.get(key)
+        if hit is not None and hit[0] > now:
+            _catalog_cache.move_to_end(key)
+            return dict(hit[1]) if hit[1] else _lookup_catalog_local(query)
+    if upstream_available(core_url):
+        try:
+            resp = http_client().get(f"{core_url}/api/v1/catalog/search", params={"q": query, "limit": 1}, timeout=1.5)
+            if resp.status_code == 200:
+                results = resp.json().get("results") or []
+                remote = results[0] if results and isinstance(results[0], dict) else None
+                with _catalog_lock:
+                    _catalog_cache[key] = (now + _CATALOG_TTL_S, remote)
+                    _catalog_cache.move_to_end(key)
+                    while len(_catalog_cache) > _CATALOG_MAX:
+                        _catalog_cache.popitem(last=False)
+                if remote:
+                    return dict(remote)
+            elif resp.status_code >= 500:
+                mark_upstream_down(core_url)
+        except Exception:
+            mark_upstream_down(core_url)
+    return _lookup_catalog_local(query)
+
+
 def _execute_knowledge_tool(name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
     core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
     missions_url = os.environ.get("AEON_MISSIONS_URL", "http://localhost:8200").rstrip("/")
+    target = missions_url if name == "crossmatch" else core_url
+    if name != "search_catalog" and not upstream_available(target):
+        return {"status": "offline_fallback", "detail": "upstream unavailable (backing off)"}
     try:
-        with httpx.Client(timeout=2.5) as client:
-            if name == "search_catalog":
-                q = str(tool_input.get("q", ""))
-                hit = _lookup_catalog_remote_or_local(q)
-                return {"results": [hit] if hit else [], "count": 1 if hit else 0}
-            if name == "get_spectrum":
-                resp = client.get(
-                    f"{core_url}/api/v1/spectrum",
-                    params={
-                        "ra": tool_input.get("ra", 133.795),
-                        "dec": tool_input.get("dec", -7.245),
-                        "epoch": tool_input.get("epoch", "2026-Q1"),
-                    },
-                )
-                if resp.status_code == 200:
-                    spec = resp.json()
-                    return {
-                        "snr_median": spec.get("snr_median"),
-                        "matched_object": spec.get("matched_object"),
-                        "absorption_features": spec.get("absorption_features", []),
-                    }
-            if name == "crossmatch":
-                resp = client.get(
-                    f"{missions_url}/api/v1/missions/crossmatch",
-                    params={
-                        "ra": tool_input.get("ra", 133.795),
-                        "dec": tool_input.get("dec", -7.245),
-                        "radius_arcsec": tool_input.get("radius_arcsec", 6.0),
-                    },
-                )
-                if resp.status_code == 200:
-                    return resp.json()
+        client = http_client()
+        if name == "search_catalog":
+            q = str(tool_input.get("q", ""))
+            hit = _lookup_catalog_remote_or_local(q)
+            return {"results": [hit] if hit else [], "count": 1 if hit else 0}
+        if name == "get_spectrum":
+            resp = client.get(
+                f"{core_url}/api/v1/spectrum",
+                params={
+                    "ra": tool_input.get("ra", 133.795),
+                    "dec": tool_input.get("dec", -7.245),
+                    "epoch": tool_input.get("epoch", "2026-Q1"),
+                },
+            )
+            if resp.status_code == 200:
+                spec = resp.json()
+                return {
+                    "snr_median": spec.get("snr_median"),
+                    "matched_object": spec.get("matched_object"),
+                    "absorption_features": spec.get("absorption_features", []),
+                }
+        if name == "crossmatch":
+            resp = client.get(
+                f"{missions_url}/api/v1/missions/crossmatch",
+                params={
+                    "ra": tool_input.get("ra", 133.795),
+                    "dec": tool_input.get("dec", -7.245),
+                    "radius_arcsec": tool_input.get("radius_arcsec", 6.0),
+                },
+            )
+            if resp.status_code == 200:
+                return resp.json()
     except Exception as exc:
+        mark_upstream_down(target)
         return {"status": "offline_fallback", "detail": str(exc)}
     return {"status": "ok"}
 

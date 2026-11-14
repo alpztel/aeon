@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, model_validator
 from . import __version__
 from .astroclip_zogy import compute_astroclip_alignment
 from .models import get_registry
-from .parser import run_command_dispatcher
+from .parser import http_client, mark_upstream_down, run_command_dispatcher, upstream_available
 from .physics_sed import analyze_spectrum_physics
 
 Lang = Literal["tr", "en"]
@@ -115,16 +115,16 @@ def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
     try:
         flux = req.flux_ujy
         if flux is None and req.ra is not None and req.dec is not None:
-            import httpx
-
             core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
-            try:
-                with httpx.Client(timeout=2.5) as client:
-                    resp = client.get(f"{core_url}/api/v1/spectrum", params={"ra": req.ra, "dec": req.dec})
+            if upstream_available(core_url):
+                try:
+                    resp = http_client().get(f"{core_url}/api/v1/spectrum", params={"ra": req.ra, "dec": req.dec})
                     if resp.status_code == 200:
                         flux = resp.json().get("flux_ujy")
-            except Exception:
-                pass
+                    elif resp.status_code >= 500:
+                        mark_upstream_down(core_url)
+                except Exception:
+                    mark_upstream_down(core_url)
         reg = get_registry()
         probs, top_class, spec_hint = reg.classify_spectrum(flux)
         img_dict = req.image.model_dump() if req.image is not None else None
