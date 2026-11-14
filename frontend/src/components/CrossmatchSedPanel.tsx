@@ -220,7 +220,9 @@ export function CrossmatchSedPanel({
             <h3 className="mb-2 font-semibold uppercase tracking-wider text-sky-300">
               {dict.missions.gaiaTitle}
             </h3>
-            {!data?.gaia || data.gaia.length === 0 ? (
+            {!data ? (
+              <p className="text-slate-500">—</p>
+            ) : !data.gaia || data.gaia.length === 0 ? (
               <p className="text-slate-400">{dict.missions.noGaia}</p>
             ) : (
               <div className="aeon-mono space-y-1 text-[11px] text-slate-200">
@@ -242,7 +244,9 @@ export function CrossmatchSedPanel({
             <h3 className="mb-2 font-semibold uppercase tracking-wider text-amber-300">
               {dict.missions.wiseTitle}
             </h3>
-            {!data?.wise || data.wise.length === 0 ? (
+            {!data ? (
+              <p className="text-slate-500">—</p>
+            ) : !data.wise || data.wise.length === 0 ? (
               <p className="text-slate-400">{dict.missions.noWise}</p>
             ) : (
               <div className="aeon-mono space-y-1 text-[11px] text-slate-200">
