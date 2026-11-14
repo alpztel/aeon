@@ -254,9 +254,10 @@ class ModelRegistry:
         self.cnn.eval()
         self.vit.eval()
         _init_calibrated_weights(self.cnn, self.vit)
+        # Used only when no trained checkpoint can be loaded: say so in every response.
         self.versions: dict[str, str] = {
-            "spectral_1d_cnn": "1dcnn-spherex-v1.0-embedded",
-            "patch_anomaly_vit": "patch-vit-v1.0-embedded",
+            "spectral_1d_cnn": "template-fallback (untrained CNN + template projection)",
+            "patch_anomaly_vit": "untrained-vit + PSF S/N heuristics",
         }
         self._try_load_weights()
 

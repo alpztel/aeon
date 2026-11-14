@@ -239,10 +239,15 @@ LLM_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+def tr_lower(text: str) -> str:
+    """Lower-case for TR/EN matching: 'İ' -> 'i' (no combining dot), other letters as usual."""
+    return text.replace("\u0130", "i").lower().replace("\u0307", "")
+
+
 def detect_lang(message: str, explicit_lang: str | None = None) -> str:
     if explicit_lang in ("tr", "en"):
         return explicit_lang
-    text = message.lower()
+    text = tr_lower(message)
     tr_chars = any(ch in text for ch in "çğıöşü")
     tr_words = re.search(
         r"\b(git|uç|fark|modu|modunu|aç|kapat|yığ|tayf|spektrum|yörünge|rapor|tur|başlat|renk|dönem|kör|tarama|eşleştir|göster|dil|türkçe|ingilizce|gezegen)\b",
@@ -386,7 +391,7 @@ def parse_rule_based(message: str, lang: str | None = None, context: dict[str, A
     resolved_lang = detect_lang(message, lang)
     ctx = context or {}
     text = message.strip()
-    low = text.lower()
+    low = tr_lower(text)
 
     target = _extract_target(text)
     coords = _extract_coords(text)
@@ -696,7 +701,7 @@ def run_command_dispatcher(
             if not tool_results or stop_reason != "tool_use":
                 break
 
-            messages.append({"role": "assistant", "content": assistant_blocks})
+            messages.append({"role": "assistant", "content": response.content})
             messages.append({"role": "user", "content": tool_results})
 
         if not ui_actions:
