@@ -25,7 +25,8 @@ Owner: Node 1 · branch `agent/claude-leader-backend`. Implements the `core` pat
   pedestal, depth-calibrated noise, FITS output.
 - `photometry.py`, `analysis.py` – Astropy/Photutils pipeline shared by model and archive data.
 - `orbit.py` – REBOUND integration, JPL planetary elements, state ↔ elements conversion.
-- `ephem.py` – apparent geocentric positions: Earth ephemeris (astropy/ERFA), parallax, hypothesis tracks.
+- `ephem.py` – apparent geocentric positions: Earth ephemeris (astropy/ERFA), parallax, hypothesis tracks, SPHEREx-like visibility.
+- `orbit_fit.py` – orbit determination from astrometry (least squares, covariance errors).
 - `archive.py` – real FITS mode: drop WCS images into `AEON_DATA_DIR` (epoch from `AEONEPOC`,
   `MJD-OBS` or `DATE-OBS`) and cutouts/differencing use them instead of the model.
 - `catalog.py` – DuckDB catalog (demo targets + real reference objects).
@@ -42,7 +43,17 @@ Owner: Node 1 · branch `agent/claude-leader-backend`. Implements the `core` pat
 - Hypotheses assume linear heliocentric motion over the one-year baseline (orbital curvature at
   hundreds of AU is far below a pixel per year). Blind-search S/N is the maximum over all hypotheses,
   so its false-alarm level rises with `n_hypotheses` (reported in the response).
-- Frame cadence is uniform over 2026; real SPHEREx visits a field in ~2 windows per year (roadmap item 7).
+- **Cadence:** `cadence: "uniform"` (idealised, default) or `"spherex"` — frames only while the field's
+  solar elongation is within 90° ± 10° (model assumption for SPHEREx's Sun-perpendicular scanning):
+  two ~3-week windows a year on the ecliptic, all year near the ecliptic poles. The static-sky template
+  of each frame uses only frames > 30 days away, so a mover parked inside one window is not erased.
+  PX-2026-09 with SPHEREx cadence: tracked stack S/N ≈ 9; two windows constrain distance/rate more
+  weakly (orbit fit ≈ 524 ± 12 AU) than an evenly sampled year (≈ 518 ± 0.6 AU).
+- **Discovery → orbit:** shift-stack returns `astrometry` (independent centroids of 4 sub-stacks);
+  `orbit/simulate` with `detections` fits a heliocentric state (parallax included) by least squares and
+  forecasts it with REBOUND. Hypothesis positions refer to mid-survey 2026.5.
+- **Performance:** gzip responses, `Server-Timing` header, cached frame stacks (slider moves reuse
+  rendered frames) and spectra.
 - WISE 0855 positions use linear proper motion from epoch 2010.5 (parallax 0.44″ ignored).
 - Orbit forecasts start at 2026.5 from heliocentric direction + distance + angular rate; the
   "Kepler-only deviation" compares against a Sun-only integration (includes the Sun's reflex wobble).

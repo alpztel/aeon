@@ -106,3 +106,24 @@ def track(ra_ref: float, dec_ref: float, t_ref: float, times, rate_arcsec_yr: fl
 
 def parallax_amplitude_arcsec(distance_au: float) -> float:
     return AU_PER_PC / distance_au
+
+
+def solar_elongation_deg(ra: float, dec: float, times) -> np.ndarray:
+    """Angle between a sky position and the Sun as seen from Earth, at each time."""
+    sun_dir = -earth_helio(times)
+    sun_dir /= np.linalg.norm(sun_dir, axis=1)[:, None]
+    return np.degrees(np.arccos(np.clip(sun_dir @ unit(ra, dec), -1, 1)))
+
+
+def spherex_visible_times(ra: float, dec: float, t_start: float, t_end: float,
+                          half_width_deg: float = 10.0, step_days: float = 0.5) -> np.ndarray:
+    """Times when a field is inside a SPHEREx-like observing band.
+
+    SPHEREx scans great circles roughly perpendicular to the Sun-Earth line, so a field is
+    observed when its solar elongation is near 90 deg. Model assumption: |elongation - 90| <=
+    half_width_deg. Ecliptic fields get two windows per year; fields near the ecliptic poles are
+    visible all year (as for the real survey's deep fields).
+    """
+    grid = np.arange(t_start, t_end, step_days / 365.25)
+    elong = solar_elongation_deg(ra, dec, grid)
+    return grid[np.abs(elong - 90.0) <= half_width_deg]

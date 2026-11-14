@@ -76,12 +76,32 @@ def difference(img1: np.ndarray, img2: np.ndarray, w: WCS, psf_sigma_px: float,
 # Shift-and-stack
 # --------------------------------------------------------------------------------------------
 
-def remove_static_sky(frames: np.ndarray) -> np.ndarray:
-    """Subtract each frame's background and the per-pixel median over all frames (static template).
-    A source moving more than a few PSF widths across the sequence survives; fixed stars cancel."""
+def remove_static_sky(frames: np.ndarray, times: np.ndarray | None = None, min_sep_yr: float = 0.08,
+                      min_frames: int = 3) -> np.ndarray:
+    """Subtract each frame's background and a static-sky template.
+
+    The template for frame i is the per-pixel median of the frames taken more than `min_sep_yr`
+    (~30 days) away from it, so a slow mover that sits still within one visit window (as with
+    SPHEREx's two windows a year) is not absorbed into its own template. With fewer than
+    `min_frames` such frames, or no times given, the median of all frames is used.
+    """
     bs = np.stack([background_subtract(f)[0] for f in frames])
-    template = np.median(bs, axis=0)
-    return bs - template
+    global_template = np.median(bs, axis=0)
+    if times is None:
+        return bs - global_template
+    times = np.asarray(times, float)
+    out = np.empty_like(bs)
+    cache: dict[tuple, np.ndarray] = {}
+    for i, t in enumerate(times):
+        far = np.flatnonzero(np.abs(times - t) > min_sep_yr)
+        if len(far) < min_frames:
+            out[i] = bs[i] - global_template
+            continue
+        key = tuple(far)
+        if key not in cache:
+            cache[key] = np.median(bs[far], axis=0)
+        out[i] = bs[i] - cache[key]
+    return out
 
 
 def refine_centroid(img: np.ndarray, iy: int, ix: int, half: int = 2) -> tuple[float, float, float]:

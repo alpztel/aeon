@@ -192,3 +192,13 @@ def test_stack_cache_makes_repeat_fast(client):
     t0 = time.perf_counter()
     client.post("/api/v1/analysis/shift-stack", json={**q, "pa_deg": 12})     # slider move, same frames
     assert time.perf_counter() - t0 < max(0.5 * first, 0.3)
+
+
+def test_spherex_cadence_tracking(client):
+    body = client.post("/api/v1/analysis/shift-stack", json={
+        "ra": PX[0], "dec": PX[1], "rate_arcsec_yr": 110, "pa_deg": 62, "distance_au": 520, "cadence": "spherex"}).json()
+    assert_schema(body, "ShiftStackResult")
+    t = sorted(body["frame_times"])
+    gaps = [b - a for a, b in zip(t, t[1:])]
+    assert max(gaps) > 0.3                       # two visit windows half a year apart
+    assert body["cadence"] == "spherex" and body["snr_stacked"] > 5

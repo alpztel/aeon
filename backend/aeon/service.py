@@ -214,7 +214,18 @@ BLIND_SEARCH_RADIUS_PX = 4.0    # hypotheses are scored near the requested refer
 MAX_FRAME_PX = 640
 
 
-def _frame_times(n_frames: int) -> np.ndarray:
+def _frame_times(n_frames: int, cadence: str = "uniform", ra: float | None = None, dec: float | None = None) -> np.ndarray:
+    """Exposure mid-times over the 2026 survey year.
+
+    uniform: evenly spaced (idealised). spherex: only when the field is in the SPHEREx-like
+    observing band (solar elongation ~90 deg, see ephem.spherex_visible_times), spread evenly over
+    the visible times."""
+    if cadence == "spherex":
+        vis = ephem.spherex_visible_times(ra, dec, SURVEY_START, SURVEY_END)
+        if len(vis) < n_frames:
+            raise RequestError("Field is visible for too short a time in 2026 for the requested n_frames.")
+        idx = np.round(np.linspace(0, len(vis) - 1, n_frames)).astype(int)
+        return vis[idx]
     return np.array([SURVEY_START + (i + 0.5) * (SURVEY_END - SURVEY_START) / n_frames for i in range(n_frames)])
 
 
@@ -243,15 +254,15 @@ def _frame_size(max_offset_px: float, stamp: int) -> int:
 
 
 @lru_cache(maxsize=6)
-def _tracker_cached(ra: float, dec: float, n: int, fsize: int, scale: float, band: int | None):
-    times = _frame_times(n)
+def _tracker_cached(ra: float, dec: float, n: int, fsize: int, scale: float, band: int | None, cadence: str):
+    times = _frame_times(n, cadence, ra, dec)
     frames, w = _render_frames(ra, dec, times, fsize, scale, band)
     c = (fsize - 1) / 2.0
-    return analysis.Tracker(analysis.remove_static_sky(frames), _psf_sigma_px(band, scale), c, c), w, times
+    return analysis.Tracker(analysis.remove_static_sky(frames, times), _psf_sigma_px(band, scale), c, c), w, times
 
 
-def _tracker(ra: float, dec: float, n: int, fsize: int, scale: float, band: int | None):
-    return _tracker_cached(round(float(ra), 7), round(float(dec), 7), int(n), int(fsize), float(scale), band)
+def _tracker(ra: float, dec: float, n: int, fsize: int, scale: float, band: int | None, cadence: str = "uniform"):
+    return _tracker_cached(round(float(ra), 7), round(float(dec), 7), int(n), int(fsize), float(scale), band, cadence)
 
 
 def _stack_payload(r: dict, band: int | None, n_frames: int, times: np.ndarray, rate: float, pa: float,
@@ -266,6 +277,7 @@ def _stack_payload(r: dict, band: int | None, n_frames: int, times: np.ndarray, 
         "snr_gain": None if r["snr_gain"] is None else round(r["snr_gain"], 3),
         "n_frames": n_frames,
         "frame_times": [round(float(t), 5) for t in times],
+        "cadence": "spherex" if np.ptp(np.diff(times)) > 1e-6 else "uniform",
         "t_ref": round(r["t_ref"], 5),
         "rate_arcsec_yr": round(float(rate), 4),
         "pa_deg": round(float(pa), 4),
@@ -284,11 +296,12 @@ def _shift_stack(req: dict) -> dict:
     n = int(req.get("n_frames", 24))
     rate, pa = float(req.get("rate_arcsec_yr", 0.0)), float(req.get("pa_deg", 0.0))
     dist = req.get("distance_au")
-    times = _frame_times(n)
-    t_ref = float(np.mean(times))
+    cadence = req.get("cadence") or "uniform"
+    times = _frame_times(n, cadence, round(float(ra), 7), round(float(dec), 7))
+    t_ref = MID_SURVEY            # the (ra, dec) of a hypothesis refers to mid-survey 2026.5
     dx, dy, tra, tdec = _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale)
     fsize = _frame_size(float(np.max(np.abs(np.concatenate([dx, dy])))), size)
-    tracker, w, _ = _tracker(ra, dec, n, fsize, scale, band)
+    tracker, w, _ = _tracker(ra, dec, n, fsize, scale, band, cadence)
     r = analysis.run_tracked(tracker, w, times, t_ref, dx, dy, size, 6.0, req.get("combine", "mean"))
     return _stack_payload(r, band, n, times, rate, pa, dist, tra, tdec)
 
@@ -313,8 +326,9 @@ def _blind_search(req: dict) -> dict:
         distances = [float(ephem.AU_PER_PC / a) for a in amps]
     else:
         distances = [None]
-    times = _frame_times(n)
-    t_ref = float(np.mean(times))
+    cadence = req.get("cadence") or "uniform"
+    times = _frame_times(n, cadence, round(float(ra), 7), round(float(dec), 7))
+    t_ref = MID_SURVEY            # the (ra, dec) of a hypothesis refers to mid-survey 2026.5
 
     hyps = {}
     max_off = 0.0
@@ -325,7 +339,7 @@ def _blind_search(req: dict) -> dict:
                 hyps[(k, i, j)] = (dx, dy)
                 max_off = max(max_off, float(np.max(np.abs(np.concatenate([dx, dy])))))
     fsize = _frame_size(max_off + 2.0, max(size, BLIND_STAMP_PX))
-    tracker, w, _ = _tracker(ra, dec, n, fsize, scale, band)
+    tracker, w, _ = _tracker(ra, dec, n, fsize, scale, band, cadence)
     c = tracker.cx
 
     scores = np.full((len(distances), grid, grid), -np.inf)
