@@ -1,0 +1,49 @@
+name: deploy
+
+# Deploys main to the DigitalOcean droplet. Does nothing until the repository secrets
+# DO_HOST, DO_USER and DO_SSH_KEY exist (Settings > Secrets and variables > Actions).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["backend/**", "ai-engine/**", "multi-mission-api/**", "deploy/**"]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SECRETS: ${{ secrets.DO_HOST != '' && secrets.DO_SSH_KEY != '' }}
+    steps:
+      - name: Skip when the droplet is not configured
+        if: env.HAS_SECRETS != 'true'
+        run: echo "::notice::DO_HOST / DO_USER / DO_SSH_KEY not set; skipping deploy."
+      - name: Pull and restart on the droplet
+        if: env.HAS_SECRETS == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/aeon
+            git fetch --quiet origin main && git reset --hard origin/main
+            PROFILE=""
+            [ -f ai-engine/Dockerfile ] && [ -f multi-mission-api/Dockerfile ] && PROFILE="--profile full"
+            docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.prod.yml $PROFILE up -d --build
+            docker image prune -f
+      - name: Smoke test
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          for i in $(seq 1 20); do
+            curl -fsS https://api.aeon.tech/api/v1/health && exit 0
+            sleep 15
+          done
+          exit 1
