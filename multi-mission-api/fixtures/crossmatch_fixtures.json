@@ -1,0 +1,125 @@
+{
+  "metadata": {
+    "source": "Archival snapshots from ESA Gaia DR3 TAP, NASA/IPAC IRSA AllWISE/CatWISE2020, and STScI MAST",
+    "query_date_utc": "2026-11-14T00:00:00Z",
+    "vega_to_ab_offsets": {
+      "Gaia_BP_0.511um": 0.02,
+      "Gaia_G_0.622um": 0.12,
+      "Gaia_RP_0.777um": 0.36,
+      "WISE_W1_3.35um": 2.699,
+      "WISE_W2_4.60um": 3.339,
+      "WISE_W3_11.56um": 5.174,
+      "WISE_W4_22.09um": 6.62
+    }
+  },
+  "targets": {
+    "wise-0855": {
+      "id": "wise-0855",
+      "name": "WISE J085510.83-071442.5",
+      "ra_ref": 133.79513,
+      "dec_ref": -7.24514,
+      "ra_2026": 133.7607,
+      "dec_2026": -7.24219,
+      "match_radius_deg": 0.08,
+      "is_synthetic": false,
+      "gaia": [],
+      "wise": [
+        {
+          "designation": "J085510.83-071442.5",
+          "ra": 133.79513,
+          "dec": -7.24514,
+          "w1mpro": 17.819,
+          "w1sigmpro": 0.307,
+          "w2mpro": 14.016,
+          "w2sigmpro": 0.048,
+          "w3mpro": 11.26,
+          "w3sigmpro": 0.175,
+          "w4mpro": null,
+          "catalog": "AllWISE / CatWISE2020 (Luhman 2014; Kirkpatrick et al. 2021)",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "mast_overlap": [
+        {
+          "mission": "JWST",
+          "obs_id": "jw02327-o001_t001_nirspec",
+          "instrument": "NIRSpec",
+          "filter": "PRISM/CLEAR",
+          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=WISE%200855"
+        },
+        {
+          "mission": "HST",
+          "obs_id": "icqw01010",
+          "instrument": "WFC3/IR",
+          "filter": "F127M",
+          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=icqw01010"
+        }
+      ]
+    },
+    "rw-aur": {
+      "id": "rw-aur",
+      "name": "RW Aurigae",
+      "ra_ref": 76.95642,
+      "dec_ref": 30.40142,
+      "ra_2026": 76.95642,
+      "dec_2026": 30.40142,
+      "match_radius_deg": 0.05,
+      "is_synthetic": false,
+      "gaia": [
+        {
+          "source_id": "3447364060242429312",
+          "ra": 76.95642,
+          "dec": 30.40142,
+          "phot_g_mean_mag": 10.654,
+          "phot_bp_mean_mag": 11.182,
+          "phot_rp_mean_mag": 9.941,
+          "parallax_mas": 5.462,
+          "pmra_mas_yr": 3.12,
+          "pmdec_mas_yr": -24.18,
+          "catalog": "Gaia DR3",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "wise": [
+        {
+          "designation": "J050749.54+302405.1",
+          "ra": 76.95642,
+          "dec": 30.40142,
+          "w1mpro": 7.058,
+          "w1sigmpro": 0.029,
+          "w2mpro": 5.361,
+          "w2sigmpro": 0.041,
+          "w3mpro": 3.376,
+          "w3sigmpro": 0.014,
+          "w4mpro": 1.482,
+          "w4sigmpro": 0.016,
+          "catalog": "AllWISE",
+          "query_date_utc": "2026-11-14T00:00:00Z"
+        }
+      ],
+      "mast_overlap": [
+        {
+          "mission": "HST",
+          "obs_id": "ocx801010",
+          "instrument": "STIS",
+          "filter": "G140L",
+          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=RW%20Aur"
+        }
+      ]
+    },
+    "px-2026-09": {
+      "id": "px-2026-09",
+      "name": "PX-2026-09 (Synthetic Test Candidate)",
+      "ra_ref": 51.2,
+      "dec_ref": 14.8,
+      "ra_2026": 51.20312,
+      "dec_2026": 14.80163,
+      "match_radius_deg": 0.08,
+      "is_synthetic": true,
+      "synthetic_note": "PX-2026-09 is an injected synthetic test candidate (is_synthetic=true); no archival Gaia DR3, WISE, or MAST counterparts exist on the real sky.",
+      "gaia": [],
+      "wise": [],
+      "mast_overlap": []
+    }
+  }
+}
