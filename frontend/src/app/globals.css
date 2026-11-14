@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+:root {
+  --aeon-bg: #030712;
+  --aeon-surface: #090d16;
+  --aeon-amber: #f59e0b;
+  --aeon-cyan: #22d3ee;
+  --aeon-violet: #a78bfa;
+  --aeon-danger: #f43f5e;
+  --aeon-text: #f1f5f9;
+  --aeon-muted: #94a3b8;
+  --aeon-border: rgba(255, 255, 255, 0.08);
+}
+
+@theme inline {
+  --color-background: var(--aeon-bg);
+  --color-surface: var(--aeon-surface);
+  --color-foreground: var(--aeon-text);
+  --color-amber: var(--aeon-amber);
+  --color-cyan: var(--aeon-cyan);
+  --color-violet: var(--aeon-violet);
+  --color-danger: var(--aeon-danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background-color: var(--aeon-bg);
+  color: var(--aeon-text);
+  color-scheme: dark;
+}
+
+.aeon-panel {
+  background: rgba(9, 13, 22, 0.78);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--aeon-border);
+}
+
+.aeon-mono {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

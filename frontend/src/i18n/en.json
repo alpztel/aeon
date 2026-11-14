@@ -1,0 +1,75 @@
+{
+  "app": {
+    "name": "AEON",
+    "subtitle": "Astrophysical Discovery OS",
+    "challenge": "NASA Space Apps 2026 · Planet X & SPHEREx"
+  },
+  "header": {
+    "demoTour": "Jury Demo Tour",
+    "shortcuts": "Shortcuts",
+    "cmdPalette": "Astro-LLM",
+    "dataMode": {
+      "fits_archive": "FITS Archive",
+      "physical_model": "Physical Model",
+      "offline_cache": "Offline Cache",
+      "checking": "Connecting..."
+    }
+  },
+  "badges": {
+    "synthetic": "Synthetic Test Candidate",
+    "syntheticHint": "Injected into the physical model to validate the end-to-end detection pipeline.",
+    "demo": "Demo Target"
+  },
+  "sky": {
+    "title": "2D Infrared Sky Map",
+    "searchPlaceholder": "Search target or RA, Dec (e.g. WISE 0855, 133.8 -7.24)...",
+    "searchButton": "Fly To",
+    "searching": "Searching...",
+    "noResults": "No matching catalog object found.",
+    "fov": "FOV",
+    "pixelScale": "Scale",
+    "rendererAladin": "Aladin Lite",
+    "rendererCanvas": "SPHEREx Cutout",
+    "colormap": "Colormap",
+    "bandAll": "Broadband (0.75–5.0 µm)",
+    "bandLabel": "Band",
+    "epoch": "Epoch",
+    "timeline": "Survey Timeline (2026)",
+    "coordinates": "ICRS Coordinates",
+    "ra": "RA",
+    "dec": "Dec",
+    "properMotion": "Proper Motion",
+    "distance": "Distance",
+    "teff": "Teff",
+    "class": "Class",
+    "quickTargets": "Demo Targets",
+    "loadingCutout": "Rendering sky cutout...",
+    "cutoutError": "Could not load sky cutout.",
+    "fieldSources": "Field Sources",
+    "northUpEastLeft": "N ↑  E ←"
+  },
+  "classes": {
+    "cold_brown_dwarf": "Cold Brown Dwarf",
+    "planet_x_candidate": "Planet X Candidate",
+    "young_variable_star": "Young Variable Star",
+    "main_sequence_star": "Main Sequence Star",
+    "high_z_galaxy": "High-z Galaxy"
+  },
+  "shortcuts": {
+    "title": "Keyboard Shortcuts",
+    "close": "Close",
+    "items": {
+      "d": "Toggle Image Differencing (M2)",
+      "s": "Open Shift-and-Stack (M4)",
+      "3": "Open 3D Solar System (M5)",
+      "p": "Generate PDF Report (M11)",
+      "k": "Open Astro-LLM Command Palette (M8)",
+      "q": "Show / Hide Shortcuts"
+    }
+  },
+  "errors": {
+    "network": "API unreachable — switched to offline demo cache where available.",
+    "timeout": "Request timed out after 15 seconds.",
+    "invalidCoords": "Enter valid ICRS coordinates (RA 0–360, Dec −90…+90)."
+  }
+}

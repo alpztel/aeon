@@ -1,0 +1,75 @@
+{
+  "app": {
+    "name": "AEON",
+    "subtitle": "Astrofizik Keşif İşletim Sistemi",
+    "challenge": "NASA Space Apps 2026 · Planet X & SPHEREx"
+  },
+  "header": {
+    "demoTour": "Jüri Demo Turu",
+    "shortcuts": "Kısayollar",
+    "cmdPalette": "Astro-LLM",
+    "dataMode": {
+      "fits_archive": "Arşiv FITS Verisi",
+      "physical_model": "Fiziksel Model",
+      "offline_cache": "Çevrimdışı Önbellek",
+      "checking": "Bağlanıyor..."
+    }
+  },
+  "badges": {
+    "synthetic": "Sentetik Test Adayı",
+    "syntheticHint": "Algılama zincirini uçtan uca doğrulamak için fiziksel modele enjekte edilmiştir.",
+    "demo": "Demo Hedefi"
+  },
+  "sky": {
+    "title": "2B Kızılötesi Gökyüzü Haritası",
+    "searchPlaceholder": "Hedef veya RA, Dec ara (ör. WISE 0855, 133.8 -7.24)...",
+    "searchButton": "Haritaya Uç",
+    "searching": "Aranıyor...",
+    "noResults": "Eşleşen katalog nesnesi bulunamadı.",
+    "fov": "Görüş Alanı",
+    "pixelScale": "Ölçek",
+    "rendererAladin": "Aladin Lite",
+    "rendererCanvas": "SPHEREx Kesiti",
+    "colormap": "Renk Haritası",
+    "bandAll": "Geniş Bant (0.75–5.0 µm)",
+    "bandLabel": "Bant",
+    "epoch": "Dönem",
+    "timeline": "Tarama Zaman Çizelgesi (2026)",
+    "coordinates": "ICRS Koordinatları",
+    "ra": "RA",
+    "dec": "Dec",
+    "properMotion": "Özdevinim",
+    "distance": "Uzaklık",
+    "teff": "Teff",
+    "class": "Sınıf",
+    "quickTargets": "Demo Hedefleri",
+    "loadingCutout": "Gökyüzü kesiti oluşturuluyor...",
+    "cutoutError": "Gökyüzü kesiti yüklenemedi.",
+    "fieldSources": "Alan Kaynakları",
+    "northUpEastLeft": "K ↑  D ←"
+  },
+  "classes": {
+    "cold_brown_dwarf": "Soğuk Kahverengi Cüce",
+    "planet_x_candidate": "Planet X Adayı",
+    "young_variable_star": "Genç Değişen Yıldız",
+    "main_sequence_star": "Anakol Yıldızı",
+    "high_z_galaxy": "Yüksek-z Gökada"
+  },
+  "shortcuts": {
+    "title": "Klavye Kısayolları",
+    "close": "Kapat",
+    "items": {
+      "d": "Görüntü Farkı Modunu Aç/Kapat (M2)",
+      "s": "Shift-and-Stack Panelini Aç (M4)",
+      "3": "3B Güneş Sistemini Aç (M5)",
+      "p": "PDF Keşif Raporu Oluştur (M11)",
+      "k": "Astro-LLM Komut Paletini Aç (M8)",
+      "q": "Kısayolları Göster / Gizle"
+    }
+  },
+  "errors": {
+    "network": "API'ye ulaşılamadı — mevcut hedefler için çevrimdışı demo önbelleğine geçildi.",
+    "timeout": "İstek 15 saniye içinde yanıt vermedi.",
+    "invalidCoords": "Geçerli ICRS koordinatları girin (RA 0–360, Dec −90…+90)."
+  }
+}
