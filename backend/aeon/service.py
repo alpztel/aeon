@@ -12,7 +12,7 @@ import numpy as np
 from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-from . import __version__, analysis, bands, orbit, photometry, sky
+from . import __version__, analysis, bands, ephem, orbit, photometry, sky
 from .archive import FitsArchive
 from .catalog import ENTRIES, ENTRIES_BY_ID, CatalogEntry, get_catalog, position_at
 from .epochs import DEFAULT_EPOCH, SURVEY_END, SURVEY_START, epoch_year
@@ -61,8 +61,8 @@ def resolve_target(ra: float, dec: float, t_year: float, tol_arcsec: float) -> t
     mid-survey catalog position (what /catalog/search returns by default)."""
     best = None
     for e in ENTRIES:
-        ra_t, dec_t = position_at(e, t_year)
-        ra_m, dec_m = position_at(e, MID_SURVEY)
+        ra_t, dec_t = ephem.apparent_position(e, t_year)
+        ra_m, dec_m = ephem.apparent_position(e, MID_SURVEY)
         s = min(_sep_arcsec(ra, dec, ra_t, dec_t), _sep_arcsec(ra, dec, ra_m, dec_m))
         if s <= tol_arcsec and (best is None or s < best[0]):
             best = (s, e, ra_t, dec_t)
@@ -70,7 +70,7 @@ def resolve_target(ra: float, dec: float, t_year: float, tol_arcsec: float) -> t
 
 
 def entry_public(e: CatalogEntry, t_year: float, sep: float | None = None) -> dict:
-    ra, dec = position_at(e, t_year)
+    ra, dec = ephem.apparent_position(e, t_year)
     return {
         "id": e.id, "name": e.name, "aliases": list(e.aliases), "ra": round(ra, 7), "dec": round(dec, 7),
         "object_class": e.object_class, "mag_ab_w2": e.mag_ab_w2,
@@ -126,17 +126,22 @@ def search_catalog(q: str | None, ra: float | None, dec: float | None, radius_ar
     t = epoch_year(epoch) if epoch else MID_SURVEY
     cat = get_catalog()
     if q:
-        results = cat.by_name(q, t, limit)
-        for r in results:
-            r.pop("ref_epoch", None)
-            r.pop("redshift", None)
+        results = [entry_public(ENTRIES_BY_ID[r["id"]], t) for r in cat.by_name(q, t, limit)]
         return {"query": {"q": q, "epoch_year": t}, "count": len(results), "results": results}
     if ra is None or dec is None:
         raise RequestError("Provide either q or both ra and dec.")
-    results = cat.cone(ra, dec, radius_arcmin, t, limit)
-    for r in results:
-        r.pop("ref_epoch", None)
-        r.pop("redshift", None)
+    # DuckDB pre-selects with a margin covering the largest parallax in the catalog (~0.25 deg for
+    # objects at >= 250 AU); exact apparent separations are then computed per object.
+    margin_arcmin = 20.0
+    results = []
+    for r in cat.cone(ra, dec, radius_arcmin + margin_arcmin, t, 500):
+        e = ENTRIES_BY_ID[r["id"]]
+        a, b = ephem.apparent_position(e, t)
+        sep = _sep_arcsec(ra, dec, a, b)
+        if sep <= radius_arcmin * 60.0:
+            results.append(entry_public(e, t, sep))
+    results.sort(key=lambda o: o["separation_arcsec"])
+    results = results[:limit]
     if include_field and len(results) < limit:
         f = sky.field_sources(ra, dec, min(radius_arcmin, 30.0) / 60.0)
         seps = sky._angsep_deg(ra, dec, f["ra"], f["dec"]) * 3600.0
@@ -198,17 +203,42 @@ def spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float) -> dict:
     }
 
 
-def _frames(ra: float, dec: float, n_frames: int, size_px: int, scale: float, band: int | None):
-    times = np.array([SURVEY_START + (i + 0.5) * (SURVEY_END - SURVEY_START) / n_frames for i in range(n_frames)])
-    frames = []
-    w = None
+PARALLAX_STEP_PX = 1.5          # parallax-amplitude grid spacing for the distance axis
+BLIND_STAMP_PX = 25             # stamp size used to score blind-search hypotheses
+BLIND_SEARCH_RADIUS_PX = 4.0    # hypotheses are scored near the requested reference position
+MAX_FRAME_PX = 640
+
+
+def _frame_times(n_frames: int) -> np.ndarray:
+    return np.array([SURVEY_START + (i + 0.5) * (SURVEY_END - SURVEY_START) / n_frames for i in range(n_frames)])
+
+
+def _render_frames(ra: float, dec: float, times: np.ndarray, size_px: int, scale: float, band: int | None):
+    frames, w = [], None
     for t in times:
         img, w, _ = sky.render(ra, dec, [float(t)], size_px, scale, band, seed_tag="frame")
         frames.append(img)
-    return np.array(frames), times, w
+    return np.array(frames), w
 
 
-def _stack_payload(r: dict, w: WCS, band: int | None, n_frames: int, times: np.ndarray) -> dict:
+def _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale):
+    """Track of one hypothesis: apparent RA/Dec per frame and pixel offsets from the reference."""
+    tra, tdec = ephem.track(ra, dec, t_ref, times, rate, pa, dist)
+    w0 = sky.make_wcs(ra, dec, 1, scale)                 # pixel 0 == reference position
+    x, y = w0.all_world2pix(tra, tdec, 0)
+    return np.asarray(x), np.asarray(y), tra, tdec
+
+
+def _frame_size(max_offset_px: float, stamp: int) -> int:
+    size = int(2 * math.ceil(max_offset_px) + stamp + 12)
+    if size > MAX_FRAME_PX:
+        raise RequestError(f"Track spans {max_offset_px:.0f} px; reduce rates or raise the minimum distance.")
+    return size
+
+
+def _stack_payload(r: dict, band: int | None, n_frames: int, times: np.ndarray, rate: float, pa: float,
+                   dist: float | None, tra, tdec) -> dict:
+    w = r["wcs"]
     return {
         "method": "shift-stack",
         "stacked": image_payload(r["stacked"], w, None, band),
@@ -219,10 +249,111 @@ def _stack_payload(r: dict, w: WCS, band: int | None, n_frames: int, times: np.n
         "n_frames": n_frames,
         "frame_times": [round(float(t), 5) for t in times],
         "t_ref": round(r["t_ref"], 5),
-        "rate_arcsec_yr": round(float(r["rate_arcsec_yr"]), 4),
-        "pa_deg": round(float(r["pa_deg"]), 4),
-        "motion_frame": "heliocentric (Earth-reflex parallax removed for the trial distance)",
+        "rate_arcsec_yr": round(float(rate), 4),
+        "pa_deg": round(float(pa), 4),
+        "distance_au": None if dist is None else round(float(dist), 3),
+        "motion_frame": "geocentric (Earth parallax tracked)" if dist is not None else "heliocentric (no parallax)",
+        "track": [{"t": round(float(t), 5), "ra": round(float(a), 7), "dec": round(float(b), 7)}
+                  for t, a, b in zip(times, tra, tdec)],
         "peak": r["peak"],
+    }
+
+
+def _shift_stack(req: dict) -> dict:
+    ra, dec = req["ra"], req["dec"]
+    size, scale, band = req.get("size_px", 64), req.get("pixel_scale_arcsec", sky.NATIVE_PIXEL_SCALE), req.get("band")
+    n = int(req.get("n_frames", 24))
+    rate, pa = float(req.get("rate_arcsec_yr", 0.0)), float(req.get("pa_deg", 0.0))
+    dist = req.get("distance_au")
+    times = _frame_times(n)
+    t_ref = float(np.mean(times))
+    dx, dy, tra, tdec = _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale)
+    fsize = _frame_size(float(np.max(np.abs(np.concatenate([dx, dy])))), size)
+    frames, w = _render_frames(ra, dec, times, fsize, scale, band)
+    c = (fsize - 1) / 2.0
+    tracker = analysis.Tracker(analysis.remove_static_sky(frames), _psf_sigma_px(band, scale), c, c)
+    r = analysis.run_tracked(tracker, w, times, t_ref, dx, dy, size, 6.0, req.get("combine", "mean"))
+    return _stack_payload(r, band, n, times, rate, pa, dist, tra, tdec)
+
+
+def _blind_search(req: dict) -> dict:
+    ra, dec = req["ra"], req["dec"]
+    size, scale, band = req.get("size_px", 64), req.get("pixel_scale_arcsec", sky.NATIVE_PIXEL_SCALE), req.get("band")
+    n = int(req.get("n_frames", 24))
+    grid = int(req.get("grid", 5))
+    combine = req.get("combine", "mean")
+    rr = req.get("rate_range_arcsec_yr") or (20.0, 200.0)
+    pr = req.get("pa_range_deg") or (30.0, 90.0)
+    dr = req.get("distance_range_au", (250.0, 1000.0))
+    rates = np.linspace(rr[0], rr[1], grid)
+    pas = np.linspace(pr[0], pr[1], grid)
+    if dr:
+        d_lo, d_hi = sorted(float(v) for v in dr)
+        if d_lo <= 0:
+            raise RequestError("distance_range_au must be positive.")
+        step = PARALLAX_STEP_PX * scale
+        amps = np.arange(ephem.AU_PER_PC / d_hi, ephem.AU_PER_PC / d_lo + step, step)
+        distances = [float(ephem.AU_PER_PC / a) for a in amps]
+    else:
+        distances = [None]
+    times = _frame_times(n)
+    t_ref = float(np.mean(times))
+
+    hyps = {}
+    max_off = 0.0
+    for k, dist in enumerate(distances):
+        for i, rate in enumerate(rates):
+            for j, pa in enumerate(pas):
+                dx, dy, _, _ = _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale)
+                hyps[(k, i, j)] = (dx, dy)
+                max_off = max(max_off, float(np.max(np.abs(np.concatenate([dx, dy])))))
+    fsize = _frame_size(max_off + 2.0, max(size, BLIND_STAMP_PX))
+    frames, w = _render_frames(ra, dec, times, fsize, scale, band)
+    c = (fsize - 1) / 2.0
+    tracker = analysis.Tracker(analysis.remove_static_sky(frames), _psf_sigma_px(band, scale), c, c)
+
+    scores = np.full((len(distances), grid, grid), -np.inf)
+    for (k, i, j), (dx, dy) in hyps.items():
+        scores[k, i, j] = tracker.score(dx, dy, BLIND_STAMP_PX, BLIND_SEARCH_RADIUS_PX, combine)[0]
+    k, i, j = np.unravel_index(int(np.argmax(scores)), scores.shape)
+    best = (float(rates[i]), float(pas[j]), distances[k], float(scores[k, i, j]))
+
+    # Local refinement: half the coarse spacing on every axis.
+    d_rate = (rates[1] - rates[0]) / 2 if grid > 1 else 0.0
+    d_pa = (pas[1] - pas[0]) / 2 if grid > 1 else 0.0
+    if distances[k] is None:
+        d_cands = [None]
+    else:
+        a0 = ephem.AU_PER_PC / distances[k]
+        half = PARALLAX_STEP_PX * scale / 2
+        d_cands = [float(ephem.AU_PER_PC / a) for a in (a0 - half, a0, a0 + half) if a > 0]
+    n_refined = 0
+    for rate in (best[0] - d_rate, best[0], best[0] + d_rate):
+        for pa in (best[1] - d_pa, best[1], best[1] + d_pa):
+            for dist in d_cands:
+                if rate < 0:
+                    continue
+                dx, dy, _, _ = _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale)
+                if float(np.max(np.abs(np.concatenate([dx, dy])))) + BLIND_STAMP_PX / 2 > c - 2:
+                    continue
+                sc = tracker.score(dx, dy, BLIND_STAMP_PX, BLIND_SEARCH_RADIUS_PX, combine)[0]
+                n_refined += 1
+                if sc > best[3]:
+                    best = (rate, pa, dist, sc)
+    rate, pa, dist, _ = best
+    dx, dy, tra, tdec = _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale)
+    r = analysis.run_tracked(tracker, w, times, t_ref, dx, dy, size, BLIND_SEARCH_RADIUS_PX, combine)
+    return {
+        "method": "blind-search",
+        "rates_arcsec_yr": [round(float(v), 4) for v in rates],
+        "pas_deg": [round(float(v), 4) for v in pas],
+        "distances_au": None if distances == [None] else [round(d, 3) for d in distances],
+        "distance_profile": None if distances == [None] else [round(float(v), 3) for v in scores.max(axis=(1, 2))],
+        "grid": scores[k].round(3).tolist(),
+        "refined": {"rates_arcsec_yr": [round(float(best[0] + o * d_rate), 4) for o in (-1, 0, 1)],
+                    "pas_deg": [round(float(best[1] + o * d_pa), 4) for o in (-1, 0, 1)], "grid": []},
+        "n_hypotheses": int(scores.size + n_refined),
+        "best": _stack_payload(r, band, n, times, rate, pa, dist, tra, tdec),
     }
 
 
@@ -247,20 +378,10 @@ def run_analysis(method: str, req: dict) -> dict:
             "detections": d["detections"], "noise_sigma": round(d["noise_sigma"], 5),
             "dt_years": round(epoch_year(e2) - epoch_year(e1), 4), "data_mode": m1["source"],
         }
-    n = int(req.get("n_frames", 24))
-    frames, times, w = _frames(ra, dec, n, size, scale, band)
-    ps = _psf_sigma_px(band, scale)
-    combine = req.get("combine", "mean")
     if method == "shift-stack":
-        r = analysis.run_shift_stack(frames, times, w, ps, scale, float(req.get("rate_arcsec_yr", 0.0)),
-                                     float(req.get("pa_deg", 0.0)), combine)
-        return _stack_payload(r, w, band, n, times)
+        return _shift_stack(req)
     if method == "blind-search":
-        rr = tuple(req.get("rate_range_arcsec_yr") or (20.0, 200.0))
-        pr = tuple(req.get("pa_range_deg") or (30.0, 90.0))
-        b = analysis.blind_search(frames, times, w, ps, scale, rr, pr, int(req.get("grid", 5)), combine)
-        return {"method": "blind-search", "rates_arcsec_yr": b["rates"], "pas_deg": b["pas"], "grid": b["grid"],
-                "refined": b["refined"], "best": _stack_payload(b["best"], w, band, n, times)}
+        return _blind_search(req)
     raise RequestError(f"Unknown method {method!r}")
 
 
