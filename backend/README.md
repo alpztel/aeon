@@ -107,6 +107,7 @@ synthetic — for its field only the real background is downloaded.
 pip install -r requirements.txt
 uvicorn aeon.main:app --reload --port 8000
 pytest -q                    # offline; IRSA round trip: pytest -q --run-network
+pytest -q tests/test_torture.py   # 80 hostile / edge / concurrency cases
 ```
 
 On Windows keep the virtualenv on a short path (e.g. `C:\venvs\aeon`): astropy's compiled

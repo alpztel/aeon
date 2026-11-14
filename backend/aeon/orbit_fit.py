@@ -21,6 +21,7 @@ from . import ephem
 from .orbit import AU_KM, G, KM_S_TO_AU_YR, elements_from_state, eq_to_ecl
 
 ARCSEC = math.pi / 180 / 3600
+LN_D_MIN, LN_D_MAX = math.log(0.05), math.log(1e5)   # fit domain for the geocentric distance [AU]
 
 
 def propagate(r0: np.ndarray, v0: np.ndarray, dts: np.ndarray, steps_per_year: int = 64) -> np.ndarray:
@@ -65,7 +66,7 @@ class _Model:
         xi, eta, lnd, mu_e, mu_n, vr = p
         u = self.u0 + xi * ARCSEC * self.east + eta * ARCSEC * self.north
         u = u / np.linalg.norm(u)
-        d = math.exp(lnd)                                          # geocentric distance at t0
+        d = math.exp(min(max(lnd, LN_D_MIN), LN_D_MAX))            # geocentric distance at t0 (bounded)
         r0 = self.earth0 + d * u
         rh = np.linalg.norm(r0)
         rhat = r0 / rh
@@ -111,8 +112,14 @@ def fit(detections: list[dict], t0: float | None = None, vr_prior_km_s: float = 
 
     # 2) full non-linear fit.
     p0 = np.array([q[0], q[1], math.log(d0), q[2], q[3], 0.0])
-    sol = least_squares(m.residuals, p0, method="lm", max_nfev=2000)
+    try:
+        sol = least_squares(m.residuals, p0, method="lm", max_nfev=2000)
+    except (OverflowError, FloatingPointError, np.linalg.LinAlgError) as exc:
+        raise ValueError(f"Orbit fit diverged: {exc}") from exc
+    if not np.all(np.isfinite(sol.x)) or not np.all(np.isfinite(sol.fun)):
+        raise ValueError("Orbit fit diverged (non-finite solution); the detections are not one moving object.")
     p = sol.x
+    p[2] = min(max(p[2], LN_D_MIN), LN_D_MAX)
     n_obs = len(t)
     dof = max(2 * n_obs + 1 - 6, 1)
     chi2 = float(np.sum(sol.fun ** 2))

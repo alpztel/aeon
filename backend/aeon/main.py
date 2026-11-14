@@ -61,7 +61,7 @@ class AnalysisRequest(BaseModel):
     pa_deg: float = 0.0
     n_frames: int = Field(24, ge=2, le=64)
     combine: Literal["mean", "median"] = "mean"
-    distance_au: float | None = Field(None, gt=0, le=1e6)
+    distance_au: float | None = Field(None, ge=2, le=1e6)
     cadence: Literal["uniform", "spherex"] = "uniform"
     distance_range_au: tuple[float, float] | None = (250.0, 1000.0)
     rate_range_arcsec_yr: tuple[float, float] = (20.0, 200.0)
