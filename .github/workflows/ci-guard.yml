@@ -1,0 +1,110 @@
+name: ci-guard
+
+on:
+  push:
+    branches: ["agent/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  folder-isolation:
+    name: Folder isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check changed paths against the branch allow-list
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          case "$BRANCH" in
+            agent/claude-leader-backend) ALLOW='^backend/' ;;
+            agent/ag1-frontend)          ALLOW='^(frontend|docs-and-reports)/' ;;
+            agent/ag2-ai-missions)       ALLOW='^(ai-engine|multi-mission-api)/' ;;
+            agent/*)                     echo "::error::Unknown agent branch '$BRANCH'. Register it in ci-guard.yml first."; exit 1 ;;
+            *)                           echo "Branch '$BRANCH' is not an agent branch; root changes are reviewed via CODEOWNERS."; exit 0 ;;
+          esac
+          git fetch --no-tags origin main
+          BASE="$(git merge-base origin/main HEAD)"
+          CHANGED="$(git diff --name-only "$BASE" HEAD)"
+          echo "Changed files:"; echo "$CHANGED"
+          BAD="$(echo "$CHANGED" | grep -Ev "$ALLOW" | grep -v '^$' || true)"
+          if [ -n "$BAD" ]; then
+            echo "::error::Branch $BRANCH may only modify paths matching $ALLOW. Offending files:"
+            echo "$BAD"
+            exit 1
+          fi
+          echo "Folder isolation OK."
+
+  contract:
+    name: openapi.json is valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openapi-spec-validator==0.7.1
+      - run: python -m openapi_spec_validator openapi.json
+      - name: Exactly 11 paths
+        run: python -c "import json,sys; n=len(json.load(open('openapi.json'))['paths']); print(n,'paths'); sys.exit(0 if n==11 else 1)"
+
+  backend-tests:
+    name: backend pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: has
+        run: echo "present=$([ -f backend/requirements.txt ] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+      - if: steps.has.outputs.present == 'yes'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - if: steps.has.outputs.present == 'yes'
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          pytest -q
+
+  frontend-build:
+    name: frontend lint + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: has
+        run: echo "present=$([ -f frontend/package.json ] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+      - if: steps.has.outputs.present == 'yes'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - if: steps.has.outputs.present == 'yes'
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+  python-services:
+    name: ${{ matrix.service }} pytest
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ai-engine, multi-mission-api]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test if the service exists
+        run: |
+          if [ ! -f "${{ matrix.service }}/requirements.txt" ]; then echo "No ${{ matrix.service }} yet, skipping."; exit 0; fi
+          cd "${{ matrix.service }}"
+          pip install -r requirements.txt
+          pytest -q

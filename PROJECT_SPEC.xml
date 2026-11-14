@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AEON master specification. Machine-readable companion to AGENTS.md and openapi.json.
+     Changes only via PR reviewed by @alpztel. -->
+<project name="AEON" version="1.0.0" challenge="NASA Space Apps Challenge 2026 - Planet X and SPHEREx"
+         repo="https://github.com/alpztel/aeon" site="https://aeon.tech" api="https://api.aeon.tech" license="MIT">
+
+  <mission>
+    <tr>SPHEREx'in 102 bantlık yakın-kızılötesi gökyüzü verisini saniyeler içinde keşfe dönüştüren, açık kaynaklı, yapay zeka destekli astrofizik keşif işletim sistemi.</tr>
+    <en>An open-source, AI-assisted astrophysical discovery OS that turns SPHEREx's 102-band near-infrared all-sky data into discoveries in seconds.</en>
+    <problems>
+      <problem id="P1">Data overload: raw FITS cubes require SQL/Astropy expertise.</problem>
+      <problem id="P2">Faint moving objects (Planet X, Y dwarfs) sit below single-frame noise.</problem>
+      <problem id="P3">Multi-mission (SPHEREx / JWST / HST / Gaia / WISE) cross-referencing is manual.</problem>
+    </problems>
+  </mission>
+
+  <team>
+    <member name="Alperen" github="alpztel" role="Project and repo lead" node="1"/>
+    <member name="Mucteba Özdemir" role="Frontend" node="2"/>
+    <member name="Ece" role="AI and missions" node="3"/>
+    <member name="Filiz" role="AI and missions" node="3"/>
+    <member name="Asya" role="AI and missions" node="3"/>
+  </team>
+
+  <nodes>
+    <node id="1" agent="Claude Code" branch="agent/claude-leader-backend" folders="backend/" verify="cd backend &amp;&amp; pytest -q"/>
+    <node id="2" agent="Antigravity 1" branch="agent/ag1-frontend" folders="frontend/ docs-and-reports/" verify="cd frontend &amp;&amp; npm run lint &amp;&amp; npm run build"/>
+    <node id="3" agent="Antigravity 2" branch="agent/ag2-ai-missions" folders="ai-engine/ multi-mission-api/" verify="pytest -q (per folder)"/>
+  </nodes>
+
+  <instrument name="SPHEREx-like model" pixel_scale_arcsec="6.2" bands="102" range_um="0.75-5.0" cadence="6 months all-sky">
+    <!-- 6 detector arrays x 17 log-spaced channels. Source of truth: backend/aeon/bands.py -->
+    <array id="1" range_um="0.75-1.11" resolving_power="41"/>
+    <array id="2" range_um="1.11-1.64" resolving_power="41"/>
+    <array id="3" range_um="1.64-2.42" resolving_power="41"/>
+    <array id="4" range_um="2.42-3.82" resolving_power="35"/>
+    <array id="5" range_um="3.82-4.42" resolving_power="110"/>
+    <array id="6" range_um="4.42-5.00" resolving_power="130"/>
+    <depth_5sigma_ab_per_band>19.5</depth_5sigma_ab_per_band>
+    <epochs>
+      <epoch id="2026-Q1" decimal_year="2026.125"/>
+      <epoch id="2026-Q2" decimal_year="2026.375"/>
+      <epoch id="2026-Q3" decimal_year="2026.625"/>
+      <epoch id="2026-Q4" decimal_year="2026.875"/>
+    </epochs>
+  </instrument>
+
+  <modules>
+    <module id="M1" owner="node2" name="2D IR sky map + timeline" tech="Aladin Lite SDK, WebGL/Canvas fallback" endpoints="/api/v1/catalog/search /api/v1/sky/cutout"/>
+    <module id="M2" owner="node1+node2" name="Image differencing I(t2)-I(t1)" shortcut="D" colormaps="inferno viridis magma grayscale" endpoints="/api/v1/analysis/difference"/>
+    <module id="M3" owner="node1+node2" name="102-band spectrum analyser" tech="Plotly.js, Web Audio sonification" endpoints="/api/v1/spectrum"/>
+    <module id="M4" owner="node1+node2" name="Shift-and-stack + 5x5 blind velocity search" shortcut="S" endpoints="/api/v1/analysis/shift-stack /api/v1/analysis/blind-search"/>
+    <module id="M5" owner="node1+node2" name="3D solar system + REBOUND forecast (1/5/10 yr)" shortcut="3" tech="Three.js, REBOUND IAS15" endpoints="/api/v1/orbit/simulate"/>
+    <module id="M6" owner="node3+node2" name="JWST/HST picture-in-picture (MAST)" endpoints="/api/v1/missions/crossmatch"/>
+    <module id="M7" owner="node3+node2" name="Gaia DR3 + WISE cross-match, SED 0.4-22 um, unmatched IR candidates" endpoints="/api/v1/missions/crossmatch"/>
+    <module id="M8" owner="node3+node2" name="Astro-LLM command palette" shortcut="Cmd+K" endpoints="/api/v1/ai/command"/>
+    <module id="M9" owner="node3" name="1D-CNN spectral classifier + PatchAnomalyViT" tech="PyTorch, Hugging Face Spaces" endpoints="/api/v1/ai/classify"/>
+    <module id="M10" owner="node3+node2" name="GCN alert ticker + citizen-science pool" tech="MongoDB Atlas" endpoints="/api/v1/alerts/gcn /api/v1/candidates"/>
+    <module id="M11" owner="node2+node3" name="PDF discovery report + autonomous GitHub Issue bot" shortcut="P" output="AEON_Discovery_Report.pdf"/>
+  </modules>
+
+  <demo_tour>
+    <target id="wise-0855" name="WISE J085510.83-071442.5" class="cold_brown_dwarf" real="true"
+            ra_deg="133.79513" dec_deg="-7.24514" ref_epoch="2010.5" pm_ra_cosdec="-8.118" pm_dec="0.680" teff_k="250" distance_pc="2.28"
+            show="Proper motion dipole in difference mode (Q1 vs Q3)"/>
+    <target id="rw-aur" name="RW Aurigae" class="young_variable_star" real="true"
+            ra_deg="76.95640" dec_deg="30.40130" show="Time-variable 102-band flux while scrubbing the timeline"/>
+    <target id="px-2026-09" name="Planet X candidate PX-2026-09" class="planet_x_candidate" real="false" synthetic="injected"
+            ra_deg="51.20000" dec_deg="14.80000" distance_au="520" rate_arcsec_yr="110" pa_deg="62"
+            show="Invisible in single frames; recovered by shift-and-stack; REBOUND 10-year arc in 3D"/>
+  </demo_tour>
+
+  <design>
+    <colors background="#030712" surface="#090D16" accent_amber="#F59E0B" accent_cyan="#22D3EE" accent_violet="#A78BFA" danger="#F43F5E"/>
+    <style>NASA JPL mission control x Apple/Linear; glass panels (backdrop-blur-xl); IR-inspired accents.</style>
+    <i18n languages="tr en" default="en" switch="header TR | EN toggle, instant, includes charts, LLM and PDF"/>
+    <fallback>Every view works offline via the backend's physical model; the UI shows a "physical model" badge when data_mode != fits_archive.</fallback>
+  </design>
+
+  <infrastructure>
+    <frontend host="Vercel" domain="aeon.tech"/>
+    <backend host="DigitalOcean Droplet" runtime="Docker Compose + Nginx" domain="api.aeon.tech"/>
+    <catalog engine="DuckDB in-memory"/>
+    <candidates engine="MongoDB Atlas"/>
+    <models host="Hugging Face Spaces"/>
+  </infrastructure>
+
+  <acceptance>
+    <criterion>All 11 openapi.json paths implemented by their owners and reachable through the gateway.</criterion>
+    <criterion>WISE 0855 difference image shows a negative/positive dipole separated by about 4 arcsec over 6 months.</criterion>
+    <criterion>PX-2026-09 single-frame S/N below 3, stacked S/N above 5 at the correct velocity; blind search recovers that velocity.</criterion>
+    <criterion>REBOUND forecast returns 1/5/10-year positions with relative energy error below 1e-8.</criterion>
+    <criterion>Every UI string available in TR and EN.</criterion>
+  </acceptance>
+</project>

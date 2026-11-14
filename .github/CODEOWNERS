@@ -1,0 +1,16 @@
+# AEON code owners. GitHub requests a review from these accounts on every PR touching the path.
+# Node 2 and Node 3 maintainers: add your GitHub handles next to @alpztel on your lines via a PR.
+
+*                     @alpztel
+
+/AGENTS.md            @alpztel
+/PROJECT_SPEC.xml     @alpztel
+/openapi.json         @alpztel
+/.github/             @alpztel
+/deploy/              @alpztel
+
+/backend/             @alpztel
+/frontend/            @alpztel
+/docs-and-reports/    @alpztel
+/ai-engine/           @alpztel
+/multi-mission-api/   @alpztel
