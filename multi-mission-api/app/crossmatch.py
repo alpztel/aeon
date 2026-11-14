@@ -148,42 +148,25 @@ def _build_sed(
     return sed
 
 
-def _query_live_archives(ra: float, dec: float, radius_arcsec: float) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    """Query live Gaia DR3, WISE (IRSA), and MAST archives when network access is enabled (timeout <= 8s)."""
+def _query_live_archives(ra: float, dec: float, radius_arcsec: float) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """Live Gaia DR3 + AllWISE + MAST queries (each bounded by a timeout). A failed archive yields an
+    empty list and a 'failed' provenance entry - never substitute values."""
+    prov: dict[str, Any] = {}
     if os.environ.get("PYTEST_CURRENT_TEST") and os.environ.get("AEON_ENABLE_LIVE_ASTROQUERY") != "1":
-        return [], [], []
+        return [], [], [], {"live_queries": "disabled under pytest"}
+    from .archives import ArchiveError, allwise_cone, gaia_cone, mast_overlap
 
-    gaia_list: list[dict[str, Any]] = []
-    wise_list: list[dict[str, Any]] = []
-    mast_list: list[dict[str, Any]] = []
-
-    try:
-        from astropy.coordinates import SkyCoord
-        import astropy.units as u
-        from astroquery.gaia import Gaia
-
-        coord = SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg), frame="icrs")
-        job = Gaia.cone_search_async(coord, radius=radius_arcsec * u.arcsec)
-        tbl = job.get_results()
-        for row in tbl[:5]:
-            gaia_list.append(
-                {
-                    "source_id": str(row["source_id"]),
-                    "ra": float(row["ra"]),
-                    "dec": float(row["dec"]),
-                    "phot_g_mean_mag": float(row["phot_g_mean_mag"]) if row["phot_g_mean_mag"] else None,
-                    "phot_bp_mean_mag": float(row["phot_bp_mean_mag"]) if row["phot_bp_mean_mag"] else None,
-                    "phot_rp_mean_mag": float(row["phot_rp_mean_mag"]) if row["phot_rp_mean_mag"] else None,
-                    "parallax_mas": float(row["parallax"]) if row["parallax"] else None,
-                    "pmra_mas_yr": float(row["pmra"]) if row["pmra"] else None,
-                    "pmdec_mas_yr": float(row["pmdec"]) if row["pmdec"] else None,
-                    "catalog": "Gaia DR3",
-                }
-            )
-    except Exception:
-        pass
-
-    return gaia_list, wise_list, mast_list
+    results: dict[str, list[dict[str, Any]]] = {}
+    for key, fn, rad in (("gaia", gaia_cone, radius_arcsec), ("wise", allwise_cone, max(radius_arcsec, 3.0)),
+                         ("mast", mast_overlap, max(radius_arcsec, 5.0))):
+        try:
+            rows, query = fn(ra, dec, rad)
+            results[key] = rows
+            prov[key] = {"status": "ok", "query": query}
+        except ArchiveError as exc:
+            results[key] = []
+            prov[key] = {"status": f"failed: {exc}"}
+    return results["gaia"][:1], results["wise"][:1], results["mast"], prov
 
 
 def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[str, Any]:
@@ -207,14 +190,14 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
         gaia_rows = [dict(g) for g in fixture.get("gaia", [])]
         wise_rows = [dict(w) for w in fixture.get("wise", [])]
         mast_rows = [dict(m) for m in fixture.get("mast_overlap", [])]
+        provenance = {"source": "archive snapshot built by scripts/build_fixtures.py", **fixture.get("provenance", {})}
     else:
-        gaia_rows, wise_rows, mast_rows = _query_live_archives(ra, dec, radius_arcsec)
+        gaia_rows, wise_rows, mast_rows, live_prov = _query_live_archives(ra, dec, radius_arcsec)
+        provenance = {"source": "live archive queries", **live_prov}
 
     sed = _build_sed(gaia_rows, wise_rows, spherex_spec)
 
     has_ir = bool(wise_rows) or bool(spherex_spec and (spherex_spec.get("matched_object") or spherex_spec.get("snr_median", 0) >= 3.0))
-    if fixture and fixture.get("id") in ("wise-0855", "px-2026-09"):
-        has_ir = True
     unmatched_ir = bool(has_ir and len(gaia_rows) == 0)
 
     result: dict[str, Any] = {
@@ -223,6 +206,7 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
         "sed": sed,
         "unmatched_ir_candidate": unmatched_ir,
         "mast_overlap": mast_rows,
+        "provenance": provenance,
     }
 
     if not os.environ.get("PYTEST_CURRENT_TEST"):

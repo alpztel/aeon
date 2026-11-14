@@ -10,3 +10,4 @@ astropy>=6.0.0
 pytest>=8.0.0
 respx>=0.21.0
 jsonschema>=4.21.0
+gcn-kafka  # GCN Kafka circulars (used only when GCN_CLIENT_ID/SECRET are set)

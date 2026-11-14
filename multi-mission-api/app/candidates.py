@@ -33,6 +33,13 @@ PX_SYNTHETIC_POSITIONS: tuple[tuple[float, float], ...] = (
 )
 
 
+def _neutralise(text: Any, limit: int) -> str:
+    """User text in issue bodies: no @mentions, no code fences, no rendered links, bounded length."""
+    t = str(text or "")[:limit]
+    t = t.replace("`", "'").replace("@", "@\u200b")
+    return t.replace("http://", "hxxp://").replace("https://", "hxxps://")
+
+
 class CandidateStore:
     """Thread-safe MongoDB Atlas or in-memory mongomock repository for citizen-science candidates."""
 
@@ -46,47 +53,29 @@ class CandidateStore:
         self._db = self._client["aeon"]
         self._col = self._db["candidates"]
         self._ip_hits: dict[str, list[float]] = {}
+        self._issue_times: list[float] = []
         self._seed_initial_candidates()
 
     def reset_for_tests(self) -> None:
         with self._lock:
             self._col.delete_many({})
             self._ip_hits.clear()
+            self._issue_times.clear()
             self._seed_initial_candidates()
 
     def _seed_initial_candidates(self) -> None:
-        if self._col.count_documents({}) > 0:
-            return
-        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        seeds = [
-            {
-                "id": "cand-wise-0855",
-                "ra": 133.7607,
-                "dec": -7.24219,
-                "object_class": "cold_brown_dwarf",
-                "anomaly_score": 0.88,
-                "snr": 18.4,
-                "votes": 14,
-                "submitted_by": "aeon-pipeline",
-                "created_utc": now_iso,
-                "github_issue_url": None,
-                "notes": "WISE J085510.83-071442.5 (~250 K Y dwarf dipole in Q1-Q3 difference image).",
-            },
-            {
-                "id": "cand-px-2026-09",
-                "ra": 51.20312,
-                "dec": 14.80163,
-                "object_class": "planet_x_candidate",
-                "anomaly_score": 0.94,
-                "snr": 8.6,
-                "votes": 21,
-                "submitted_by": "aeon-synthetic-validator",
-                "created_utc": now_iso,
-                "github_issue_url": None,
-                "notes": "[SYNTHETIC TEST CANDIDATE / is_synthetic=true] Injected Planet X test target PX-2026-09 recovered via shift-and-stack.",
-            },
-        ]
-        self._col.insert_many(seeds)
+        """The pool starts empty: every entry must come from a real submission."""
+        return
+
+    def _issue_quota_ok(self) -> bool:
+        """At most AEON_MAX_ISSUES_PER_HOUR automated issues per hour (default 3)."""
+        limit = int(os.environ.get("AEON_MAX_ISSUES_PER_HOUR", "3"))
+        now = time.time()
+        self._issue_times = [t for t in self._issue_times if now - t < 3600.0]
+        if len(self._issue_times) >= limit:
+            return False
+        self._issue_times.append(now)
+        return True
 
     def check_rate_limit(self, client_ip: str) -> bool:
         with self._lock:
@@ -149,36 +138,29 @@ class CandidateStore:
                 if spec_resp.status_code == 200:
                     spec_data = spec_resp.json()
                     flux_ujy = spec_data.get("flux_ujy")
-                    if cand.get("snr") is None and spec_data.get("snr_median") is not None:
+                    if spec_data.get("snr_median") is not None:
                         cand["snr"] = float(spec_data["snr_median"])
                     matched = spec_data.get("matched_object") or {}
                     if matched.get("is_synthetic"):
                         is_synthetic = True
-                    if not cand.get("object_class") and matched.get("object_class") in OBJECT_CLASSES:
+                    if matched.get("object_class") in OBJECT_CLASSES:
                         cand["object_class"] = matched["object_class"]
         except Exception:
             pass
 
-        if flux_ujy is not None or cand.get("object_class") is None or cand.get("anomaly_score") is None:
+        # Classification only from a real spectrum, never from a placeholder.
+        if flux_ujy:
             try:
                 with httpx.Client(timeout=2.0) as client:
-                    payload = {"flux_ujy": flux_ujy} if flux_ujy else {"flux_ujy": [10.0] * 102}
-                    cls_resp = client.post(f"{ai_url}/api/v1/ai/classify", json=payload)
+                    cls_resp = client.post(f"{ai_url}/api/v1/ai/classify", json={"flux_ujy": flux_ujy})
                     if cls_resp.status_code == 200:
                         cls_data = cls_resp.json()
                         if not cand.get("object_class") and cls_data.get("top_class") in OBJECT_CLASSES:
                             cand["object_class"] = cls_data["top_class"]
-                        if cand.get("anomaly_score") is None and cls_data.get("anomaly_score") is not None:
+                        if cls_data.get("anomaly_score") is not None:
                             cand["anomaly_score"] = float(cls_data["anomaly_score"])
             except Exception:
                 pass
-
-        if cand.get("object_class") not in OBJECT_CLASSES:
-            cand["object_class"] = "planet_x_candidate" if is_synthetic else "cold_brown_dwarf"
-        if cand.get("anomaly_score") is None:
-            cand["anomaly_score"] = 0.92 if is_synthetic else 0.65
-        if cand.get("snr") is None:
-            cand["snr"] = 6.5
 
         if is_synthetic and "is_synthetic" not in notes_str and "SYNTHETIC" not in notes_str.upper():
             cand["notes"] = f"[SYNTHETIC TEST CANDIDATE / is_synthetic=true] {notes_str}".strip()
@@ -200,6 +182,10 @@ class CandidateStore:
         dec = float(cand["dec"])
         obj_cls = str(cand.get("object_class", "unknown"))
 
+        if not self._issue_quota_ok():
+            logger.warning("Issue quota reached; not opening an issue for %s", cand.get("id"))
+            return None
+
         title = f"[Keşif adayı] AEON J{ra:08.4f}{dec:+08.4f} — {obj_cls}"
         labels = ["discovery", "automated"]
         synth_banner = ""
@@ -218,8 +204,8 @@ class CandidateStore:
             f"- **Sınıf (`object_class`):** `{obj_cls}`\n"
             f"- **Anomali Skoru (`anomaly_score`):** `{anomaly:.4f}`\n"
             f"- **Sinyal/Gürültü (`snr`):** `{snr:.2f}`\n"
-            f"- **Gönderen:** `{cand.get('submitted_by', 'anonymous')}`\n"
-            f"- **Notlar:** {cand.get('notes', '-')}\n"
+            f"- **Gönderen:** `{_neutralise(cand.get('submitted_by', 'anonymous'), 64)}`\n"
+            f"- **Notlar (kullanıcı metni):**\n\n```text\n{_neutralise(cand.get('notes', '-'), 1000)}\n```\n"
             f"- **AEON Gökyüzü Bağlantısı:** https://aeon.tech/?ra={ra:.5f}&dec={dec:.5f}\n"
         )
 
@@ -255,18 +241,19 @@ class CandidateStore:
                 return existing
 
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            # Scores, class, votes, ids and issue links are server-side facts; client values are ignored.
             record: dict[str, Any] = {
-                "id": str(candidate_data.get("id") or f"cand-{uuid.uuid4().hex[:8]}"),
+                "id": f"cand-{uuid.uuid4().hex[:8]}",
                 "ra": ra,
                 "dec": dec,
-                "object_class": candidate_data.get("object_class"),
-                "anomaly_score": candidate_data.get("anomaly_score"),
-                "snr": candidate_data.get("snr"),
-                "votes": int(candidate_data.get("votes") if candidate_data.get("votes") is not None else 1),
-                "submitted_by": str(candidate_data.get("submitted_by") or "citizen-scientist"),
-                "created_utc": str(candidate_data.get("created_utc") or now_iso),
-                "github_issue_url": candidate_data.get("github_issue_url"),
-                "notes": str(candidate_data.get("notes") or ""),
+                "object_class": None,
+                "anomaly_score": None,
+                "snr": None,
+                "votes": 1,
+                "submitted_by": str(candidate_data.get("submitted_by") or "citizen-scientist")[:64],
+                "created_utc": now_iso,
+                "github_issue_url": None,
+                "notes": str(candidate_data.get("notes") or "")[:1000],
             }
 
             record, is_synthetic = self._enrich_candidate(record)

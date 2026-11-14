@@ -40,8 +40,8 @@ def test_crossmatch_wise_0855_unmatched_ir_and_sed(client):
     assert len(body["wise"]) == 1
     assert body["unmatched_ir_candidate"] is True
     missions = {m["mission"] for m in body["mast_overlap"]}
-    assert "JWST" in missions
-    assert "HST" in missions
+    assert missions and missions <= {"JWST", "HST"}          # from the real MAST snapshot
+    assert body["provenance"]["source"].startswith("archive snapshot")
     surveys = {pt["survey"] for pt in body["sed"]}
     assert "WISE" in surveys
     assert "SPHEREx" in surveys
@@ -72,21 +72,50 @@ def test_crossmatch_synthetic_px_2026_09(client):
     assert resp.status_code == 200
     body = resp.json()
     assert_path_response_schema(body, "/api/v1/missions/crossmatch", "get")
-    # Synthetic object has no real-sky Gaia or WISE archival entries
+    # Synthetic object has no real-sky Gaia or WISE archival entries; with the core offline there is
+    # no IR detection either, so it must not be called an unmatched IR candidate.
     assert body["gaia"] == []
     assert body["wise"] == []
+    assert body["unmatched_ir_candidate"] is False
+
+
+@respx.mock
+def test_crossmatch_synthetic_px_with_core_detection(client):
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(200, json={
+        "wavelength_um": [0.75 + i * 0.04 for i in range(102)], "flux_ujy": [5.0] * 102,
+        "flux_err_ujy": [1.0] * 102, "snr_median": 4.0,
+        "matched_object": {"id": "px-2026-09", "is_synthetic": True}}))
+    body = client.get("/api/v1/missions/crossmatch", params={"ra": 51.295473, "dec": 14.8325559}).json()
     assert body["unmatched_ir_candidate"] is True
 
 
-def test_gcn_alerts_cached_fallback(client, monkeypatch):
+def test_gcn_alerts_no_source_returns_empty(client, monkeypatch):
+    """Without Kafka credentials or an archive URL there are no alerts - never invented ones."""
     monkeypatch.delenv("AEON_GCN_ARCHIVE_URL", raising=False)
     resp = client.get("/api/v1/alerts/gcn", params={"limit": 3})
     assert resp.status_code == 200
-    alerts = resp.json()
+    assert resp.json() == []
+
+
+def test_gcn_circular_mapping():
+    from app.gcn import circular_to_alert
+
+    a = circular_to_alert({"circularId": 40000, "subject": "GRB 250101A: Swift-BAT detection", "createdOn": 1735689600000})
+    assert a == {"id": "GCN-40000", "kind": "GRB", "time_utc": "2025-01-01T00:00:00Z",
+                 "title": "GRB 250101A: Swift-BAT detection", "url": "https://gcn.nasa.gov/circulars/40000"}
+    assert circular_to_alert({"subject": "no id"}) is None
+
+
+@respx.mock
+def test_gcn_archive_url(client, monkeypatch):
+    monkeypatch.setenv("AEON_GCN_ARCHIVE_URL", "https://example.test/gcn.json")
+    respx.get("https://example.test/gcn.json").mock(return_value=Response(200, json=[
+        {"id": "GCN-2", "kind": "GRB", "time_utc": "2025-02-02T00:00:00Z"},
+        {"id": "GCN-1", "kind": "SN", "time_utc": "2025-01-01T00:00:00Z"},
+        {"bad": "row"}]))
+    alerts = client.get("/api/v1/alerts/gcn").json()
+    assert [a["id"] for a in alerts] == ["GCN-2", "GCN-1"]
     assert_path_response_schema(alerts, "/api/v1/alerts/gcn", "get")
-    assert len(alerts) == 3
-    assert alerts[0]["time_utc"] >= alerts[1]["time_utc"]
-    assert all("önbellek" in a["title"].lower() for a in alerts)
 
 
 @respx.mock
@@ -208,7 +237,7 @@ def test_candidates_list_vote_dedup_and_github_issue_bot(client, monkeypatch):
         assert list_resp.status_code == 200
         cand_list = list_resp.json()
         assert_path_response_schema(cand_list, "/api/v1/candidates", "get")
-        assert len(cand_list) >= 3
+        assert len(cand_list) >= 2            # the pool starts empty; two real submissions above
         if sort_mode == "anomaly":
             assert cand_list[0]["anomaly_score"] >= cand_list[1]["anomaly_score"]
         elif sort_mode == "votes":
@@ -228,9 +257,9 @@ def test_candidates_error_handling_and_rate_limit(client, monkeypatch):
     r3 = client.post("/api/v1/candidates", json={"action": "submit"})
     assert r3.status_code == 422
 
-    # Rate limit exceeded -> 429 (r2 above consumed 1 hit, so 2 more hits reach 3)
+    # Rate limit exceeded -> 429 (r2, the setup submit and the first vote fill a limit of 3)
     monkeypatch.setenv("AEON_RATE_LIMIT_PER_MIN", "3")
-    assert client.post("/api/v1/candidates", json={"action": "vote", "candidate_id": "cand-wise-0855"}).status_code == 200
-    assert client.post("/api/v1/candidates", json={"action": "vote", "candidate_id": "cand-wise-0855"}).status_code == 200
-    assert client.post("/api/v1/candidates", json={"action": "vote", "candidate_id": "cand-wise-0855"}).status_code == 429
+    cid = client.post("/api/v1/candidates", json={"action": "submit", "candidate": {"ra": 1.0, "dec": 2.0}}).json()["id"]
+    assert client.post("/api/v1/candidates", json={"action": "vote", "candidate_id": cid}).status_code == 200
+    assert client.post("/api/v1/candidates", json={"action": "vote", "candidate_id": cid}).status_code == 429
 

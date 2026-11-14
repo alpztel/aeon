@@ -1,16 +1,13 @@
 {
   "metadata": {
-    "source": "Archival snapshots from ESA Gaia DR3 TAP, NASA/IPAC IRSA AllWISE/CatWISE2020, and STScI MAST",
-    "query_date_utc": "2026-11-14T00:00:00Z",
-    "vega_to_ab_offsets": {
-      "Gaia_BP_0.511um": 0.02,
-      "Gaia_G_0.622um": 0.12,
-      "Gaia_RP_0.777um": 0.36,
-      "WISE_W1_3.35um": 2.699,
-      "WISE_W2_4.60um": 3.339,
-      "WISE_W3_11.56um": 5.174,
-      "WISE_W4_22.09um": 6.62
-    }
+    "built_utc": "2026-11-14T13:13:42Z",
+    "builder": "multi-mission-api/scripts/build_fixtures.py",
+    "sources": [
+      "ESA Gaia DR3 TAP",
+      "NASA/IPAC IRSA AllWISE TAP",
+      "STScI MAST CAOM"
+    ],
+    "refreshed_utc": "2026-11-14T13:27:28Z"
   },
   "targets": {
     "wise-0855": {
@@ -18,43 +15,79 @@
       "name": "WISE J085510.83-071442.5",
       "ra_ref": 133.79513,
       "dec_ref": -7.24514,
-      "ra_2026": 133.7607,
-      "dec_2026": -7.24219,
+      "ra_2026": 133.7587596,
+      "dec_2026": -7.2421178,
       "match_radius_deg": 0.08,
       "is_synthetic": false,
       "gaia": [],
       "wise": [
         {
-          "designation": "J085510.83-071442.5",
-          "ra": 133.79513,
-          "dec": -7.24514,
-          "w1mpro": 17.819,
-          "w1sigmpro": 0.307,
-          "w2mpro": 14.016,
-          "w2sigmpro": 0.048,
-          "w3mpro": 11.26,
-          "w3sigmpro": 0.175,
-          "w4mpro": null,
-          "catalog": "AllWISE / CatWISE2020 (Luhman 2014; Kirkpatrick et al. 2021)",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "designation": "J085510.74-071442.5",
+          "ra": 133.7947597,
+          "dec": -7.2451456,
+          "cc_flags": "0000",
+          "catalog": "AllWISE (J2010.5)",
+          "w1mpro": 16.231,
+          "w1sigmpro": 0.064,
+          "w2mpro": 13.704,
+          "w2sigmpro": 0.033,
+          "w3mpro": 11.143,
+          "w3sigmpro": 0.126,
+          "w4mpro": 8.448,
+          "w4sigmpro": null
         }
       ],
       "mast_overlap": [
         {
           "mission": "JWST",
-          "obs_id": "jw02327-o001_t001_nirspec",
-          "instrument": "NIRSpec",
-          "filter": "PRISM/CLEAR",
-          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=WISE%200855"
+          "obs_id": "jw01230-o002_t001_nircam_clear-f200w",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F200W",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01230-o002_t001_nircam_clear-f200w_i2d.jpg",
+          "has_preview_image": true
         },
         {
-          "mission": "HST",
-          "obs_id": "icqw01010",
-          "instrument": "WFC3/IR",
-          "filter": "F127M",
-          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=icqw01010"
+          "mission": "JWST",
+          "obs_id": "jw01230-o002_t001_nircam_clear-f444w",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F444W",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01230-o002_t001_nircam_clear-f444w_i2d.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01230-o003_t001_nircam_clear-f200w",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F200W",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01230-o003_t001_nircam_clear-f200w_i2d.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01230-o003_t001_nircam_clear-f444w",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F444W",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01230-o003_t001_nircam_clear-f444w_i2d.jpg",
+          "has_preview_image": true
         }
-      ]
+      ],
+      "provenance": {
+        "queried_utc": "2026-11-14T13:13:42Z",
+        "gaia": {
+          "status": "ok",
+          "query": "SELECT TOP 5 source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, DISTANCE(POINT(ra, dec), POINT(133.7826277, -7.2441011)) * 3600 AS sep_arcsec FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT(ra, dec), CIRCLE(133.7826277, -7.2441011, 0.00138889)) ORDER BY sep_arcsec",
+          "search_epoch": 2016.0
+        },
+        "wise": {
+          "status": "ok",
+          "query": "SELECT TOP 5 designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, cc_flags FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 133.7951300, -7.2451400, 0.00166667)) = 1",
+          "search_epoch": 2010.5
+        },
+        "mast": {
+          "status": "ok",
+          "query": "astroquery.mast.Observations.query_region('133.773535 -7.243346', radius='10.0 arcsec')"
+        }
+      }
     },
     "rw-aur": {
       "id": "rw-aur",
@@ -63,208 +96,356 @@
       "dec_ref": 30.40142,
       "ra_2026": 76.95642,
       "dec_2026": 30.40142,
-      "match_radius_deg": 0.05,
+      "match_radius_deg": 0.08,
       "is_synthetic": false,
       "gaia": [
         {
-          "source_id": "3447364060242429312",
-          "ra": 76.95642,
-          "dec": 30.40142,
-          "phot_g_mean_mag": 10.654,
-          "phot_bp_mean_mag": 11.182,
-          "phot_rp_mean_mag": 9.941,
-          "parallax_mas": 5.462,
-          "pmra_mas_yr": 3.12,
-          "pmdec_mas_yr": -24.18,
-          "catalog": "Gaia DR3",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "source_id": "156430817820015232",
+          "ra": 76.9565443110343,
+          "dec": 30.401316149887936,
+          "phot_g_mean_mag": 13.035076,
+          "phot_bp_mean_mag": 11.959859,
+          "phot_rp_mean_mag": 10.731155,
+          "parallax_mas": 5.454096456582266,
+          "pmra_mas_yr": 4.90603392110511,
+          "pmdec_mas_yr": -24.577534567492915,
+          "sep_arcsec": 0.5373612912671845,
+          "catalog": "Gaia DR3 (J2016.0)"
         }
       ],
       "wise": [
         {
-          "designation": "J050749.54+302405.1",
-          "ra": 76.95642,
-          "dec": 30.40142,
-          "w1mpro": 7.058,
-          "w1sigmpro": 0.029,
-          "w2mpro": 5.361,
-          "w2sigmpro": 0.041,
-          "w3mpro": 3.376,
+          "designation": "J050749.54+302404.7",
+          "ra": 76.9564535,
+          "dec": 30.4013327,
+          "cc_flags": "0000",
+          "catalog": "AllWISE (J2010.5)",
+          "w1mpro": 6.246,
+          "w1sigmpro": 0.093,
+          "w2mpro": 5.228,
+          "w2sigmpro": 0.056,
+          "w3mpro": 3.375,
           "w3sigmpro": 0.014,
-          "w4mpro": 1.482,
-          "w4sigmpro": 0.016,
-          "catalog": "AllWISE",
-          "query_date_utc": "2026-11-14T00:00:00Z"
-        }
-      ],
-      "mast_overlap": [
-        {
-          "mission": "HST",
-          "obs_id": "ocx801010",
-          "instrument": "STIS",
-          "filter": "G140L",
-          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=RW%20Aur"
-        }
-      ]
-    },
-    "px-2026-09": {
-      "id": "px-2026-09",
-      "name": "PX-2026-09 (Synthetic Test Candidate)",
-      "ra_ref": 51.2,
-      "dec_ref": 14.8,
-      "ra_2026": 51.295473,
-      "dec_2026": 14.8325559,
-      "match_radius_deg": 0.2,
-      "is_synthetic": true,
-      "synthetic_note": "PX-2026-09 is an injected synthetic test candidate (is_synthetic=true); no archival Gaia DR3, WISE, or MAST counterparts exist on the real sky.",
-      "gaia": [],
-      "wise": [],
-      "mast_overlap": []
-    },
-    "luhman-16": {
-      "id": "luhman-16",
-      "name": "WISE J104915.57-531906.1 (Luhman 16AB)",
-      "ra_ref": 162.3282,
-      "dec_ref": -53.3184,
-      "ra_2026": 162.3077,
-      "dec_2026": -53.31686,
-      "match_radius_deg": 0.06,
-      "is_synthetic": false,
-      "gaia": [
-        {
-          "source_id": "5353626573555963392",
-          "ra": 162.3077,
-          "dec": -53.31686,
-          "phot_g_mean_mag": 16.201,
-          "phot_bp_mean_mag": 19.42,
-          "phot_rp_mean_mag": 14.31,
-          "parallax_mas": 501.557,
-          "pmra_mas_yr": -2759.0,
-          "pmdec_mas_yr": 354.0,
-          "catalog": "Gaia DR3",
-          "query_date_utc": "2026-11-14T00:00:00Z"
-        }
-      ],
-      "wise": [
-        {
-          "designation": "J104915.57-531906.1",
-          "ra": 162.3282,
-          "dec": -53.3184,
-          "w1mpro": 7.84,
-          "w1sigmpro": 0.023,
-          "w2mpro": 7.31,
-          "w2sigmpro": 0.02,
-          "w3mpro": 6.21,
-          "w3sigmpro": 0.015,
-          "w4mpro": 5.79,
-          "w4sigmpro": 0.038,
-          "catalog": "AllWISE",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "w4mpro": 1.448,
+          "w4sigmpro": 0.021
         }
       ],
       "mast_overlap": [
         {
           "mission": "JWST",
-          "obs_id": "jw01386-o002_t001_nirspec",
-          "instrument": "NIRSpec",
-          "filter": "PRISM/CLEAR",
-          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=Luhman%2016"
+          "obs_id": "jw01282-o106_t011_miri_ch1-long",
+          "instrument": "MIRI/IFU",
+          "filter": "CH1-LONG",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01282-o106_t011_miri_ch1-long_s3d.jpg",
+          "has_preview_image": true
         },
         {
-          "mission": "HST",
-          "obs_id": "ibtp01010",
-          "instrument": "WFC3/IR",
-          "filter": "G141",
-          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=Luhman%2016"
+          "mission": "JWST",
+          "obs_id": "jw01282-o106_t011_miri_ch1-medium",
+          "instrument": "MIRI/IFU",
+          "filter": "CH1-MEDIUM",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01282-o106_t011_miri_ch1-medium_s3d.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01282-o106_t011_miri_ch1-short",
+          "instrument": "MIRI/IFU",
+          "filter": "CH1-SHORT",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01282-o106_t011_miri_ch1-short_s3d.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01282-o106_t011_miri_ch2-long",
+          "instrument": "MIRI/IFU",
+          "filter": "CH2-LONG",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01282-o106_t011_miri_ch2-long_s3d.jpg",
+          "has_preview_image": true
         }
-      ]
+      ],
+      "provenance": {
+        "queried_utc": "2026-11-14T13:27:28Z",
+        "gaia": {
+          "status": "ok",
+          "query": "SELECT TOP 5 source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, DISTANCE(POINT(ra, dec), POINT(76.9564200, 30.4014200)) * 3600 AS sep_arcsec FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT(ra, dec), CIRCLE(76.9564200, 30.4014200, 0.00138889)) ORDER BY sep_arcsec",
+          "search_epoch": 2016.0
+        },
+        "wise": {
+          "status": "ok",
+          "query": "SELECT TOP 5 designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, cc_flags FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 76.9564200, 30.4014200, 0.00166667)) = 1",
+          "search_epoch": 2010.5
+        },
+        "mast": {
+          "status": "ok",
+          "query": "astroquery.mast.Observations.query_region('76.956420 30.401420', radius='10.0 arcsec')"
+        }
+      }
+    },
+    "luhman-16": {
+      "id": "luhman-16",
+      "name": "WISE J104915.57-531906.1",
+      "ra_ref": 162.31488,
+      "dec_ref": -53.31836,
+      "ra_2026": 162.2943529,
+      "dec_2026": -53.3167867,
+      "match_radius_deg": 0.08,
+      "is_synthetic": false,
+      "gaia": [
+        {
+          "source_id": "5353626573555863424",
+          "ra": 162.3084022291181,
+          "dec": -53.3180447534979,
+          "phot_g_mean_mag": 16.919827,
+          "phot_bp_mean_mag": 20.619625,
+          "phot_rp_mean_mag": 14.517294,
+          "parallax_mas": null,
+          "pmra_mas_yr": null,
+          "pmdec_mas_yr": null,
+          "sep_arcsec": 1.4855020393853053,
+          "catalog": "Gaia DR3 (J2016.0)"
+        }
+      ],
+      "wise": [
+        {
+          "designation": "J104915.52-531906.1",
+          "ra": 162.314706,
+          "dec": -53.3183847,
+          "cc_flags": "0h00",
+          "catalog": "AllWISE (J2010.5)",
+          "w1mpro": 7.872,
+          "w1sigmpro": 0.022,
+          "w2mpro": 7.284,
+          "w2sigmpro": 0.019,
+          "w3mpro": 6.204,
+          "w3sigmpro": 0.015,
+          "w4mpro": 5.925,
+          "w4sigmpro": 0.039
+        }
+      ],
+      "mast_overlap": [
+        {
+          "mission": "JWST",
+          "obs_id": "jw02965-o001_t001_miri_p750l-slitlessprism",
+          "instrument": "MIRI/SLITLESS",
+          "filter": "P750L",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw02965-o001_t001_miri_p750l-slitlessprism_x1dints.png",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw02965-o022_t002_miri_p750l-slitlessprism",
+          "instrument": "MIRI/SLITLESS",
+          "filter": "P750L",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw02965-o022_t002_miri_p750l-slitlessprism_x1dints.png",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw02965-o012_t001_miri_p750l-slitlessprism",
+          "instrument": "MIRI/SLITLESS",
+          "filter": "P750L",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw02965-o012_t001_miri_p750l-slitlessprism_x1dints.png",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw02965-o003_t001_nirspec_clear-prism-s1600a1-sub512s",
+          "instrument": "NIRSPEC/SLIT",
+          "filter": "CLEAR;PRISM",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw02965-o003_t001_nirspec_clear-prism-s1600a1-sub512s_x1dints.png",
+          "has_preview_image": true
+        }
+      ],
+      "provenance": {
+        "queried_utc": "2026-11-14T13:13:42Z",
+        "gaia": {
+          "status": "ok",
+          "query": "SELECT TOP 5 source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, DISTANCE(POINT(ra, dec), POINT(162.3078238, -53.3178192)) * 3600 AS sep_arcsec FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT(ra, dec), CIRCLE(162.3078238, -53.3178192, 0.00138889)) ORDER BY sep_arcsec",
+          "search_epoch": 2016.0
+        },
+        "wise": {
+          "status": "ok",
+          "query": "SELECT TOP 5 designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, cc_flags FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 162.3148800, -53.3183600, 0.00166667)) = 1",
+          "search_epoch": 2010.5
+        },
+        "mast": {
+          "status": "ok",
+          "query": "astroquery.mast.Observations.query_region('162.302692 -53.317426', radius='10.0 arcsec')"
+        }
+      }
     },
     "wise-1828": {
       "id": "wise-1828",
       "name": "WISEPA J182831.08+265037.8",
       "ra_ref": 277.1295,
       "dec_ref": 26.84383,
-      "ra_2026": 277.13447,
-      "dec_2026": 26.84459,
-      "match_radius_deg": 0.05,
+      "ra_2026": 277.1345808,
+      "dec_2026": 26.8446033,
+      "match_radius_deg": 0.08,
       "is_synthetic": false,
       "gaia": [],
       "wise": [
         {
-          "designation": "J182831.08+265037.8",
-          "ra": 277.1295,
-          "dec": 26.84383,
-          "w1mpro": 17.68,
-          "w1sigmpro": 0.21,
+          "designation": "J182831.08+265037.6",
+          "ra": 277.1295179,
+          "dec": 26.8437977,
+          "cc_flags": "0000",
+          "catalog": "AllWISE (J2010.5)",
+          "w1mpro": 18.248,
+          "w1sigmpro": null,
           "w2mpro": 14.353,
           "w2sigmpro": 0.045,
-          "w3mpro": 12.14,
-          "w3sigmpro": 0.28,
-          "w4mpro": null,
-          "catalog": "AllWISE / CatWISE2020",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "w3mpro": 12.444,
+          "w3sigmpro": 0.338,
+          "w4mpro": 8.505,
+          "w4sigmpro": null
         }
       ],
       "mast_overlap": [
         {
           "mission": "JWST",
-          "obs_id": "jw01189-o012_t001_nircam",
-          "instrument": "NIRCam",
-          "filter": "F480M",
-          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=WISE%201828"
+          "obs_id": "jw01189-o010_t005_nircam_clear-f090w",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F090W",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01189-o010_t005_nircam_clear-f090w_i2d.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01189-o010_t005_nircam_clear-f115w",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F115W",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01189-o010_t005_nircam_clear-f115w_i2d.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01189-o010_t005_nircam_clear-f335m",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F335M",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01189-o010_t005_nircam_clear-f335m_i2d.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01189-o010_t005_nircam_clear-f360m",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F360M",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01189-o010_t005_nircam_clear-f360m_i2d.jpg",
+          "has_preview_image": true
         }
-      ]
+      ],
+      "provenance": {
+        "queried_utc": "2026-11-14T13:13:42Z",
+        "gaia": {
+          "status": "ok",
+          "query": "SELECT TOP 5 source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, DISTANCE(POINT(ra, dec), POINT(277.1312465, 26.8440958)) * 3600 AS sep_arcsec FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT(ra, dec), CIRCLE(277.1312465, 26.8440958, 0.00138889)) ORDER BY sep_arcsec",
+          "search_epoch": 2016.0
+        },
+        "wise": {
+          "status": "ok",
+          "query": "SELECT TOP 5 designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, cc_flags FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 277.1295000, 26.8438300, 0.00166667)) = 1",
+          "search_epoch": 2010.5
+        },
+        "mast": {
+          "status": "ok",
+          "query": "astroquery.mast.Observations.query_region('277.132517 26.844289', radius='10.0 arcsec')"
+        }
+      }
     },
     "barnard": {
       "id": "barnard",
       "name": "Barnard's Star",
       "ra_ref": 269.45208,
       "dec_ref": 4.69339,
-      "ra_2026": 269.44631,
-      "dec_2026": 4.76818,
-      "match_radius_deg": 0.1,
+      "ra_2026": 269.4461861,
+      "dec_2026": 4.7694156,
+      "match_radius_deg": 0.08,
       "is_synthetic": false,
       "gaia": [
         {
           "source_id": "4472832130942575872",
-          "ra": 269.45208,
-          "dec": 4.69339,
-          "phot_g_mean_mag": 8.194,
-          "phot_bp_mean_mag": 9.792,
-          "phot_rp_mean_mag": 6.958,
-          "parallax_mas": 546.976,
-          "pmra_mas_yr": -798.58,
-          "pmdec_mas_yr": 10328.12,
-          "catalog": "Gaia DR3",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "ra": 269.44850252543836,
+          "dec": 4.739420051112412,
+          "phot_g_mean_mag": 8.1939745,
+          "phot_bp_mean_mag": 9.791788,
+          "phot_rp_mean_mag": 6.9580913,
+          "parallax_mas": 546.975939730948,
+          "pmra_mas_yr": -801.5509783684709,
+          "pmdec_mas_yr": 10362.394206546573,
+          "sep_arcsec": 0.46521868389603654,
+          "catalog": "Gaia DR3 (J2016.0)"
         }
       ],
       "wise": [
         {
-          "designation": "J175748.49+044136.2",
-          "ra": 269.45208,
-          "dec": 4.69339,
-          "w1mpro": 4.38,
-          "w1sigmpro": 0.05,
-          "w2mpro": 4.12,
-          "w2sigmpro": 0.04,
-          "w3mpro": 4.03,
-          "w3sigmpro": 0.015,
-          "w4mpro": 3.95,
-          "w4sigmpro": 0.022,
-          "catalog": "AllWISE",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "designation": "J175747.94+044323.8",
+          "ra": 269.44977,
+          "dec": 4.72328,
+          "cc_flags": "hHH0",
+          "catalog": "AllWISE (J2010.5)",
+          "w1mpro": 4.358,
+          "w1sigmpro": 0.258,
+          "w2mpro": 3.658,
+          "w2sigmpro": 0.232,
+          "w3mpro": 4.376,
+          "w3sigmpro": 0.028,
+          "w4mpro": 3.969,
+          "w4sigmpro": 0.028
         }
       ],
       "mast_overlap": [
         {
           "mission": "HST",
-          "obs_id": "ob4t01010",
-          "instrument": "STIS",
-          "filter": "E140M",
-          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=Barnard%20Star"
+          "obs_id": "hst_hsla_namebarnardsstar--2191",
+          "instrument": "COS-STIS",
+          "filter": "E140M;E230H;G130M;G230L;G430L",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:HST/product/hsla/hst_namebarnardsstar--2191/hst_namebarnardsstar--2191_aspec.png",
+          "has_preview_image": true
+        },
+        {
+          "mission": "HST",
+          "obs_id": "odlm24010",
+          "instrument": "STIS/CCD",
+          "filter": "G430L",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:HST/product/odlm24010_sx1.png",
+          "has_preview_image": true
+        },
+        {
+          "mission": "HST",
+          "obs_id": "hst_hasp_15071_cos_gj699_ldlm",
+          "instrument": "COS",
+          "filter": "G130M",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:HST/product/hasp/hst_15071_cos_gj699_g130m_ldlm23_cspec.png",
+          "has_preview_image": true
+        },
+        {
+          "mission": "HST",
+          "obs_id": "ldlm23010",
+          "instrument": "COS/FUV",
+          "filter": "G130M",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:HST/product/ldlm23010_x1dsum.png",
+          "has_preview_image": true
         }
-      ]
+      ],
+      "provenance": {
+        "queried_utc": "2026-11-14T13:13:42Z",
+        "gaia": {
+          "status": "ok",
+          "query": "SELECT TOP 5 source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, DISTANCE(POINT(ra, dec), POINT(269.4485214, 4.7392922)) * 3600 AS sep_arcsec FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT(ra, dec), CIRCLE(269.4485214, 4.7392922, 0.00138889)) ORDER BY sep_arcsec",
+          "search_epoch": 2016.0
+        },
+        "wise": {
+          "status": "ok",
+          "query": "SELECT TOP 5 designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, cc_flags FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 269.4497447, 4.7235133, 0.00166667)) = 1",
+          "search_epoch": 2010.5
+        },
+        "mast": {
+          "status": "ok",
+          "query": "astroquery.mast.Observations.query_region('269.447632 4.750768', radius='10.0 arcsec')"
+        }
+      }
     },
     "tw-hya": {
       "id": "tw-hya",
@@ -273,92 +454,200 @@
       "dec_ref": -34.70473,
       "ra_2026": 165.46587,
       "dec_2026": -34.70473,
-      "match_radius_deg": 0.05,
+      "match_radius_deg": 0.08,
       "is_synthetic": false,
       "gaia": [
         {
           "source_id": "5401795662560500352",
-          "ra": 165.46587,
-          "dec": -34.70473,
-          "phot_g_mean_mag": 10.489,
-          "phot_bp_mean_mag": 11.214,
-          "phot_rp_mean_mag": 9.574,
-          "parallax_mas": 16.628,
-          "pmra_mas_yr": -68.21,
-          "pmdec_mas_yr": -13.91,
-          "catalog": "Gaia DR3",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "ra": 165.46590290601438,
+          "dec": -34.704793228437424,
+          "phot_g_mean_mag": 10.450887,
+          "phot_bp_mean_mag": 11.178594,
+          "phot_rp_mean_mag": 9.53352,
+          "parallax_mas": 16.628881208611332,
+          "pmra_mas_yr": -68.30937498866098,
+          "pmdec_mas_yr": -13.900123966262845,
+          "sep_arcsec": 0.24758061482959043,
+          "catalog": "Gaia DR3 (J2016.0)"
         }
       ],
       "wise": [
         {
-          "designation": "J110151.90-344217.0",
-          "ra": 165.46587,
-          "dec": -34.70473,
-          "w1mpro": 7.012,
-          "w1sigmpro": 0.031,
-          "w2mpro": 6.861,
+          "designation": "J110151.84-344217.1",
+          "ra": 165.46602,
+          "dec": -34.7047697,
+          "cc_flags": "0000",
+          "catalog": "AllWISE (J2010.5)",
+          "w1mpro": 7.009,
+          "w1sigmpro": 0.052,
+          "w2mpro": 6.878,
           "w2sigmpro": 0.021,
-          "w3mpro": 4.289,
-          "w3sigmpro": 0.015,
-          "w4mpro": 1.112,
-          "w4sigmpro": 0.019,
-          "catalog": "AllWISE",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "w3mpro": 4.54,
+          "w3sigmpro": 0.014,
+          "w4mpro": 1.516,
+          "w4sigmpro": 0.017
         }
       ],
       "mast_overlap": [
         {
           "mission": "JWST",
-          "obs_id": "jw01282-o018_t001_miri",
-          "instrument": "MIRI",
-          "filter": "MRS",
-          "preview_url": "https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=TW%20Hya"
+          "obs_id": "jw01179005001_02102_00001_nrcalong",
+          "instrument": "NIRCAM/CORON",
+          "filter": "F335M;MASKRND",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01179005001_02102_00001_nrcalong_cal.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01179005001_03102_00001_nrca2",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F210M;MASKRND",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01179005001_03102_00001_nrca2_cal.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01179005001_03102_00001_nrcalong",
+          "instrument": "NIRCAM/CORON",
+          "filter": "F335M;MASKRND",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01179005001_03102_00001_nrcalong_cal.jpg",
+          "has_preview_image": true
+        },
+        {
+          "mission": "JWST",
+          "obs_id": "jw01179005001_03104_00001_nrca2",
+          "instrument": "NIRCAM/IMAGE",
+          "filter": "F210M;MASKRND",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:JWST/product/jw01179005001_03104_00001_nrca2_cal.jpg",
+          "has_preview_image": true
         }
-      ]
+      ],
+      "provenance": {
+        "queried_utc": "2026-11-14T13:13:42Z",
+        "gaia": {
+          "status": "ok",
+          "query": "SELECT TOP 5 source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, DISTANCE(POINT(ra, dec), POINT(165.4658700, -34.7047300)) * 3600 AS sep_arcsec FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT(ra, dec), CIRCLE(165.4658700, -34.7047300, 0.00138889)) ORDER BY sep_arcsec",
+          "search_epoch": 2016.0
+        },
+        "wise": {
+          "status": "ok",
+          "query": "SELECT TOP 5 designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, cc_flags FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 165.4658700, -34.7047300, 0.00166667)) = 1",
+          "search_epoch": 2010.5
+        },
+        "mast": {
+          "status": "ok",
+          "query": "astroquery.mast.Observations.query_region('165.465870 -34.704730', radius='10.0 arcsec')"
+        }
+      }
     },
     "18-sco": {
       "id": "18-sco",
       "name": "18 Scorpii",
       "ra_ref": 243.90529,
       "dec_ref": -8.36944,
-      "ra_2026": 243.90529,
-      "dec_2026": -8.36944,
-      "match_radius_deg": 0.05,
+      "ra_2026": 243.9070176,
+      "dec_2026": -8.3730852,
+      "match_radius_deg": 0.08,
       "is_synthetic": false,
       "gaia": [
         {
           "source_id": "4345775217221821312",
-          "ra": 243.90529,
-          "dec": -8.36944,
-          "phot_g_mean_mag": 5.341,
-          "phot_bp_mean_mag": 5.668,
-          "phot_rp_mean_mag": 4.862,
-          "parallax_mas": 70.737,
-          "pmra_mas_yr": 231.18,
-          "pmdec_mas_yr": -495.52,
-          "catalog": "Gaia DR3",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "ra": 243.90633606005997,
+          "dec": -8.371641161548801,
+          "phot_g_mean_mag": 5.327651,
+          "phot_bp_mean_mag": 5.6549315,
+          "phot_rp_mean_mag": 4.8378544,
+          "parallax_mas": 70.73714672122247,
+          "pmra_mas_yr": 232.2303207442892,
+          "pmdec_mas_yr": -495.3782016299215,
+          "sep_arcsec": 0.010584631715342232,
+          "catalog": "Gaia DR3 (J2016.0)"
         }
       ],
       "wise": [
         {
-          "designation": "J161537.27-082209.9",
-          "ra": 243.90529,
-          "dec": -8.36944,
-          "w1mpro": 4.02,
-          "w1sigmpro": 0.06,
-          "w2mpro": 3.89,
-          "w2sigmpro": 0.04,
-          "w3mpro": 4.01,
-          "w3sigmpro": 0.015,
-          "w4mpro": 3.98,
-          "w4sigmpro": 0.025,
-          "catalog": "AllWISE",
-          "query_date_utc": "2026-11-14T00:00:00Z"
+          "designation": "J161537.45-082215.2",
+          "ra": 243.9060577,
+          "dec": -8.3708896,
+          "cc_flags": "0000",
+          "catalog": "AllWISE (J2010.5)",
+          "w1mpro": 3.988,
+          "w1sigmpro": 0.234,
+          "w2mpro": 3.642,
+          "w2sigmpro": 0.173,
+          "w3mpro": 3.994,
+          "w3sigmpro": 0.013,
+          "w4mpro": 3.956,
+          "w4sigmpro": 0.024
         }
       ],
-      "mast_overlap": []
+      "mast_overlap": [
+        {
+          "mission": "HST",
+          "obs_id": "hst_hasp_15485_stis_18sco_odta",
+          "instrument": "STIS",
+          "filter": "G230LB;G430L;G750L",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:HST/product/hasp/hst_15485_stis_18sco_g230lb-g430l-g750l_odta07_cspec.png",
+          "has_preview_image": true
+        },
+        {
+          "mission": "HST",
+          "obs_id": "hst_hasp_16225_stis_18-sco_oee5",
+          "instrument": "STIS",
+          "filter": "E230H",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:HST/product/hasp/hst_16225_stis_18-sco_e230h_oee525_cspec.png",
+          "has_preview_image": true
+        },
+        {
+          "mission": "HST",
+          "obs_id": "odta07010",
+          "instrument": "STIS/CCD",
+          "filter": "G230LB",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:HST/product/odta07010_sx1.png",
+          "has_preview_image": true
+        },
+        {
+          "mission": "HST",
+          "obs_id": "odta07020",
+          "instrument": "STIS/CCD",
+          "filter": "G430L",
+          "preview_url": "https://mast.stsci.edu/api/v0.1/Download/file?uri=mast:HST/product/odta07020_sx1.png",
+          "has_preview_image": true
+        }
+      ],
+      "provenance": {
+        "queried_utc": "2026-11-14T13:13:42Z",
+        "gaia": {
+          "status": "ok",
+          "query": "SELECT TOP 5 source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, DISTANCE(POINT(ra, dec), POINT(243.9063331, -8.3716409)) * 3600 AS sep_arcsec FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT(ra, dec), CIRCLE(243.9063331, -8.3716409, 0.00138889)) ORDER BY sep_arcsec",
+          "search_epoch": 2016.0
+        },
+        "wise": {
+          "status": "ok",
+          "query": "SELECT TOP 5 designation, ra, dec, w1mpro, w1sigmpro, w2mpro, w2sigmpro, w3mpro, w3sigmpro, w4mpro, w4sigmpro, cc_flags FROM allwise_p3as_psd WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 243.9059745, -8.3708843, 0.00166667)) = 1",
+          "search_epoch": 2010.5
+        },
+        "mast": {
+          "status": "ok",
+          "query": "astroquery.mast.Observations.query_region('243.906594 -8.372191', radius='10.0 arcsec')"
+        }
+      }
+    },
+    "px-2026-09": {
+      "id": "px-2026-09",
+      "name": "PX-2026-09 (synthetic test candidate)",
+      "ra_ref": 51.2,
+      "dec_ref": 14.8,
+      "ra_2026": 51.295473,
+      "dec_2026": 14.8325559,
+      "match_radius_deg": 0.2,
+      "is_synthetic": true,
+      "gaia": [],
+      "wise": [],
+      "mast_overlap": [],
+      "provenance": {
+        "note": "Injected synthetic object; it does not exist on the sky, so no archive is queried."
+      }
     }
   }
 }

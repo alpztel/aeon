@@ -114,8 +114,27 @@ def test_px_2026_09_geocentric_parallax_position_is_flagged_synthetic(client, mo
     assert r.status_code == 200
     body = r.json()
     assert "is_synthetic=true" in body["notes"]
-    assert len(gh_issues) == 1
-    assert "synthetic-test" in gh_issues[0]["labels"], f"Missing synthetic-test label: {gh_issues[0]['labels']}"
+    # Services offline: no server-side scores, so the client's 0.96 / 8.4 must not open an issue.
+    assert body["anomaly_score"] is None and body["snr"] is None
+    assert gh_issues == []
+
+
+@respx.mock
+def test_synthetic_candidate_with_server_scores_gets_synthetic_label(client, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_mock_token")
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(200, json={
+        "flux_ujy": [5.0] * 102, "snr_median": 8.4, "matched_object": {"id": "px-2026-09", "is_synthetic": True}}))
+    respx.post("http://localhost:8100/api/v1/ai/classify").mock(return_value=Response(200, json={
+        "top_class": "planet_x_candidate", "anomaly_score": 0.96, "probabilities": {}}))
+    gh_issues = []
+    respx.post("https://api.github.com/repos/alpztel/aeon/issues").mock(
+        side_effect=lambda req: (gh_issues.append(json.loads(req.content.decode("utf-8"))),
+                                 Response(201, json={"html_url": "https://github.com/alpztel/aeon/issues/778"}))[1])
+    body = client.post("/api/v1/candidates", json={"action": "submit", "candidate": {
+        "ra": 51.295473, "dec": 14.8325559, "notes": "@someone see https://x.example"}}).json()
+    assert body["anomaly_score"] == 0.96 and len(gh_issues) == 1
+    assert "synthetic-test" in gh_issues[0]["labels"]
+    assert "@someone" not in gh_issues[0]["body"] and "https://x.example" not in gh_issues[0]["body"]
 
 
 @respx.mock
@@ -158,8 +177,10 @@ def test_concurrent_duplicate_submission_race_condition(client, monkeypatch):
     ONLY ONE stored candidate and AT MOST ONE GitHub issue (no TOCTOU duplicate race)."""
     monkeypatch.setenv("AEON_RATE_LIMIT_PER_MIN", "500")
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_race_token")
-    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(503))
-    respx.post("http://localhost:8100/api/v1/ai/classify").mock(return_value=Response(503))
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(200, json={
+        "flux_ujy": [5.0] * 102, "snr_median": 9.0, "matched_object": None}))
+    respx.post("http://localhost:8100/api/v1/ai/classify").mock(return_value=Response(200, json={
+        "top_class": "cold_brown_dwarf", "anomaly_score": 0.95, "probabilities": {}}))
 
     gh_calls = []
 
@@ -197,7 +218,7 @@ def test_concurrent_duplicate_submission_race_condition(client, monkeypatch):
     [
         (133.79513, -7.24514, True),   # wise-0855 (Y dwarf, no Gaia optical)
         (277.12950, 26.84383, True),   # wise-1828 (Y dwarf, no Gaia optical)
-        (51.295473, 14.8325559, True), # px-2026-09 (synthetic Planet X candidate)
+        (51.295473, 14.8325559, False), # px-2026-09 (synthetic; core offline -> no IR detection claimed)
         (76.95642, 30.40142, False),   # rw-aur (Gaia DR3 + AllWISE)
         (162.30770, -53.31686, False), # luhman-16 (Gaia DR3 + AllWISE + JWST)
         (269.45208, 4.69339, False),   # barnard (Gaia DR3 + AllWISE + HST)
