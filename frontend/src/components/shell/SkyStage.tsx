@@ -135,13 +135,16 @@ export function SkyStage({ coords, epoch, fit = "full" }: SkyStageProps) {
   }, [renderer, aladinFailed, coords.ra, coords.dec, fovArcmin]);
 
   const showAladin = renderer === "aladin" && !aladinFailed;
+  // Optional, additive field of the backend response (not in the frozen contract's Image schema).
+  const provenance = (cutout as (SkyImage & { provenance?: { n_frames?: number; obs_date_range?: [string, string] } }) | null)
+    ?.provenance;
 
   return (
     <figure className={`relative mx-auto w-[min(86vw,calc(100dvh-300px),620px)] min-w-[200px] transition-[width] duration-300 ${FIT_CLASS[fit]}`}>
       {/* HUD — top */}
       <figcaption className="mb-2 flex items-end justify-between gap-2">
         <span className="aeon-label normal-case">
-          {dict.sky.fov} {fovArcmin}′ · {PIXEL_SCALE_ARCSEC}″/px
+          {dict.sky.fov} {fovArcmin}′ · {PIXEL_SCALE_ARCSEC}″/px · 0.75–5.0 µm
         </span>
         <span className="aeon-label">{dict.sky.northUpEastLeft}</span>
       </figcaption>
@@ -186,7 +189,21 @@ export function SkyStage({ coords, epoch, fit = "full" }: SkyStageProps) {
       {/* HUD — bottom */}
       <div className="mt-2 flex items-center justify-between gap-2">
         <span className="aeon-label flex items-center gap-2 normal-case">
-          <span className="text-foreground/80">{showAladin ? "AllWISE · Aladin Lite" : dict.sky.bandAll}</span>
+          {showAladin ? (
+            <span className="text-foreground/80">AllWISE · Aladin Lite</span>
+          ) : cutout?.data_mode === "fits_archive" ? (
+            <span className="flex items-center gap-1.5 text-foreground">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-ice" />
+              {dict.shell.realData}
+              {provenance?.n_frames ? ` · ${provenance.n_frames} ${dict.shell.frames}` : ""}
+              {provenance?.obs_date_range ? ` · ${provenance.obs_date_range[0].slice(0, 10)} → ${provenance.obs_date_range[1].slice(0, 10)}` : ""}
+            </span>
+          ) : cutout ? (
+            <span className="flex items-center gap-1.5 text-foreground/80">
+              <span className="inline-block h-1.5 w-1.5 rounded-full border border-white/50" />
+              {dict.shell.modelData} · {dict.shell.noObservation}
+            </span>
+          ) : null}
           {fromCache && <span className="text-[var(--aeon-warn)]">· {dict.header.dataMode.offline_cache}</span>}
           {loading && <span className="text-ice">· {dict.shell.loading}</span>}
         </span>

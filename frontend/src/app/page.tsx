@@ -11,7 +11,7 @@ import { ShiftStackPanel } from "@/components/ShiftStackPanel";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { SolarSystem3DPanel } from "@/components/SolarSystem3DPanel";
 import { SpectrumPanel } from "@/components/SpectrumPanel";
-import { EpochScrubber } from "@/components/shell/EpochScrubber";
+import { EpochScrubber, type EpochCoverage } from "@/components/shell/EpochScrubber";
 import { Inspector } from "@/components/shell/Inspector";
 import { Onboarding } from "@/components/shell/Onboarding";
 import { SkyStage } from "@/components/shell/SkyStage";
@@ -26,6 +26,7 @@ import {
   DEMO_TARGETS,
   EPOCHS,
   getHealth,
+  getSkyCutout,
   searchCatalog,
   type AstrometryPoint,
   type CatalogObject,
@@ -50,8 +51,8 @@ export default function HomePage() {
   const [wide, setWide] = useState(false);
   const [pipOpen, setPipOpen] = useState(false);
   const [pipOverlaps, setPipOverlaps] = useState<NonNullable<CrossmatchResult["mast_overlap"]>>([]);
-  const [epoch, setEpoch] = useState<Epoch>("2026-Q1");
-  const [coords, setCoords] = useState<Coords>({ ra: DEMO_TARGETS[0].ra, dec: DEMO_TARGETS[0].dec });
+  const [epoch, setEpoch] = useState<Epoch>(DEMO_TARGETS[0].epoch);
+  const [coords, setCoords] = useState<Coords>(DEMO_TARGETS[0].epochCoords[DEMO_TARGETS[0].epoch]);
   const [refCoords, setRefCoords] = useState<Coords>({ ra: DEMO_TARGETS[0].refRa, dec: DEMO_TARGETS[0].refDec });
   const [selectedObject, setSelectedObject] = useState<CatalogObject | null>(null);
   const [astrometry, setAstrometry] = useState<AstrometryPoint[]>([]);
@@ -59,6 +60,39 @@ export default function HomePage() {
   const [tourActive, setTourActive] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const epochSeqRef = useRef(0);
+
+  // Real-vs-model coverage of the four epochs for the current target: the same cutout request the
+  // stage makes, so the marks match what the visitor will see. Re-fetched only when the target changes.
+  const demoMeta = selectedObject ? DEMO_TARGETS.find((d) => d.id === selectedObject.id) : undefined;
+  const coverageKey = demoMeta ? demoMeta.id : `${refCoords.ra.toFixed(5)},${refCoords.dec.toFixed(5)}`;
+  const [coverage, setCoverage] = useState<{ key: string; map: EpochCoverage }>({ key: "", map: {} });
+  useEffect(() => {
+    let active = true;
+    const meta = demoMeta;
+    const base = { ...refCoords };
+    Promise.all(
+      EPOCHS.map((ep) => {
+        const pos = meta?.epochCoords[ep] ?? base;
+        return getSkyCutout({ ra: pos.ra, dec: pos.dec, epoch: ep, size_px: 64, pixel_scale_arcsec: 6.2 })
+          .then(({ data, fromCache }) => [ep, fromCache ? undefined : data.data_mode === "fits_archive" ? "real" : "model"] as const)
+          .catch(() => [ep, undefined] as const);
+      })
+    ).then((pairs) => {
+      if (!active) return;
+      const map: EpochCoverage = {};
+      for (const [ep, mode] of pairs) if (mode) map[ep] = mode;
+      setCoverage({ key: coverageKey, map });
+    });
+    return () => {
+      active = false;
+    };
+    // demoMeta / refCoords are captured through coverageKey on purpose
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverageKey]);
+  const epochCoverage = coverage.key === coverageKey ? coverage.map : {};
+  const realEpochs = EPOCHS.filter((ep) => epochCoverage[ep] === "real");
+  const diffEpochs: [Epoch, Epoch] =
+    realEpochs.length >= 2 ? [realEpochs[0], realEpochs[realEpochs.length - 1]] : ["2026-Q1", "2026-Q3"];
 
   const toggleTool = useCallback((id: ToolId) => setTool((cur) => (cur === id ? null : id)), []);
   const closeTool = useCallback(() => setTool(null), []);
@@ -146,7 +180,7 @@ export default function HomePage() {
     getHealth().then(({ mode }) => {
       if (active) setDataMode(mode);
     });
-    Promise.all([searchCatalog({ q: "wise-0855", epoch: "2026-Q1" }), searchCatalog({ q: "wise-0855" })])
+    Promise.all([searchCatalog({ q: "wise-0855", epoch: DEMO_TARGETS[0].epoch }), searchCatalog({ q: "wise-0855" })])
       .then(([epRes, refRes]) => {
         const hit = epRes.data.results[0];
         if (!active || !hit) return;
@@ -278,7 +312,14 @@ export default function HomePage() {
   const renderTool = (id: ToolId) => {
     switch (id) {
       case "diff":
-        return <DifferencePanel coords={refCoords} selectedObject={selectedObject} />;
+        return (
+          <DifferencePanel
+            key={diffEpochs.join("-")}
+            coords={refCoords}
+            selectedObject={selectedObject}
+            defaultEpochs={diffEpochs}
+          />
+        );
       case "spectrum":
         return <SpectrumPanel coords={coords} epoch={epoch} selectedObject={selectedObject} />;
       case "classify":
@@ -362,7 +403,7 @@ export default function HomePage() {
           }`}
         >
           <div className="w-full max-w-[420px] md:pointer-events-auto">
-            <EpochScrubber epoch={epoch} onChange={(ep) => void handleEpochChange(ep)} />
+            <EpochScrubber epoch={epoch} onChange={(ep) => void handleEpochChange(ep)} coverage={epochCoverage} />
           </div>
         </div>
       </main>

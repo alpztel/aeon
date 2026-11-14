@@ -7,7 +7,9 @@ import io
 import math
 import os
 import threading
+import time
 from collections import OrderedDict
+from pathlib import Path
 from functools import lru_cache
 
 import numpy as np
@@ -26,9 +28,70 @@ class RequestError(ValueError):
     """Raised for semantically invalid requests (mapped to HTTP 422)."""
 
 
-@lru_cache(maxsize=1)
+# The archive is re-indexed when FITS files are added or replaced under AEON_DATA_DIR (the weekly
+# Azure ingest writes there), checked at most every AEON_ARCHIVE_RESCAN_S seconds, so new SPHEREx
+# frames appear without restarting the service. 0 disables re-checking.
+ARCHIVE_RESCAN_S = float(os.environ.get("AEON_ARCHIVE_RESCAN_S", "300"))
+_ARCHIVE_LOCK = threading.Lock()
+_ARCHIVE_STATE: dict = {"archive": None, "signature": None, "checked": 0.0}
+
+
+def archive_signature(root: str | os.PathLike | None) -> tuple[int, int, int]:
+    """(file count, total bytes, newest mtime in ns) of the FITS files under root; cheap scandir walk."""
+    n = size = newest = 0
+    if not root or not os.path.isdir(root):
+        return n, size, newest
+    stack = [os.fspath(root)]
+    while stack:
+        try:
+            with os.scandir(stack.pop()) as it:
+                for e in it:
+                    if e.is_dir(follow_symlinks=False):
+                        if not e.name.startswith("."):
+                            stack.append(e.path)
+                    elif e.name.endswith((".fits", ".fits.gz")):
+                        st = e.stat()
+                        n += 1
+                        size += st.st_size
+                        newest = max(newest, st.st_mtime_ns)
+        except OSError:
+            continue
+    return n, size, newest
+
+
+def _invalidate_archive_caches() -> None:
+    """Results computed from the previous archive must not be served after a re-index."""
+    _spectrum_cached.cache_clear()
+    with _TRACKER_LOCK:
+        _TRACKERS.clear()
+
+
 def get_archive() -> FitsArchive:
-    return FitsArchive(os.environ.get("AEON_DATA_DIR"))
+    st = _ARCHIVE_STATE
+    now = time.monotonic()
+    arch = st["archive"]
+    if arch is not None and (ARCHIVE_RESCAN_S <= 0 or now - st["checked"] < ARCHIVE_RESCAN_S):
+        return arch
+    with _ARCHIVE_LOCK:
+        arch = st["archive"]
+        if arch is not None and (ARCHIVE_RESCAN_S <= 0 or now - st["checked"] < ARCHIVE_RESCAN_S):
+            return arch
+        root = os.environ.get("AEON_DATA_DIR")
+        sig = archive_signature(root)
+        st["checked"] = time.monotonic()
+        if arch is None or sig != st["signature"] or (root and arch.root != Path(root)) or (not root and arch.root):
+            fresh = FitsArchive(root)
+            st["archive"], st["signature"] = fresh, sig
+            if arch is not None:
+                _invalidate_archive_caches()
+            arch = fresh
+        return arch
+
+
+def reset_archive() -> None:
+    """Forget the cached archive (tests, configuration changes)."""
+    with _ARCHIVE_LOCK:
+        _ARCHIVE_STATE.update(archive=None, signature=None, checked=0.0)
 
 
 def data_mode() -> str:
