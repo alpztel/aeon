@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Compass, HelpCircle, Play, Radio, Sparkles } from "lucide-react";
+import { Compass, FileDown, HelpCircle, Play, Radio, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import type { DataMode } from "@/lib/api";
 
@@ -10,6 +10,8 @@ interface HeaderProps {
   onOpenShortcuts: () => void;
   onOpenCmdPalette?: () => void;
   onStartDemoTour?: () => void;
+  onDownloadPdf?: () => void;
+  pdfBusy?: boolean;
 }
 
 export function Header({
@@ -17,6 +19,8 @@ export function Header({
   onOpenShortcuts,
   onOpenCmdPalette,
   onStartDemoTour,
+  onDownloadPdf,
+  pdfBusy,
 }: HeaderProps) {
   const { lang, setLang, dict } = useI18n();
 
@@ -69,6 +73,18 @@ export function Header({
           >
             <Play className="h-3.5 w-3.5 fill-current" />
             <span>{dict.header.demoTour}</span>
+          </button>
+
+          {/* PDF Discovery Report Button */}
+          <button
+            type="button"
+            onClick={onDownloadPdf}
+            disabled={pdfBusy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/35 bg-cyan-500/15 px-2.5 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/25 disabled:opacity-50"
+            title={dict.shortcuts.items.p}
+          >
+            <FileDown className="h-3.5 w-3.5 text-cyan-300" />
+            <span>{dict.header.pdfReport}</span>
           </button>
 
           {/* Cmd+K Button */}

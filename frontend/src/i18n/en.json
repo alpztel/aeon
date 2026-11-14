@@ -8,6 +8,7 @@
     "demoTour": "Jury Demo Tour",
     "shortcuts": "Shortcuts",
     "cmdPalette": "Astro-LLM",
+    "pdfReport": "PDF Report (P)",
     "dataMode": {
       "fits_archive": "FITS Archive",
       "physical_model": "Physical Model",
@@ -192,6 +193,27 @@
     "vote": "Upvote",
     "flyTo": "Inspect",
     "issueOpened": "GitHub Issue"
+  },
+  "tour": {
+    "badge": "Jury Demo Tour",
+    "prev": "Previous",
+    "next": "Next Step",
+    "finish": "Finish Tour",
+    "downloadPdf": "Download Discovery PDF",
+    "steps": [
+      {
+        "title": "Step 1 / 3 — WISE 0855−0714 (Coldest Brown Dwarf, 250 K)",
+        "narration": "Flying to WISE 0855 at 2.28 pc. In Image Differencing (Q1 vs Q3), its 8.1″/yr proper motion reveals a clear negative/positive dipole separated by ~4″, while the 102-band spectrum highlights deep CH₄ (3.3 µm) and H₂O absorption."
+      },
+      {
+        "title": "Step 2 / 3 — RW Aurigae (Young Variable T Tauri Star)",
+        "narration": "Flying to RW Aurigae. Scrubbing across 2026-Q1 through 2026-Q4 reveals strong 102-band continuum and circumstellar disk flux variations. Pin the Q1 spectrum as a reference to compare epochs directly."
+      },
+      {
+        "title": "Step 3 / 3 — PX-2026-09 (Injected Synthetic Planet X Test Candidate, 520 AU)",
+        "narration": "Flying to synthetic test candidate PX-2026-09 (flagged is_synthetic: true). Invisible in single exposures (S/N < 3), Shift-and-Stack along 110″/yr, PA 62°, d = 520 AU boosts S/N > 6, fits its heliocentric orbit, and forecasts its 10-year arc with REBOUND IAS15."
+      }
+    ]
   },
   "classes": {
     "cold_brown_dwarf": "Cold Brown Dwarf",

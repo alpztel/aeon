@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Layers, Orbit, Radar, Sparkles } from "lucide-react";
+import { FileDown, Layers, Orbit, Radar, Sparkles } from "lucide-react";
 import { AstroLlmModal } from "@/components/AstroLlmModal";
 import { CandidatePoolPanel } from "@/components/CandidatePoolPanel";
 import { ClassificationCard } from "@/components/ClassificationCard";
 import { CrossmatchSedPanel } from "@/components/CrossmatchSedPanel";
+import { DemoTourBar } from "@/components/DemoTourBar";
 import { DifferencePanel } from "@/components/DifferencePanel";
 import { GcnTicker } from "@/components/GcnTicker";
 import { Header } from "@/components/Header";
@@ -27,9 +28,10 @@ import {
   type Epoch,
   type UiAction,
 } from "@/lib/api";
+import { generateAndDownloadDiscoveryPdf } from "@/lib/pdf-report";
 
 export default function HomePage() {
-  const { dict, setLang } = useI18n();
+  const { lang, dict, setLang } = useI18n();
   const [dataMode, setDataMode] = useState<DataMode | "checking">("checking");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -47,6 +49,58 @@ export default function HomePage() {
   });
   const [selectedObject, setSelectedObject] = useState<CatalogObject | null>(null);
   const [astrometry, setAstrometry] = useState<AstrometryPoint[]>([]);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [tourActive, setTourActive] = useState(false);
+  const [tourStep, setTourStep] = useState<0 | 1 | 2>(0);
+
+  const handleDownloadPdf = useCallback(async () => {
+    setPdfBusy(true);
+    try {
+      await generateAndDownloadDiscoveryPdf({
+        lang,
+        coords,
+        epoch,
+        selectedObject,
+        dataMode,
+      });
+    } finally {
+      setPdfBusy(false);
+    }
+  }, [lang, coords, epoch, selectedObject, dataMode]);
+
+  const applyTourStep = useCallback(
+    async (step: 0 | 1 | 2) => {
+      setTourStep(step);
+      setTourActive(true);
+      const targets: Record<0 | 1 | 2, { id: string; ra: number; dec: number; epoch: Epoch }> = {
+        0: { id: "wise-0855", ra: 133.79513, dec: -7.24514, epoch: "2026-Q1" },
+        1: { id: "rw-aur", ra: 76.9564, dec: 30.4013, epoch: "2026-Q3" },
+        2: { id: "px-2026-09", ra: 51.2, dec: 14.8, epoch: "2026-Q1" },
+      };
+      const cfg = targets[step];
+      setEpoch(cfg.epoch);
+      if (step === 0) {
+        setDiffOpen(true);
+      } else if (step === 1) {
+        setDiffOpen(true);
+      } else {
+        setStackOpen(true);
+        setOrbitOpen(true);
+      }
+      try {
+        const { data } = await searchCatalog({ q: cfg.id, epoch: cfg.epoch });
+        if (data.results[0]) {
+          setSelectedObject(data.results[0]);
+          setCoords({ ra: data.results[0].ra, dec: data.results[0].dec });
+          return;
+        }
+      } catch {
+        // fallback to coordinates
+      }
+      setCoords({ ra: cfg.ra, dec: cfg.dec });
+    },
+    []
+  );
 
   useEffect(() => {
     let active = true;
@@ -95,11 +149,14 @@ export default function HomePage() {
       } else if (e.key === "3") {
         e.preventDefault();
         setOrbitOpen((prev) => !prev);
+      } else if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        void handleDownloadPdf();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [handleDownloadPdf]);
 
   const executeUiActions = useCallback(
     async (actions: UiAction[]) => {
@@ -163,7 +220,11 @@ export default function HomePage() {
             break;
           }
           case "GENERATE_PDF": {
-            window.print();
+            await handleDownloadPdf();
+            break;
+          }
+          case "START_DEMO_TOUR": {
+            await applyTourStep(0);
             break;
           }
           default:
@@ -171,7 +232,7 @@ export default function HomePage() {
         }
       }
     },
-    [epoch, setLang]
+    [epoch, setLang, handleDownloadPdf, applyTourStep]
   );
 
   return (
@@ -180,12 +241,22 @@ export default function HomePage() {
         dataMode={dataMode}
         onOpenShortcuts={() => setShortcutsOpen(true)}
         onOpenCmdPalette={() => setCmdOpen(true)}
+        onStartDemoTour={() => void applyTourStep(0)}
+        onDownloadPdf={() => void handleDownloadPdf()}
+        pdfBusy={pdfBusy}
       />
       <GcnTicker
         onFlyTo={(ra, dec) => {
           setSelectedObject(null);
           setCoords({ ra, dec });
         }}
+      />
+      <DemoTourBar
+        active={tourActive}
+        step={tourStep}
+        onSelectStep={(s) => void applyTourStep((s as 0 | 1 | 2))}
+        onClose={() => setTourActive(false)}
+        onDownloadPdf={() => void handleDownloadPdf()}
       />
       <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-5 px-4 py-5 sm:px-6">
         <SkyMapPanel
@@ -247,6 +318,16 @@ export default function HomePage() {
           >
             <Sparkles className="h-3.5 w-3.5" />
             <span>{dict.header.cmdPalette} (⌘K)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void handleDownloadPdf()}
+            disabled={pdfBusy}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/35 bg-cyan-500/15 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/25 disabled:opacity-50"
+          >
+            <FileDown className="h-3.5 w-3.5" />
+            <span>{dict.header.pdfReport} (P)</span>
           </button>
         </div>
 
