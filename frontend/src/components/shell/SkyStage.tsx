@@ -25,7 +25,15 @@ declare global {
 interface SkyStageProps {
   coords: { ra: number; dec: number };
   epoch: Epoch;
+  /** full: nothing open · compact: inspector open · tour: inspector + tour caption */
+  fit?: "full" | "compact" | "tour";
 }
+
+const FIT_CLASS = {
+  full: "md:w-[min(56vw,calc(100dvh-380px),640px)]",
+  compact: "md:w-[min(44vw,calc(100dvh-420px),560px)]",
+  tour: "md:w-[min(40vw,calc(100dvh-470px),500px)]",
+} as const;
 
 const SIZE_PX = 64;
 const PIXEL_SCALE_ARCSEC = 6.2;
@@ -36,7 +44,7 @@ function Bracket({ className }: { className: string }) {
 }
 
 /** The observation window: the SPHEREx cutout (or Aladin Lite) framed on the star field, with HUD readouts. */
-export function SkyStage({ coords, epoch }: SkyStageProps) {
+export function SkyStage({ coords, epoch, fit = "full" }: SkyStageProps) {
   const { dict } = useI18n();
   const [cutout, setCutout] = useState<SkyImage | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
@@ -129,10 +137,10 @@ export function SkyStage({ coords, epoch }: SkyStageProps) {
   const showAladin = renderer === "aladin" && !aladinFailed;
 
   return (
-    <figure className="relative mx-auto w-[min(86vw,calc(100dvh-300px),620px)] min-w-[220px] md:w-[min(58vw,calc(100dvh-320px),640px)]">
+    <figure className={`relative mx-auto w-[min(86vw,calc(100dvh-300px),620px)] min-w-[200px] transition-[width] duration-300 ${FIT_CLASS[fit]}`}>
       {/* HUD — top */}
       <figcaption className="mb-2 flex items-end justify-between gap-2">
-        <span className="aeon-label">
+        <span className="aeon-label normal-case">
           {dict.sky.fov} {fovArcmin}′ · {PIXEL_SCALE_ARCSEC}″/px
         </span>
         <span className="aeon-label">{dict.sky.northUpEastLeft}</span>
@@ -177,7 +185,7 @@ export function SkyStage({ coords, epoch }: SkyStageProps) {
 
       {/* HUD — bottom */}
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="aeon-label flex items-center gap-2">
+        <span className="aeon-label flex items-center gap-2 normal-case">
           <span className="text-foreground/80">{showAladin ? "AllWISE · Aladin Lite" : dict.sky.bandAll}</span>
           {fromCache && <span className="text-[var(--aeon-warn)]">· {dict.header.dataMode.offline_cache}</span>}
           {loading && <span className="text-ice">· {dict.shell.loading}</span>}

@@ -38,7 +38,7 @@ export function ToolRail({ active, onSelect }: ToolRailProps) {
             {/* tooltip (desktop only) */}
             <span
               role="tooltip"
-              className="aeon-panel pointer-events-none absolute right-14 top-1/2 hidden -translate-y-1/2 whitespace-nowrap px-3 py-1.5 text-xs text-foreground opacity-0 shadow-xl transition-opacity group-hover:opacity-100 md:block"
+              className={`aeon-panel pointer-events-none absolute right-14 top-1/2 hidden -translate-y-1/2 whitespace-nowrap px-3 py-1.5 text-xs text-foreground opacity-0 shadow-xl transition-opacity group-hover:opacity-100 ${isActive ? "" : "md:block"}`}
             >
               {name}
               {t.key && <kbd className="aeon-kbd ml-2">{t.key}</kbd>}

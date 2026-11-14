@@ -15,7 +15,7 @@ function Datum({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="aeon-label">{label}</dt>
-      <dd className="aeon-mono mt-1 truncate text-[13px] text-foreground">{value}</dd>
+      <dd className="aeon-mono mt-1 whitespace-nowrap text-[13px] text-foreground">{value}</dd>
     </div>
   );
 }
@@ -43,7 +43,7 @@ export function TargetCard({ selectedObject, coords, compact }: TargetCardProps)
         <span className="h-1.5 w-1.5 rounded-full bg-signal" />
         {dict.shell.target} · {kicker}
       </p>
-      <h1 className="aeon-display mt-2 text-[28px] text-foreground md:text-[40px]">{title}</h1>
+      <h1 className="aeon-display mt-2 break-words text-[28px] text-foreground md:text-[34px]">{title}</h1>
 
       {obj?.is_synthetic && (
         <p className="mt-3 inline-flex items-start gap-2 rounded-lg border border-[var(--aeon-danger)]/50 bg-[var(--aeon-danger)]/10 px-2.5 py-1.5 text-xs text-[#ffb3ba]">
@@ -54,7 +54,7 @@ export function TargetCard({ selectedObject, coords, compact }: TargetCardProps)
         </p>
       )}
 
-      <dl className="mt-4 grid grid-cols-3 gap-x-5 gap-y-3 sm:grid-cols-5">
+      <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
         <Datum label={dict.sky.ra} value={`${coords.ra.toFixed(5)}°`} />
         <Datum label={dict.sky.dec} value={`${coords.dec >= 0 ? "+" : ""}${coords.dec.toFixed(5)}°`} />
         {pm && <Datum label={dict.shell.pmShort} value={pm} />}
@@ -63,7 +63,7 @@ export function TargetCard({ selectedObject, coords, compact }: TargetCardProps)
       </dl>
 
       {!compact && obj?.description && (
-        <p className="mt-4 line-clamp-3 max-w-[400px] text-[13px] leading-relaxed text-muted">
+        <p className="mt-4 line-clamp-3 max-w-[400px] text-[13px] leading-relaxed text-muted md:max-xl:hidden">
           {bilingual(obj.description)}
         </p>
       )}

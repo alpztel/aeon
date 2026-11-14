@@ -231,6 +231,20 @@ body {
   padding: 0;
 }
 
+/* The inspector header already names the tool: a module's own heading becomes its technical
+   sub-label (Vast-style spec label), and the duplicate icon in front of it is dropped. */
+.aeon-inspector .aeon-panel h2 {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--aeon-muted);
+}
+.aeon-inspector .aeon-panel svg:has(+ h2) {
+  display: none;
+}
+
 /* ---------- motion ---------- */
 @keyframes aeon-fade-up {
   from {

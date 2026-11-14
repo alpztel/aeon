@@ -333,14 +333,14 @@ export default function HomePage() {
 
       <main className="relative flex min-h-dvh flex-col pb-[76px] pt-[118px] md:block md:pb-0 md:pt-0">
         {/* stage */}
-        <div className={`flex items-center justify-center px-4 transition-[padding] duration-300 md:fixed md:inset-0 md:pb-[150px] md:pl-6 md:pt-[84px] ${stageInset}`}>
-          <SkyStage coords={coords} epoch={epoch} />
+        <div className={`order-1 flex items-center justify-center px-4 transition-[padding] duration-300 md:fixed md:inset-0 md:pl-6 md:pt-[84px] ${tourActive ? "md:pb-[340px]" : "md:pb-[260px]"} ${stageInset}`}>
+          <SkyStage coords={coords} epoch={epoch} fit={tool ? (tourActive ? "tour" : "compact") : "full"} />
         </div>
 
         {/* object readout or tour narration — bottom left, always the same place */}
         <div
-          className={`z-10 px-4 pt-6 md:fixed md:bottom-6 md:left-6 md:w-[min(440px,calc(100vw-140px))] md:px-0 md:pt-0 ${
-            tool ? "md:max-lg:hidden" : ""
+          className={`z-10 order-3 px-4 pt-6 md:fixed md:bottom-6 md:left-6 md:w-[min(440px,calc(100vw-140px))] md:px-0 md:pt-0 ${
+            tool ? (wide ? "md:hidden" : "md:max-lg:hidden") : ""
           }`}
         >
           {tourActive ? (
@@ -357,7 +357,7 @@ export default function HomePage() {
 
         {/* epoch strip — bottom centre */}
         <div
-          className={`flex justify-center px-4 pt-8 transition-[padding] duration-300 md:pointer-events-none md:fixed md:inset-x-0 md:bottom-6 md:px-6 md:pt-0 ${
+          className={`order-2 flex justify-center px-4 pt-6 transition-[padding] duration-300 md:pointer-events-none md:fixed md:inset-x-0 md:bottom-6 md:px-6 md:pt-0 ${
             tool ? (wide ? "md:hidden" : "md:pl-[480px] md:pr-[660px] max-xl:md:hidden") : "md:pl-[480px] md:pr-[96px] max-lg:md:pl-6 max-lg:md:justify-end"
           }`}
         >

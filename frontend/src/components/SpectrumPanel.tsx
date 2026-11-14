@@ -146,6 +146,7 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
       const shapes: import("plotly.js-dist-min").Shape[] = [];
       const annotations: import("plotly.js-dist-min").Annotation[] = [];
 
+      let labelRow = 0;
       for (const feat of spectrum.absorption_features ?? []) {
         if (!feat.molecule || feat.center_um === undefined) continue;
         const meta = MOLECULE_BANDS[feat.molecule];
@@ -161,15 +162,20 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
           fillcolor: meta.color,
           line: { width: 1, color: meta.border, dash: feat.detected ? "solid" : "dot" },
         });
-        annotations.push({
-          x: feat.center_um,
-          y: 0.96,
-          xref: "x",
-          yref: "paper",
-          text: `${meta.label} (${feat.center_um.toFixed(2)} µm)`,
-          showarrow: false,
-          font: { color: "#ece8e3", size: 10 },
-        });
+        // Label detected bands only, staggered over three rows so neighbours never overlap;
+        // wavelengths and depths are listed under the chart.
+        if (feat.detected) {
+          annotations.push({
+            x: feat.center_um,
+            y: [0.98, 0.9, 0.82][labelRow++ % 3],
+            xref: "x",
+            yref: "paper",
+            text: meta.label,
+            showarrow: false,
+            font: { color: "#ece8e3", size: 10 },
+            bgcolor: "rgba(5,5,6,0.7)",
+          });
+        }
       }
 
       if (playingBand !== null && spectrum.wavelength_um[playingBand] !== undefined) {

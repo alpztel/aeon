@@ -48,6 +48,7 @@ declare module "plotly.js-dist-min" {
     yref?: "y" | "paper";
     text: string;
     showarrow?: boolean;
+    bgcolor?: string;
     font?: {
       color?: string;
       size?: number;
