@@ -1,0 +1,43 @@
+name: stress
+
+# Full-stack stress test (temporary). Runs only for pull requests that touch stress/.
+on:
+  pull_request:
+    branches: [main]
+    paths: ["stress/**", ".github/workflows/stress.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Machine
+        run: nproc; free -m
+      - name: Start full stack
+        run: |
+          touch deploy/.env
+          docker compose -f deploy/docker-compose.yml --profile full up -d --build
+          for i in $(seq 1 90); do
+            curl -fsS http://localhost/api/v1/health >/dev/null && \
+            curl -fsS -X POST -H 'content-type: application/json' -d '{"message":"ping"}' http://localhost/api/v1/ai/command >/dev/null && \
+            curl -fsS http://localhost/api/v1/alerts/gcn >/dev/null && break
+            sleep 5
+          done
+          docker compose -f deploy/docker-compose.yml --profile full ps
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install httpx==0.27.2
+      - name: Stress phases
+        run: bash stress/run.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-report
+          path: |
+            stress/results.json
+            stress/docker_stats.csv
+            stress/compose.log
