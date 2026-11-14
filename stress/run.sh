@@ -26,6 +26,17 @@ mem_snapshot() {
   docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' | sed "s/^/STRESS|mem|$1|/"
 }
 
+# Runner calibration: single-core Python + NumPy score, so runs on different machines can be compared.
+python - <<'CAL'
+import time, numpy as np
+t = time.perf_counter(); s = 0
+for i in range(3_000_000): s += i * i
+py = time.perf_counter() - t
+a = np.random.default_rng(0).normal(size=(600, 600)); t = time.perf_counter()
+for _ in range(20): a @ a
+npy = time.perf_counter() - t
+print(f"STRESS|calibration|python_loop_s={py:.3f} numpy_matmul_s={npy:.3f}")
+CAL
 sample_stats & SAMPLER=$!
 health
 mem_snapshot start

@@ -17,6 +17,7 @@ exactly like archive FITS data.
 from __future__ import annotations
 
 import math
+import os
 import zlib
 from dataclasses import dataclass
 from functools import lru_cache
@@ -72,8 +73,8 @@ class SourceSet:
     ids: list[str | None]
 
 
-# ~0.3 MB per tile: 256 tiles ~ 80 MB per worker
-@lru_cache(maxsize=256)
+# ~0.3 MB per tile; AEON_TILE_CACHE tiles per process (default 256 ~ 80 MB)
+@lru_cache(maxsize=int(os.environ.get("AEON_TILE_CACHE", "256")))
 def _tile_sources(k: int, j: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Deterministic field population of one tile: ra, dec, mag_w2, teff, is_galaxy."""
     dec_lo = -90.0 + k * TILE_DEG
@@ -127,7 +128,7 @@ def _angsep_deg(ra1, dec1, ra2, dec2):
 
 
 # ~3 MB per tile in float32 (was 6 MB float64 x 512 tiles = 3 GB per worker under random-sky load)
-@lru_cache(maxsize=48)
+@lru_cache(maxsize=int(os.environ.get("AEON_TILE_SED_CACHE", "48")))   # ~3 MB each
 def _tile_seds(k: int, j: int) -> np.ndarray:
     """Band fluxes (N, 102) uJy, float32, of a tile's field population (stars: Planck; galaxies: z-model)."""
     ra, _, mag, teff, is_gal = _tile_sources(k, j)

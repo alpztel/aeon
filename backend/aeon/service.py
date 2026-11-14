@@ -363,7 +363,7 @@ def spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float) -> dict:
     return _spectrum_cached(round(float(ra), 7), round(float(dec), 7), epoch, round(float(aperture_arcsec), 3))
 
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=int(os.environ.get("AEON_SPECTRUM_CACHE", "256")))
 def _spectrum_cached(ra: float, dec: float, epoch: str, aperture_arcsec: float) -> dict:
     t = epoch_year(epoch)
     hit = resolve_target(ra, dec, t, tol_arcsec=max(aperture_arcsec, 2 * sky.NATIVE_PIXEL_SCALE))
