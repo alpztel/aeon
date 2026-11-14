@@ -339,6 +339,8 @@ test.describe("torture: spam and a real outage", () => {
       const btn = card(page).getByRole("button", { name: "Retry" });
       await btn.click({ timeout: 15_000 });
     }
+    // let the last round finish failing before the engine "comes back" (its auto-retry would otherwise succeed)
+    await expect(card(page)).toHaveAttribute("data-ai-state", "unreachable", { timeout: 15_000 });
     broken = false;
     await card(page).getByRole("button", { name: "Retry" }).click({ timeout: 15_000 });
     await expect(card(page)).toHaveAttribute("data-ai-state", "ready");
