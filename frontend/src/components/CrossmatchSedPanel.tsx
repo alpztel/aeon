@@ -55,13 +55,15 @@ export function CrossmatchSedPanel({
       })
       .catch(() => {
         if (!active) return;
-        setError(dict.missions.error);
+        setData(null);
+        setFromCache(false);
+        setError(dict.missions.serviceUnavailable);
         setLoadedKey(reqKey);
       });
     return () => {
       active = false;
     };
-  }, [coords.ra, coords.dec, reqKey, dict.missions.error]);
+  }, [coords.ra, coords.dec, reqKey, dict.missions.serviceUnavailable]);
 
   // Render full 0.4 - 22 um SED with Plotly
   useEffect(() => {

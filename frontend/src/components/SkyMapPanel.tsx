@@ -29,11 +29,18 @@ import {
 
 interface SkyMapPanelProps {
   selectedObject: CatalogObject | null;
-  onSelectObject: (obj: CatalogObject | null, coords: { ra: number; dec: number }) => void;
+  onSelectObject: (
+    obj: CatalogObject | null,
+    coords: { ra: number; dec: number },
+    refCoords?: { ra: number; dec: number }
+  ) => void;
   epoch: Epoch;
   onEpochChange: (epoch: Epoch) => void;
   coords: { ra: number; dec: number };
 }
+
+const ALADIN_SCRIPT_URL =
+  "https://aladin.cds.unistra.fr/AladinLite/api/v3/3.5.1/aladin.js";
 
 interface AladinInstance {
   gotoRaDec: (ra: number, dec: number) => void;
@@ -72,6 +79,7 @@ export function SkyMapPanel({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const aladinContainerRef = useRef<HTMLDivElement | null>(null);
   const aladinInstanceRef = useRef<AladinInstance | null>(null);
+  const searchSeqRef = useRef(0);
 
   const sizePx = 64;
   const pixelScaleArcsec = 6.2;
@@ -126,7 +134,7 @@ export function SkyMapPanel({
         if (!window.A) {
           await new Promise<void>((resolve, reject) => {
             const script = document.createElement("script");
-            script.src = "https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js";
+            script.src = ALADIN_SCRIPT_URL;
             script.async = true;
             script.onload = () => resolve();
             script.onerror = () => reject(new Error("Aladin script load failed"));
@@ -163,21 +171,57 @@ export function SkyMapPanel({
     };
   }, [renderer, aladinFailed, coords.ra, coords.dec, fovArcmin]);
 
-  const handleSelectTargetId = async (targetId: string, fallbackRa: number, fallbackDec: number) => {
+  const handleSelectTargetId = async (
+    targetId: string,
+    fallbackRa: number,
+    fallbackDec: number,
+    fallbackRefRa?: number,
+    fallbackRefDec?: number
+  ) => {
+    const seq = ++searchSeqRef.current;
     setSearchError(null);
     setSearching(true);
     try {
-      const { data } = await searchCatalog({ q: targetId, epoch });
-      const hit = data.results[0];
+      const [epochRes, refRes] = await Promise.all([
+        searchCatalog({ q: targetId, epoch }),
+        searchCatalog({ q: targetId }),
+      ]);
+      if (seq !== searchSeqRef.current) return;
+      const hit = epochRes.data.results[0];
+      const refHit = refRes.data.results[0];
       if (hit) {
-        onSelectObject(hit, { ra: hit.ra, dec: hit.dec });
+        onSelectObject(
+          hit,
+          { ra: hit.ra, dec: hit.dec },
+          {
+            ra: refHit?.ra ?? fallbackRefRa ?? hit.ra,
+            dec: refHit?.dec ?? fallbackRefDec ?? hit.dec,
+          }
+        );
       } else {
-        onSelectObject(null, { ra: fallbackRa, dec: fallbackDec });
+        onSelectObject(
+          null,
+          { ra: fallbackRa, dec: fallbackDec },
+          {
+            ra: fallbackRefRa ?? fallbackRa,
+            dec: fallbackRefDec ?? fallbackDec,
+          }
+        );
       }
     } catch {
-      onSelectObject(null, { ra: fallbackRa, dec: fallbackDec });
+      if (seq !== searchSeqRef.current) return;
+      onSelectObject(
+        null,
+        { ra: fallbackRa, dec: fallbackDec },
+        {
+          ra: fallbackRefRa ?? fallbackRa,
+          dec: fallbackRefDec ?? fallbackDec,
+        }
+      );
     } finally {
-      setSearching(false);
+      if (seq === searchSeqRef.current) {
+        setSearching(false);
+      }
     }
   };
 
@@ -186,6 +230,7 @@ export function SkyMapPanel({
     const raw = query.trim();
     if (!raw) return;
 
+    const seq = ++searchSeqRef.current;
     setSearchError(null);
     setSearching(true);
 
@@ -207,29 +252,60 @@ export function SkyMapPanel({
           include_field: true,
           epoch,
         });
+        if (seq !== searchSeqRef.current) return;
         const hit = data.results[0] ?? null;
-        onSelectObject(hit, { ra, dec });
+        if (hit && hit.source !== "field") {
+          try {
+            const { data: refData } = await searchCatalog({ q: hit.id });
+            if (seq !== searchSeqRef.current) return;
+            const refHit = refData.results[0];
+            onSelectObject(
+              hit,
+              { ra, dec },
+              { ra: refHit?.ra ?? ra, dec: refHit?.dec ?? dec }
+            );
+            return;
+          } catch {
+            // fallback below
+          }
+        }
+        onSelectObject(hit, { ra, dec }, { ra, dec });
       } catch {
-        onSelectObject(null, { ra, dec });
+        if (seq !== searchSeqRef.current) return;
+        onSelectObject(null, { ra, dec }, { ra, dec });
       } finally {
-        setSearching(false);
+        if (seq === searchSeqRef.current) {
+          setSearching(false);
+        }
       }
       return;
     }
 
     // Name / designation search
     try {
-      const { data } = await searchCatalog({ q: raw, epoch });
-      const hit = data.results[0];
+      const [epochRes, refRes] = await Promise.all([
+        searchCatalog({ q: raw, epoch }),
+        searchCatalog({ q: raw }),
+      ]);
+      if (seq !== searchSeqRef.current) return;
+      const hit = epochRes.data.results[0];
+      const refHit = refRes.data.results[0];
       if (!hit) {
         setSearchError(dict.sky.noResults);
       } else {
-        onSelectObject(hit, { ra: hit.ra, dec: hit.dec });
+        onSelectObject(
+          hit,
+          { ra: hit.ra, dec: hit.dec },
+          { ra: refHit?.ra ?? hit.ra, dec: refHit?.dec ?? hit.dec }
+        );
       }
     } catch {
+      if (seq !== searchSeqRef.current) return;
       setSearchError(dict.errors.network);
     } finally {
-      setSearching(false);
+      if (seq === searchSeqRef.current) {
+        setSearching(false);
+      }
     }
   };
 
@@ -281,11 +357,20 @@ export function SkyMapPanel({
           </span>
           {DEMO_TARGETS.map((qt) => {
             const active = selectedObject?.id === qt.id;
+            const epCoord = qt.epochCoords[epoch] ?? { ra: qt.ra, dec: qt.dec };
             return (
               <button
                 key={qt.id}
                 type="button"
-                onClick={() => handleSelectTargetId(qt.id, qt.ra, qt.dec)}
+                onClick={() =>
+                  handleSelectTargetId(
+                    qt.id,
+                    epCoord.ra,
+                    epCoord.dec,
+                    qt.refRa,
+                    qt.refDec
+                  )
+                }
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
                   active
                     ? "border-amber-400/50 bg-amber-500/20 text-amber-200"

@@ -159,6 +159,9 @@
     "instrument": "Instrument",
     "filter": "Filter",
     "mission": "Mission",
+    "noPreview": "No preview available",
+    "openMast": "Open in MAST",
+    "serviceUnavailable": "Multi-mission cross-match service (/api/v1/missions/crossmatch) is not connected yet.",
     "error": "Cross-match query failed."
   },
   "ai": {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FileDown, Layers, Orbit, Radar, Sparkles } from "lucide-react";
 import { AstroLlmModal } from "@/components/AstroLlmModal";
 import { CandidatePoolPanel } from "@/components/CandidatePoolPanel";
@@ -45,21 +45,62 @@ export default function HomePage() {
   >([]);
   const [epoch, setEpoch] = useState<Epoch>("2026-Q1");
   const [coords, setCoords] = useState<{ ra: number; dec: number }>({
-    ra: 133.79513,
-    dec: -7.24514,
+    ra: DEMO_TARGETS[0].ra,
+    dec: DEMO_TARGETS[0].dec,
+  });
+  const [refCoords, setRefCoords] = useState<{ ra: number; dec: number }>({
+    ra: DEMO_TARGETS[0].refRa,
+    dec: DEMO_TARGETS[0].refDec,
   });
   const [selectedObject, setSelectedObject] = useState<CatalogObject | null>(null);
   const [astrometry, setAstrometry] = useState<AstrometryPoint[]>([]);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [tourActive, setTourActive] = useState(false);
   const [tourStep, setTourStep] = useState<0 | 1 | 2>(0);
+  const epochSeqRef = useRef(0);
+
+  const handleEpochChange = useCallback(
+    async (nextEpoch: Epoch) => {
+      const seq = ++epochSeqRef.current;
+      if (selectedObject && selectedObject.source !== "field") {
+        const demoMeta = DEMO_TARGETS.find((d) => d.id === selectedObject.id);
+        if (demoMeta?.epochCoords[nextEpoch]) {
+          const pre = demoMeta.epochCoords[nextEpoch];
+          setSelectedObject((prev) =>
+            prev ? { ...prev, ra: pre.ra, dec: pre.dec } : prev
+          );
+          setCoords({ ra: pre.ra, dec: pre.dec });
+          setEpoch(nextEpoch);
+          return;
+        }
+        try {
+          const { data } = await searchCatalog({
+            q: selectedObject.id,
+            epoch: nextEpoch,
+          });
+          if (seq !== epochSeqRef.current) return;
+          const hit = data.results[0];
+          if (hit) {
+            setSelectedObject(hit);
+            setCoords({ ra: hit.ra, dec: hit.dec });
+            setEpoch(nextEpoch);
+            return;
+          }
+        } catch {
+          if (seq !== epochSeqRef.current) return;
+        }
+      }
+      setEpoch(nextEpoch);
+    },
+    [selectedObject]
+  );
 
   const handleDownloadPdf = useCallback(async () => {
     setPdfBusy(true);
     try {
       await generateAndDownloadDiscoveryPdf({
         lang,
-        coords,
+        coords: refCoords,
         epoch,
         selectedObject,
         dataMode,
@@ -67,7 +108,7 @@ export default function HomePage() {
     } finally {
       setPdfBusy(false);
     }
-  }, [lang, coords, epoch, selectedObject, dataMode]);
+  }, [lang, refCoords, epoch, selectedObject, dataMode]);
 
   const applyTourStep = useCallback(async (step: 0 | 1 | 2) => {
     setTourStep(step);
@@ -81,16 +122,27 @@ export default function HomePage() {
       setDiffOpen(true);
     }
     try {
-      const { data } = await searchCatalog({ q: cfg.id, epoch: cfg.epoch });
-      if (data.results[0]) {
-        setSelectedObject(data.results[0]);
-        setCoords({ ra: data.results[0].ra, dec: data.results[0].dec });
+      const [epRes, refRes] = await Promise.all([
+        searchCatalog({ q: cfg.id, epoch: cfg.epoch }),
+        searchCatalog({ q: cfg.id }),
+      ]);
+      const hit = epRes.data.results[0];
+      const refHit = refRes.data.results[0];
+      if (hit) {
+        setSelectedObject(hit);
+        setCoords({ ra: hit.ra, dec: hit.dec });
+        setRefCoords({
+          ra: refHit?.ra ?? cfg.refRa,
+          dec: refHit?.dec ?? cfg.refDec,
+        });
         return;
       }
     } catch {
       // fallback to coordinates
     }
-    setCoords({ ra: cfg.ra, dec: cfg.dec });
+    const epCoord = cfg.epochCoords[cfg.epoch] ?? { ra: cfg.ra, dec: cfg.dec };
+    setCoords(epCoord);
+    setRefCoords({ ra: cfg.refRa, dec: cfg.refDec });
   }, []);
 
   useEffect(() => {
@@ -98,12 +150,20 @@ export default function HomePage() {
     getHealth().then(({ mode }) => {
       if (active) setDataMode(mode);
     });
-    searchCatalog({ q: "wise-0855", epoch: "2026-Q1" })
-      .then(({ data }) => {
-        if (active && data.results[0]) {
-          const hit = data.results[0];
+    Promise.all([
+      searchCatalog({ q: "wise-0855", epoch: "2026-Q1" }),
+      searchCatalog({ q: "wise-0855" }),
+    ])
+      .then(([epRes, refRes]) => {
+        if (active && epRes.data.results[0]) {
+          const hit = epRes.data.results[0];
+          const refHit = refRes.data.results[0];
           setSelectedObject(hit);
           setCoords({ ra: hit.ra, dec: hit.dec });
+          setRefCoords({
+            ra: refHit?.ra ?? DEMO_TARGETS[0].refRa,
+            dec: refHit?.dec ?? DEMO_TARGETS[0].refDec,
+          });
         }
       })
       .catch(() => {});
@@ -165,10 +225,19 @@ export default function HomePage() {
             const dec = typeof p.dec === "number" ? p.dec : undefined;
             if (q) {
               try {
-                const { data } = await searchCatalog({ q, epoch });
-                if (data.results[0]) {
-                  setSelectedObject(data.results[0]);
-                  setCoords({ ra: data.results[0].ra, dec: data.results[0].dec });
+                const [epRes, refRes] = await Promise.all([
+                  searchCatalog({ q, epoch }),
+                  searchCatalog({ q }),
+                ]);
+                const hit = epRes.data.results[0];
+                const refHit = refRes.data.results[0];
+                if (hit) {
+                  setSelectedObject(hit);
+                  setCoords({ ra: hit.ra, dec: hit.dec });
+                  setRefCoords({
+                    ra: refHit?.ra ?? hit.ra,
+                    dec: refHit?.dec ?? hit.dec,
+                  });
                   break;
                 }
               } catch {
@@ -177,13 +246,14 @@ export default function HomePage() {
             }
             if (ra !== undefined && dec !== undefined) {
               setCoords({ ra, dec });
+              setRefCoords({ ra, dec });
             }
             break;
           }
           case "SET_EPOCH": {
             const ep = p.epoch as Epoch | undefined;
             if (ep && EPOCHS.includes(ep)) {
-              setEpoch(ep);
+              await handleEpochChange(ep);
             }
             break;
           }
@@ -238,7 +308,7 @@ export default function HomePage() {
         }
       }
     },
-    [epoch, setLang, handleDownloadPdf, applyTourStep]
+    [epoch, setLang, handleDownloadPdf, applyTourStep, handleEpochChange]
   );
 
   return (
@@ -255,6 +325,7 @@ export default function HomePage() {
         onFlyTo={(ra, dec) => {
           setSelectedObject(null);
           setCoords({ ra, dec });
+          setRefCoords({ ra, dec });
         }}
       />
       <DemoTourBar
@@ -267,12 +338,13 @@ export default function HomePage() {
       <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-5 px-4 py-5 sm:px-6">
         <SkyMapPanel
           selectedObject={selectedObject}
-          onSelectObject={(obj, nextCoords) => {
+          onSelectObject={(obj, nextCoords, nextRefCoords) => {
             setSelectedObject(obj);
             setCoords(nextCoords);
+            setRefCoords(nextRefCoords ?? nextCoords);
           }}
           epoch={epoch}
-          onEpochChange={setEpoch}
+          onEpochChange={(ep) => void handleEpochChange(ep)}
           coords={coords}
         />
 
@@ -338,7 +410,7 @@ export default function HomePage() {
         </div>
 
         {diffOpen && (
-          <DifferencePanel coords={coords} selectedObject={selectedObject} />
+          <DifferencePanel coords={refCoords} selectedObject={selectedObject} />
         )}
 
         <div id="aeon-spectrum-panel">
@@ -350,13 +422,13 @@ export default function HomePage() {
         </div>
 
         <ClassificationCard
-          coords={coords}
+          coords={refCoords}
           selectedObject={selectedObject}
         />
 
         <div id="aeon-crossmatch-panel">
           <CrossmatchSedPanel
-            coords={coords}
+            coords={refCoords}
             selectedObject={selectedObject}
             onOpenPip={(overlaps) => {
               setPipOverlaps(overlaps);
@@ -367,7 +439,7 @@ export default function HomePage() {
 
         {stackOpen && (
           <ShiftStackPanel
-            coords={coords}
+            coords={refCoords}
             selectedObject={selectedObject}
             onAstrometryReady={setAstrometry}
           />
@@ -375,18 +447,19 @@ export default function HomePage() {
 
         {orbitOpen && (
           <SolarSystem3DPanel
-            coords={coords}
+            coords={refCoords}
             selectedObject={selectedObject}
             astrometry={astrometry}
           />
         )}
 
         <CandidatePoolPanel
-          coords={coords}
+          coords={refCoords}
           selectedObject={selectedObject}
           onInspectCoords={(ra, dec) => {
             setSelectedObject(null);
             setCoords({ ra, dec });
+            setRefCoords({ ra, dec });
           }}
         />
       </main>

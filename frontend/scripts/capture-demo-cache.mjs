@@ -16,9 +16,9 @@ const OUT_DIR = path.resolve(__dirname, "../public/demo-cache");
 const API_BASE = (process.env.AEON_API_BASE || "http://localhost:8000").replace(/\/+$/, "");
 
 const DEMO_TARGETS = [
-  { id: "wise-0855", ra: 133.79513, dec: -7.24514, rate: 8.15, pa: 275 },
-  { id: "rw-aur", ra: 76.9564, dec: 30.4013, rate: 0, pa: 0 },
-  { id: "px-2026-09", ra: 51.2, dec: 14.8, rate: 110, pa: 62 },
+  { id: "wise-0855", rate: 8.15, pa: 275, distance_au: null },
+  { id: "rw-aur", rate: 0, pa: 0, distance_au: null },
+  { id: "px-2026-09", rate: 110, pa: 62, distance_au: 520 },
 ];
 
 const EPOCHS = ["2026-Q1", "2026-Q2", "2026-Q3", "2026-Q4"];
@@ -36,16 +36,29 @@ async function main() {
 
   const catalogResults = [];
   for (const target of DEMO_TARGETS) {
+    // 1. Mid-survey (2026.5) catalog lookup without epoch parameter
     const cat = await fetchJson(
       `${API_BASE}/api/v1/catalog/search?q=${encodeURIComponent(target.id)}`
     );
-    if (cat.results?.[0]) {
-      catalogResults.push(cat.results[0]);
+    const refEntry = cat.results?.[0];
+    if (!refEntry) {
+      throw new Error(`Catalog lookup returned no results for ${target.id}`);
     }
+    catalogResults.push(refEntry);
+    const refRa = refEntry.ra;
+    const refDec = refEntry.dec;
 
+    // 2. Per-epoch catalog lookup + cutout + 102-band spectrum at that epoch's apparent position
     for (const epoch of EPOCHS) {
+      const epCat = await fetchJson(
+        `${API_BASE}/api/v1/catalog/search?q=${encodeURIComponent(target.id)}&epoch=${epoch}`
+      );
+      const epEntry = epCat.results?.[0] ?? refEntry;
+      const epRa = epEntry.ra;
+      const epDec = epEntry.dec;
+
       const cutout = await fetchJson(
-        `${API_BASE}/api/v1/sky/cutout?ra=${target.ra}&dec=${target.dec}&epoch=${epoch}&size_px=64&pixel_scale_arcsec=6.2&format=json`
+        `${API_BASE}/api/v1/sky/cutout?ra=${epRa}&dec=${epDec}&epoch=${epoch}&size_px=64&pixel_scale_arcsec=6.2&format=json`
       );
       await fs.writeFile(
         path.join(OUT_DIR, `cutout-${target.id}-${epoch}.json`),
@@ -53,7 +66,7 @@ async function main() {
       );
 
       const spec = await fetchJson(
-        `${API_BASE}/api/v1/spectrum?ra=${target.ra}&dec=${target.dec}&epoch=${epoch}`
+        `${API_BASE}/api/v1/spectrum?ra=${epRa}&dec=${epDec}&epoch=${epoch}`
       );
       await fs.writeFile(
         path.join(OUT_DIR, `spectrum-${target.id}-${epoch}.json`),
@@ -61,12 +74,13 @@ async function main() {
       );
     }
 
+    // 3. Analysis endpoints use the mid-survey (2026.5) reference position
     const diff = await fetchJson(`${API_BASE}/api/v1/analysis/difference`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ra: target.ra,
-        dec: target.dec,
+        ra: refRa,
+        dec: refDec,
         epoch_1: "2026-Q1",
         epoch_2: "2026-Q3",
         size_px: 64,
@@ -79,10 +93,12 @@ async function main() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ra: target.ra,
-        dec: target.dec,
+        ra: refRa,
+        dec: refDec,
         rate_arcsec_yr: target.rate,
         pa_deg: target.pa,
+        distance_au: target.distance_au,
+        cadence: "uniform",
         n_frames: 24,
         combine: "mean",
       }),
@@ -93,18 +109,46 @@ async function main() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ra: target.ra,
-        dec: target.dec,
+        ra: refRa,
+        dec: refDec,
         n_frames: 24,
         combine: "mean",
+        cadence: "uniform",
         rate_range_arcsec_yr: [20, 200],
         pa_range_deg: [30, 90],
+        distance_range_au: target.distance_au ? [250, 1000] : null,
         grid: 5,
       }),
     });
     await fs.writeFile(path.join(OUT_DIR, `blind-${target.id}.json`), JSON.stringify(blind));
-    console.log(`Captured full cache for ${target.id}`);
+
+    // Optional: capture crossmatch response only when the missions service is deployed (HTTP 200)
+    try {
+      const xm = await fetchJson(
+        `${API_BASE}/api/v1/missions/crossmatch?ra=${refRa}&dec=${refDec}&radius_arcsec=10`
+      );
+      await fs.writeFile(
+        path.join(OUT_DIR, `crossmatch-${target.id}.json`),
+        JSON.stringify(xm)
+      );
+    } catch {
+      // Missions service not deployed on this host; skip without writing fabricated data
+    }
+
+    console.log(`Captured full cache for ${target.id} (ref ${refRa}, ${refDec})`);
   }
+
+  const orbit = await fetchJson(`${API_BASE}/api/v1/orbit/simulate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      target_id: "px-2026-09",
+      horizons_years: [1, 5, 10],
+      samples_per_year: 24,
+    }),
+  });
+  await fs.writeFile(path.join(OUT_DIR, "orbit-px-2026-09.json"), JSON.stringify(orbit));
+  console.log("Saved orbit-px-2026-09.json");
 
   await fs.writeFile(
     path.join(OUT_DIR, "catalog-demo.json"),

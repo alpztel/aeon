@@ -12,22 +12,22 @@
         "WISE 0855-0714",
         "W0855"
       ],
-      "ra": 133.7602,
-      "dec": -7.2422,
+      "ra": 133.7586977,
+      "dec": -7.2420576,
       "object_class": "cold_brown_dwarf",
       "mag_ab_w2": 17.23,
       "pm_ra_cosdec_arcsec_yr": -8.118,
       "pm_dec_arcsec_yr": 0.68,
       "distance_au": null,
       "distance_pc": 2.28,
-      "teff_k": 250,
+      "teff_k": 250.0,
       "is_demo": true,
       "is_synthetic": false,
       "description": {
         "en": "Coldest known brown dwarf (~250 K) at 2.3 pc. Its ~8.1\"/yr proper motion makes a clear +/- dipole between survey epochs in difference mode; water-ice clouds and strong CH4/H2O absorption shape its 4-5 um peak.",
-        "tr": "Bilinen en soğuk kahverengi cüce (~250 K), 2,3 pc uzaklıkta. ~8,1\"/yıl özdevinimi, Görüntü Farkı modunda tarama dönemleri arasında belirgin bir +/- dipol oluşturur; güçlü CH4/H2O soğurması 4-5 µm tepesini şekillendirir."
+        "tr": "Bilinen en so\u011fuk kahverengi c\u00fcce (~250 K), 2,3 pc uzakl\u0131kta. ~8,1\"/y\u0131l \u00f6zdevinimi, G\u00f6r\u00fcnt\u00fc Fark\u0131 modunda tarama d\u00f6nemleri aras\u0131nda belirgin bir +/- dipol olu\u015fturur; g\u00fc\u00e7l\u00fc CH4/H2O so\u011furmas\u0131 4-5 \u00b5m tepesini \u015fekillendirir."
       },
-      "separation_arcsec": 0,
+      "separation_arcsec": null,
       "source": "catalog"
     },
     {
@@ -38,22 +38,22 @@
         "RW Aur A",
         "HD 240764"
       ],
-      "ra": 76.95642,
-      "dec": 30.40142,
+      "ra": 76.9564207,
+      "dec": 30.4014199,
       "object_class": "young_variable_star",
       "mag_ab_w2": 8.7,
-      "pm_ra_cosdec_arcsec_yr": 0,
-      "pm_dec_arcsec_yr": 0,
+      "pm_ra_cosdec_arcsec_yr": 0.0,
+      "pm_dec_arcsec_yr": 0.0,
       "distance_au": null,
-      "distance_pc": 183,
-      "teff_k": 4100,
+      "distance_pc": 183.0,
+      "teff_k": 4100.0,
       "is_demo": true,
       "is_synthetic": false,
       "description": {
         "en": "Young T Tauri star with a disrupted disk. Variable circumstellar extinction dims the short-wavelength bands while the warm inner disk brightens beyond 3 um, so the 102-band spectrum changes from quarter to quarter.",
-        "tr": "Diski bozulmuş genç bir T Tauri yıldızı. Değişken çevresel sönümleme kısa dalga bantlarını karartırken sıcak iç disk 3 µm ötesinde parlar; 102 bantlık tayf çeyrekten çeyreğe değişir."
+        "tr": "Diski bozulmu\u015f gen\u00e7 bir T Tauri y\u0131ld\u0131z\u0131. De\u011fi\u015fken \u00e7evresel s\u00f6n\u00fcmleme k\u0131sa dalga bantlar\u0131n\u0131 karart\u0131rken s\u0131cak i\u00e7 disk 3 \u00b5m \u00f6tesinde parlar; 102 bantl\u0131k tayf \u00e7eyrekten \u00e7eyre\u011fe de\u011fi\u015fir."
       },
-      "separation_arcsec": 0,
+      "separation_arcsec": null,
       "source": "catalog"
     },
     {
@@ -67,21 +67,21 @@
         "Gezegen X"
       ],
       "ra": 51.295473,
-      "dec": 14.832556,
+      "dec": 14.8325559,
       "object_class": "planet_x_candidate",
       "mag_ab_w2": 22.6,
-      "pm_ra_cosdec_arcsec_yr": 97.124236,
-      "pm_dec_arcsec_yr": 51.641876,
-      "distance_au": 520,
+      "pm_ra_cosdec_arcsec_yr": 97.12423600000001,
+      "pm_dec_arcsec_yr": 51.641875999999996,
+      "distance_au": 520.0,
       "distance_pc": null,
       "teff_k": null,
       "is_demo": true,
       "is_synthetic": true,
       "description": {
         "en": "Injected synthetic test candidate: a methane-rich ice giant at ~520 AU moving ~110\"/yr (PA 62 deg). Below 3 sigma in every single frame; shift-and-stack along its motion recovers it. It does not exist on the real sky - it validates the detection pipeline end to end.",
-        "tr": "Sisteme enjekte edilmiş sentetik test adayı: ~520 AU uzaklıkta, ~110\"/yıl (KA 62°) hızla hareket eden metan zengini bir buz devi. Tekil karelerde 3 sigmanın altında; hareket yönünde kaydır-ve-yığ ile ortaya çıkar. Gerçek gökyüzünde yoktur - algılama hattını uçtan uca doğrular."
+        "tr": "Sisteme enjekte edilmi\u015f sentetik test aday\u0131: ~520 AU uzakl\u0131kta, ~110\"/y\u0131l (KA 62\u00b0) h\u0131zla hareket eden metan zengini bir buz devi. Tekil karelerde 3 sigman\u0131n alt\u0131nda; hareket y\u00f6n\u00fcnde kayd\u0131r-ve-y\u0131\u011f ile ortaya \u00e7\u0131kar. Ger\u00e7ek g\u00f6ky\u00fcz\u00fcnde yoktur - alg\u0131lama hatt\u0131n\u0131 u\u00e7tan uca do\u011frular."
       },
-      "separation_arcsec": 0,
+      "separation_arcsec": null,
       "source": "catalog"
     }
   ]

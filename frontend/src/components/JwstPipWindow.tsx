@@ -79,16 +79,21 @@ export function JwstPipWindow({
                 </div>
               </dl>
 
-              {/* High-resolution synthetic/preview diffraction spike stamp */}
-              <div className="mt-2.5 flex h-24 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.45)_0%,rgba(34,211,238,0.12)_35%,rgba(3,7,18,0.95)_75%)]">
-                <svg viewBox="0 0 120 80" className="h-full w-full">
-                  <line x1="60" y1="6" x2="60" y2="74" stroke="#fbbf24" strokeWidth="0.9" strokeOpacity="0.65" />
-                  <line x1="20" y1="18" x2="100" y2="62" stroke="#fbbf24" strokeWidth="0.8" strokeOpacity="0.55" />
-                  <line x1="20" y1="62" x2="100" y2="18" stroke="#fbbf24" strokeWidth="0.8" strokeOpacity="0.55" />
-                  <circle cx="60" cy="40" r="5" fill="#fef3c7" />
-                  <circle cx="60" cy="40" r="11" fill="none" stroke="#22d3ee" strokeWidth="0.7" strokeDasharray="2 2" />
-                </svg>
-              </div>
+              {typeof (item as { preview_url?: unknown }).preview_url === "string" &&
+              (item as { preview_url?: string }).preview_url ? (
+                <div className="mt-2.5 overflow-hidden rounded-lg border border-white/10 bg-black">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={(item as { preview_url: string }).preview_url}
+                    alt={`${item.mission ?? "MAST"} ${item.obs_id ?? ""}`}
+                    className="h-28 w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="mt-2.5 flex h-16 items-center justify-center rounded-lg border border-white/10 bg-black/40 px-3 text-center text-[11px] text-slate-400">
+                  {dict.missions.noPreview}
+                </div>
+              )}
             </div>
           ))}
         </div>

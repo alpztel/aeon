@@ -159,6 +159,9 @@
     "instrument": "Aygıt",
     "filter": "Filtre",
     "mission": "Görev",
+    "noPreview": "Önizleme yok",
+    "openMast": "MAST Arşivinde Aç",
+    "serviceUnavailable": "Çoklu görev çapraz eşleştirme servisi (/api/v1/missions/crossmatch) henüz bağlı değil.",
     "error": "Çoklu görev eşleştirme sorgusu başarısız oldu."
   },
   "ai": {

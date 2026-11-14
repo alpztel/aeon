@@ -94,6 +94,7 @@ export interface DemoTargetMeta {
   refRa: number;
   refDec: number;
   epoch: Epoch;
+  epochCoords: Record<Epoch, { ra: number; dec: number }>;
   synthetic?: boolean;
 }
 
@@ -101,29 +102,47 @@ export const DEMO_TARGETS: readonly DemoTargetMeta[] = [
   {
     id: "wise-0855",
     label: "WISE 0855",
-    ra: 133.7602,
-    dec: -7.2422,
-    refRa: 133.79513,
-    refDec: -7.24514,
+    ra: 133.7595813,
+    dec: -7.2422291,
+    refRa: 133.7586977,
+    refDec: -7.2420576,
     epoch: "2026-Q1",
+    epochCoords: {
+      "2026-Q1": { ra: 133.7595813, dec: -7.2422291 },
+      "2026-Q2": { ra: 133.7589286, dec: -7.2420981 },
+      "2026-Q3": { ra: 133.7585015, dec: -7.2420507 },
+      "2026-Q4": { ra: 133.7580213, dec: -7.2420871 },
+    },
   },
   {
     id: "rw-aur",
     label: "RW Aur",
-    ra: 76.95642,
+    ra: 76.9564216,
     dec: 30.40142,
-    refRa: 76.95642,
-    refDec: 30.40142,
+    refRa: 76.9564207,
+    refDec: 30.4014199,
     epoch: "2026-Q3",
+    epochCoords: {
+      "2026-Q1": { ra: 76.9564184, dec: 30.4014199 },
+      "2026-Q2": { ra: 76.9564194, dec: 30.4014198 },
+      "2026-Q3": { ra: 76.9564216, dec: 30.40142 },
+      "2026-Q4": { ra: 76.9564207, dec: 30.4014202 },
+    },
   },
   {
     id: "px-2026-09",
     label: "PX-2026-09",
-    ra: 51.29547,
-    dec: 14.83256,
-    refRa: 51.2,
-    refDec: 14.8,
+    ra: 51.094637,
+    dec: 14.7751279,
+    refRa: 51.295473,
+    refDec: 14.8325559,
     epoch: "2026-Q1",
+    epochCoords: {
+      "2026-Q1": { ra: 51.094637, dec: 14.7751279 },
+      "2026-Q2": { ra: 51.2163064, dec: 14.814313 },
+      "2026-Q3": { ra: 51.3292136, dec: 14.8366317 },
+      "2026-Q4": { ra: 51.2243498, dec: 14.8051862 },
+    },
     synthetic: true,
   },
 ];
@@ -164,11 +183,15 @@ async function fetchDemoCache<T>(filename: string): Promise<T | null> {
 
 export function matchDemoId(ra: number, dec: number): DemoTargetMeta["id"] | null {
   let bestId: DemoTargetMeta["id"] | null = null;
-  let bestSep = 0.25;
+  let bestSep = 0.35;
   for (const c of DEMO_TARGETS) {
+    const epochSeps = EPOCHS.map((ep) =>
+      angularSeparationDeg(ra, dec, c.epochCoords[ep].ra, c.epochCoords[ep].dec)
+    );
     const sep = Math.min(
       angularSeparationDeg(ra, dec, c.ra, c.dec),
-      angularSeparationDeg(ra, dec, c.refRa, c.refDec)
+      angularSeparationDeg(ra, dec, c.refRa, c.refDec),
+      ...epochSeps
     );
     if (sep <= bestSep) {
       bestSep = sep;
@@ -223,9 +246,22 @@ export async function searchCatalog(
   } catch (err) {
     const cached = await fetchDemoCache<CatalogResponse>("catalog-demo.json");
     if (cached) {
+      const applyEpochCoords = (item: CatalogObject): CatalogObject => {
+        const meta = DEMO_TARGETS.find((d) => d.id === item.id);
+        if (!meta) return item;
+        if (params.epoch && meta.epochCoords[params.epoch]) {
+          return {
+            ...item,
+            ra: meta.epochCoords[params.epoch].ra,
+            dec: meta.epochCoords[params.epoch].dec,
+          };
+        }
+        return { ...item, ra: meta.refRa, dec: meta.refDec };
+      };
+      const items = cached.results.map(applyEpochCoords);
       if (params.q) {
         const needle = params.q.trim().toLowerCase();
-        const filtered = cached.results.filter(
+        const filtered = items.filter(
           (item) =>
             item.id.toLowerCase().includes(needle) ||
             item.name.toLowerCase().includes(needle) ||
@@ -238,7 +274,7 @@ export async function searchCatalog(
       }
       if (params.ra !== undefined && params.dec !== undefined) {
         const radiusDeg = (params.radius_arcmin ?? 5) / 60;
-        const matched = cached.results
+        const matched = items
           .map((item) => {
             const sepDeg = angularSeparationDeg(params.ra!, params.dec!, item.ra, item.dec);
             return {
@@ -253,7 +289,7 @@ export async function searchCatalog(
           fromCache: true,
         };
       }
-      return { data: cached, fromCache: true };
+      return { data: { ...cached, results: items }, fromCache: true };
     }
     throw err;
   }
@@ -462,125 +498,13 @@ export async function getCrossmatch(params: {
   try {
     const data = await fetchJson<CrossmatchResult>(`/api/v1/missions/crossmatch?${qs.toString()}`);
     return { data, fromCache: false };
-  } catch {
+  } catch (err) {
     const id = matchDemoId(params.ra, params.dec);
     if (id) {
       const cached = await fetchDemoCache<CrossmatchResult>(`crossmatch-${id}.json`);
       if (cached) return { data: cached, fromCache: true };
     }
-
-    const sed: NonNullable<CrossmatchResult["sed"]> = [];
-    try {
-      const { data: spec } = await getSpectrum({ ra: params.ra, dec: params.dec });
-      spec.wavelength_um.forEach((wl, i) => {
-        if (i % 3 === 0) {
-          sed.push({
-            wavelength_um: wl,
-            flux_ujy: spec.flux_ujy[i] ?? 0,
-            flux_err_ujy: spec.flux_err_ujy[i],
-            survey: "SPHEREx",
-          });
-        }
-      });
-    } catch {
-      // Ignore spectrum fallback failure
-    }
-
-    if (id === "wise-0855") {
-      sed.push(
-        { wavelength_um: 3.35, flux_ujy: 0.013, flux_err_ujy: 0.004, survey: "WISE" },
-        { wavelength_um: 4.6, flux_ujy: 0.465, flux_err_ujy: 0.025, survey: "WISE" },
-        { wavelength_um: 11.56, flux_ujy: 4.57, flux_err_ujy: 0.35, survey: "WISE" },
-        { wavelength_um: 22.09, flux_ujy: 12.8, flux_err_ujy: 1.4, survey: "WISE" }
-      );
-      return {
-        fromCache: true,
-        data: {
-          gaia: [],
-          wise: [
-            {
-              designation: "WISE J085510.83-071442.5",
-              w1_ab: 21.1,
-              w2_ab: 17.23,
-              w3_ab: 14.75,
-              pm_total_arcsec_yr: 8.15,
-            },
-          ],
-          sed,
-          unmatched_ir_candidate: true,
-          mast_overlap: [
-            {
-              mission: "JWST",
-              obs_id: "jw01902-o001_t001_nirspec",
-              instrument: "NIRSpec / G395M",
-              filter: "F290LP (2.87–5.10 µm)",
-            },
-            {
-              mission: "HST",
-              obs_id: "hst_13869_01_wfc3_ir_f127m",
-              instrument: "WFC3/IR",
-              filter: "F127M",
-            },
-          ],
-        },
-      };
-    }
-
-    if (id === "rw-aur") {
-      sed.unshift(
-        { wavelength_um: 0.504, flux_ujy: 1850, flux_err_ujy: 40, survey: "Gaia" },
-        { wavelength_um: 0.623, flux_ujy: 2940, flux_err_ujy: 55, survey: "Gaia" },
-        { wavelength_um: 0.773, flux_ujy: 4120, flux_err_ujy: 65, survey: "Gaia" }
-      );
-      sed.push(
-        { wavelength_um: 3.35, flux_ujy: 8400, flux_err_ujy: 190, survey: "WISE" },
-        { wavelength_um: 4.6, flux_ujy: 9850, flux_err_ujy: 210, survey: "WISE" },
-        { wavelength_um: 11.56, flux_ujy: 14200, flux_err_ujy: 450, survey: "WISE" },
-        { wavelength_um: 22.09, flux_ujy: 19600, flux_err_ujy: 780, survey: "WISE" }
-      );
-      return {
-        fromCache: true,
-        data: {
-          gaia: [
-            {
-              source_id: "Gaia DR3 156431440590447744",
-              phot_g_mean_mag: 10.48,
-              bp_rp: 1.18,
-              parallax_mas: 6.12,
-            },
-          ],
-          wise: [
-            {
-              designation: "J050749.54+302405.1",
-              w1_ab: 7.02,
-              w2_ab: 6.45,
-              w3_ab: 4.82,
-            },
-          ],
-          sed,
-          unmatched_ir_candidate: false,
-          mast_overlap: [
-            {
-              mission: "HST",
-              obs_id: "hst_14181_02_stis_fuv",
-              instrument: "STIS / FUV-MAMA",
-              filter: "G140L",
-            },
-          ],
-        },
-      };
-    }
-
-    return {
-      fromCache: true,
-      data: {
-        gaia: [],
-        wise: [],
-        sed,
-        unmatched_ir_candidate: true,
-        mast_overlap: [],
-      },
-    };
+    throw err;
   }
 }
 
