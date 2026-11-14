@@ -141,6 +141,25 @@
     "dragHint": "Drag to rotate 3D ecliptic view · Scroll to zoom · Kuiper Belt (30–50 AU) & SPHEREx scan cone shown.",
     "error": "Orbit simulation failed."
   },
+  "missions": {
+    "title": "Multi-Mission Cross-Match & Broadband SED (0.4–22 µm)",
+    "unmatchedCold": "Unmatched Cold IR Candidate",
+    "unmatchedHint": "Detected in infrared (SPHEREx / WISE) with no optical Gaia DR3 counterpart within search radius.",
+    "openJwstPip": "JWST / HST PiP",
+    "gaiaTitle": "Gaia DR3 Optical Counterparts",
+    "wiseTitle": "WISE / CatWISE Infrared Counterparts",
+    "noGaia": "No optical Gaia DR3 source within search radius (expected for T_eff < 500 K).",
+    "noWise": "No WISE catalog entry (synthetic or below WISE sensitivity).",
+    "sedX": "Wavelength λ (µm, log scale)",
+    "sedY": "Flux Density Fν (µJy)",
+    "pipTitle": "MAST Archive — JWST / HST Picture-in-Picture",
+    "pipNoOverlap": "No archival JWST or HST observation overlaps these coordinates.",
+    "obsId": "Observation ID",
+    "instrument": "Instrument",
+    "filter": "Filter",
+    "mission": "Mission",
+    "error": "Cross-match query failed."
+  },
   "classes": {
     "cold_brown_dwarf": "Cold Brown Dwarf",
     "planet_x_candidate": "Planet X Candidate",

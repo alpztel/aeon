@@ -141,6 +141,25 @@
     "dragHint": "3B ekliptik görünümü döndürmek için sürükleyin · Yakınlaştırmak için kaydırın · Kuiper Kuşağı (30–50 AU) ve SPHEREx tarama konisi gösterilir.",
     "error": "Yörünge simülasyonu başarısız oldu."
   },
+  "missions": {
+    "title": "Çoklu Görev Eşleştirme & Geniş Bant SED (0.4–22 µm)",
+    "unmatchedCold": "Eşleşmemiş Soğuk Aday",
+    "unmatchedHint": "Kızılötesinde (SPHEREx / WISE) tespit edildi ancak arama yarıçapında optik Gaia DR3 karşılığı yok.",
+    "openJwstPip": "JWST / HST PiP",
+    "gaiaTitle": "Gaia DR3 Optik Karşılıkları",
+    "wiseTitle": "WISE / CatWISE Kızılötesi Karşılıkları",
+    "noGaia": "Arama yarıçapında optik Gaia DR3 kaynağı yok (T_eff < 500 K cisimler için beklenen durum).",
+    "noWise": "WISE katalog kaydı yok (sentetik veya WISE duyarlılık sınırının altında).",
+    "sedX": "Dalga Boyu λ (µm, log ölçek)",
+    "sedY": "Akı Yoğunluğu Fν (µJy)",
+    "pipTitle": "MAST Arşivi — JWST / HST Yüzer Pencere (PiP)",
+    "pipNoOverlap": "Bu koordinatlarda arşivlenmiş JWST veya HST gözlemi bulunmuyor.",
+    "obsId": "Gözlem Kimliği",
+    "instrument": "Aygıt",
+    "filter": "Filtre",
+    "mission": "Görev",
+    "error": "Çoklu görev eşleştirme sorgusu başarısız oldu."
+  },
   "classes": {
     "cold_brown_dwarf": "Soğuk Kahverengi Cüce",
     "planet_x_candidate": "Planet X Adayı",

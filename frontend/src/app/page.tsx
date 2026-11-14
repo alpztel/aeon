@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import { Layers, Orbit, Radar } from "lucide-react";
+import { CrossmatchSedPanel } from "@/components/CrossmatchSedPanel";
 import { DifferencePanel } from "@/components/DifferencePanel";
 import { Header } from "@/components/Header";
+import { JwstPipWindow } from "@/components/JwstPipWindow";
 import { ShiftStackPanel } from "@/components/ShiftStackPanel";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { SkyMapPanel } from "@/components/SkyMapPanel";
@@ -15,6 +17,7 @@ import {
   searchCatalog,
   type AstrometryPoint,
   type CatalogObject,
+  type CrossmatchResult,
   type DataMode,
   type Epoch,
 } from "@/lib/api";
@@ -26,6 +29,10 @@ export default function HomePage() {
   const [diffOpen, setDiffOpen] = useState(true);
   const [stackOpen, setStackOpen] = useState(true);
   const [orbitOpen, setOrbitOpen] = useState(true);
+  const [pipOpen, setPipOpen] = useState(false);
+  const [pipOverlaps, setPipOverlaps] = useState<
+    NonNullable<CrossmatchResult["mast_overlap"]>
+  >([]);
   const [epoch, setEpoch] = useState<Epoch>("2026-Q1");
   const [coords, setCoords] = useState<{ ra: number; dec: number }>({
     ra: 133.79513,
@@ -151,6 +158,15 @@ export default function HomePage() {
           selectedObject={selectedObject}
         />
 
+        <CrossmatchSedPanel
+          coords={coords}
+          selectedObject={selectedObject}
+          onOpenPip={(overlaps) => {
+            setPipOverlaps(overlaps);
+            setPipOpen(true);
+          }}
+        />
+
         {stackOpen && (
           <ShiftStackPanel
             coords={coords}
@@ -167,6 +183,14 @@ export default function HomePage() {
           />
         )}
       </main>
+
+      <JwstPipWindow
+        open={pipOpen}
+        onClose={() => setPipOpen(false)}
+        overlaps={pipOverlaps}
+        coords={coords}
+      />
+
       <ShortcutsModal
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
