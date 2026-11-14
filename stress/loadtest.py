@@ -117,6 +117,12 @@ def req_ai_classify():
     return "POST", "/api/v1/ai/classify", {"json": {"flux_ujy": flux}}
 
 
+def req_ai_classify_coords():
+    # What the web UI sends: the engine fetches the spectrum from the backend itself (two services per call).
+    ra, dec = demo_or_random()
+    return "POST", "/api/v1/ai/classify", {"json": {"ra": ra, "dec": dec}}
+
+
 def req_crossmatch():
     ra, dec = random.choice(FIXTURE_TARGETS)
     return "GET", "/api/v1/missions/crossmatch", {"params": {"ra": ra, "dec": dec}}
@@ -131,7 +137,7 @@ def req_candidates():
 
 
 MIX = [(req_catalog, 15), (req_cutout, 25), (req_spectrum, 20), (req_difference, 8), (req_shift_stack, 6), (req_orbit, 5),
-       (req_ai_command, 8), (req_ai_classify, 5), (req_crossmatch, 4), (req_gcn, 2), (req_candidates, 2)]
+       (req_ai_command, 8), (req_ai_classify, 5), (req_ai_classify_coords, 6), (req_crossmatch, 4), (req_gcn, 2), (req_candidates, 2)]
 ALL = [f for f, _ in MIX]
 
 
@@ -245,6 +251,9 @@ async def p3_abuse():
                                                                "headers": {"content-type": "application/json"}}),
         ("huge_image_classify", "POST", "/api/v1/ai/classify", {"json": {"image": {"width": 512, "height": 512, "data": [0.5] * 262144}}}),
         ("long_command", "POST", "/api/v1/ai/command", {"json": {"message": "WISE " * 400}}),
+        ("classify_empty_body", "POST", "/api/v1/ai/classify", {"json": {}}),
+        ("classify_nan_coords", "POST", "/api/v1/ai/classify", {"content": b'{"ra": NaN, "dec": Infinity}', "headers": {"content-type": "application/json"}}),
+        ("classify_coords_plus_junk", "POST", "/api/v1/ai/classify", {"json": {"ra": 133.76, "dec": -7.24, "junk": "x" * 500_000}}),
         ("catalog_limit_500_wide", "GET", "/api/v1/catalog/search", {"params": {"ra": 270, "dec": -29, "radius_arcmin": 30, "include_field": True, "limit": 500}}),
         ("cutout_256_band", "GET", "/api/v1/sky/cutout", {"params": {"ra": 266.4, "dec": -28.9, "size_px": 256, "band": 101}}),
         ("cutout_fits_256", "GET", "/api/v1/sky/cutout", {"params": {"ra": 10, "dec": 10, "size_px": 256, "format": "fits"}}),

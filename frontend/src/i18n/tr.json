@@ -237,7 +237,15 @@
     "highAnomaly": "Yüksek Keşif Önceliği",
     "normalAnomaly": "Normal Alan / Katalog",
     "models": "Modeller",
-    "serviceUnavailable": "AI motoru bağlı değil — yanıt verene kadar sınıflandırma gösterilmez."
+    "serviceUnavailable": "AI motoruna şu anda ulaşılamıyor — yanıt verene kadar sınıflandırma gösterilmez.",
+    "classifying": "Sınıflandırılıyor…",
+    "retry": "Yeniden dene",
+    "requestRejected": "AI motoru bu isteği reddetti",
+    "noSpectrum": "Bu konum için kullanılabilir tayf yok — sınıflandırma yapılmadı.",
+    "sourceArchive": "Arşiv tayfı",
+    "sourceRequest": "Gönderilen tayf",
+    "snrMedian": "medyan S/N",
+    "lowSnr": "Tayfın medyan S/N değeri düşük: sınıf olasılıklarını temkinli yorumlayın."
   },
   "community": {
     "gcnLabel": "NASA GCN Canlı Uyarılar",
