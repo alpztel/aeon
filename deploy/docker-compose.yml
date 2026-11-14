@@ -12,14 +12,18 @@ services:
   ai-engine:
     build: ../ai-engine
     restart: unless-stopped
-    env_file: [.env]
+    env_file:
+      - path: .env
+        required: false   # secrets live only on the droplet; CI and fresh clones have none
     expose: ["8100"]
     profiles: ["full"]
 
   multi-mission-api:
     build: ../multi-mission-api
     restart: unless-stopped
-    env_file: [.env]
+    env_file:
+      - path: .env
+        required: false   # secrets live only on the droplet; CI and fresh clones have none
     expose: ["8200"]
     profiles: ["full"]
 
