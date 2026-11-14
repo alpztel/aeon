@@ -6,6 +6,8 @@ from __future__ import annotations
 import io
 import math
 import os
+import threading
+from collections import OrderedDict
 from functools import lru_cache
 
 import numpy as np
@@ -442,8 +444,14 @@ def _frame_size(max_offset_px: float, stamp: int) -> int:
     return size
 
 
-@lru_cache(maxsize=6)
-def _tracker_cached(ra: float, dec: float, n: int, fsize: int, scale: float, band: int | None, cadence: str):
+# Frame stacks are large (up to 640 x 640 x 64 frames); keep them under a byte budget per worker.
+_TRACKER_BUDGET = int(float(os.environ.get("AEON_TRACKER_CACHE_MB", "192")) * 1e6)
+_TRACKERS: "OrderedDict[tuple, tuple]" = OrderedDict()
+_TRACKER_LOCK = threading.Lock()
+
+
+def _tracker_build(key: tuple):
+    ra, dec, n, fsize, scale, band, cadence = key
     times = _frame_times(n, cadence, ra, dec)
     frames, w = _render_frames(ra, dec, times, fsize, scale, band)
     c = (fsize - 1) / 2.0
@@ -451,7 +459,24 @@ def _tracker_cached(ra: float, dec: float, n: int, fsize: int, scale: float, ban
 
 
 def _tracker(ra: float, dec: float, n: int, fsize: int, scale: float, band: int | None, cadence: str = "uniform"):
-    return _tracker_cached(round(float(ra), 7), round(float(dec), 7), int(n), int(fsize), float(scale), band, cadence)
+    key = (round(float(ra), 7), round(float(dec), 7), int(n), int(fsize), float(scale), band, cadence)
+    with _TRACKER_LOCK:
+        hit = _TRACKERS.get(key)
+        if hit is not None:
+            _TRACKERS.move_to_end(key)
+            return hit
+    value = _tracker_build(key)
+    size = value[0].res.nbytes
+    with _TRACKER_LOCK:
+        _TRACKERS[key] = value
+        _TRACKERS.move_to_end(key)
+        total = sum(v[0].res.nbytes for v in _TRACKERS.values())
+        while total > _TRACKER_BUDGET and len(_TRACKERS) > 1:
+            _, old = _TRACKERS.popitem(last=False)
+            total -= old[0].res.nbytes
+        if size > _TRACKER_BUDGET:          # never keep a single entry larger than the budget
+            _TRACKERS.pop(key, None)
+    return value
 
 
 def _stack_payload(r: dict, band: int | None, n_frames: int, times: np.ndarray, rate: float, pa: float,
@@ -657,11 +682,28 @@ def _check_orbit(r0, v0) -> None:
         raise RequestError(f"Perihelion {q:.2e} AU: the orbit hits the Sun.")
 
 
+MAX_ORBIT_SAMPLES = 10_000
+
+
 def simulate_orbit(req: dict) -> dict:
     horizons = sorted({float(h) for h in (req.get("horizons_years") or [1, 5, 10])})
     if not horizons or horizons[0] <= 0 or horizons[-1] > 1000:
         raise RequestError("horizons_years must be in (0, 1000].")
     spy = int(req.get("samples_per_year") or 24)
+    if horizons[-1] * spy > MAX_ORBIT_SAMPLES:
+        raise RequestError(f"horizons_years x samples_per_year must be <= {MAX_ORBIT_SAMPLES} "
+                           f"(asked {horizons[-1] * spy:.0f}); lower samples_per_year for long horizons.")
+    if req.get("target_id") and not (req.get("detections") or req.get("observation") or req.get("elements")):
+        return _target_orbit_cached(str(req["target_id"]), tuple(horizons), spy)
+    return _simulate_orbit(req, horizons, spy)
+
+
+@lru_cache(maxsize=64)
+def _target_orbit_cached(target_id: str, horizons: tuple, spy: int) -> dict:
+    return _simulate_orbit({"target_id": target_id}, list(horizons), spy)
+
+
+def _simulate_orbit(req: dict, horizons: list, spy: int) -> dict:
     obs, el = req.get("observation"), req.get("elements")
     tid = req.get("target_id")
     dets = req.get("detections")
@@ -698,3 +740,19 @@ def simulate_orbit(req: dict) -> dict:
     if obs:
         out["input"] = {"observation": obs}
     return out
+
+
+def is_heavy_analysis(method: str, req: dict) -> bool:
+    """Requests that take seconds of CPU: run them in the heavy-job pool, away from light traffic."""
+    if method == "blind-search":
+        return True
+    if method == "shift-stack":
+        return int(req.get("size_px", 64)) > 128 or int(req.get("n_frames", 24)) > 32
+    return False
+
+
+def is_heavy_orbit(req: dict) -> bool:
+    if req.get("detections"):
+        return True
+    hz = max([float(h) for h in (req.get("horizons_years") or [10])])
+    return hz * int(req.get("samples_per_year") or 24) > 2000

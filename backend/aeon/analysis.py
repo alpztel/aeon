@@ -134,7 +134,7 @@ class Tracker:
     """
 
     def __init__(self, residuals: np.ndarray, psf_sigma_px: float, cx: float, cy: float, seed: int = 7):
-        self.res = residuals
+        self.res = np.asarray(residuals, dtype=np.float32)   # half the memory; float32 is ample for stacking
         self.n = len(residuals)
         self.cx, self.cy = cx, cy
         sig = max(psf_sigma_px, 0.5)
