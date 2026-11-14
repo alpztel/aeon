@@ -970,7 +970,8 @@
               "field"
             ]
           }
-        }
+        },
+        "description": "Positions (ra, dec) are apparent geocentric positions at the requested epoch (proper motion + Earth parallax for objects with a known distance)."
       },
       "CatalogResponse": {
         "type": "object",
@@ -1231,7 +1232,7 @@
           "rate_arcsec_yr": {
             "type": "number",
             "default": 0,
-            "description": "shift-stack: apparent sky rate"
+            "description": "shift-stack: heliocentric angular rate (arcsec/yr). With distance_au set, the apparent (geocentric) track adds Earth's reflex parallax."
           },
           "pa_deg": {
             "type": "number",
@@ -1281,6 +1282,40 @@
             "default": 5,
             "minimum": 2,
             "maximum": 9
+          },
+          "distance_au": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "shift-stack: trial geocentric distance in AU for Earth-parallax digital tracking. null = no parallax (linear motion only, appropriate for objects beyond ~10^4 AU or parallax-corrected frames)."
+          },
+          "distance_range_au": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [
+              250,
+              1000
+            ],
+            "description": "blind-search: distance range searched on a grid uniform in parallax (1/d), spaced so the parallax mismatch stays below ~1.2 px. null = no distance axis (no parallax)."
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "uniform",
+              "spherex"
+            ],
+            "default": "uniform",
+            "description": "shift-stack / blind-search frame times: uniform over 2026, or only while the field's solar elongation is 90 +- 10 deg (SPHEREx-like visit windows)."
           }
         }
       },
@@ -1410,7 +1445,51 @@
             "description": "Reference epoch (decimal year) at which the stacked image is registered"
           },
           "motion_frame": {
-            "type": "string"
+            "type": "string",
+            "description": "'geocentric (Earth parallax tracked)' when distance_au is set, otherwise 'heliocentric (no parallax)'"
+          },
+          "distance_au": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "track": {
+            "type": "array",
+            "description": "Predicted apparent (geocentric) position of the hypothesis at each frame time",
+            "items": {
+              "type": "object",
+              "required": [
+                "t",
+                "ra",
+                "dec"
+              ],
+              "properties": {
+                "t": {
+                  "type": "number"
+                },
+                "ra": {
+                  "type": "number"
+                },
+                "dec": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "uniform",
+              "spherex"
+            ]
+          },
+          "astrometry": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Astrometry"
+            },
+            "description": "Independent positions measured on sub-stacks of consecutive frames along the track; usable as orbit/simulate detections."
           }
         }
       },
@@ -1445,7 +1524,7 @@
                 "type": "number"
               }
             },
-            "description": "S/N, indexed [rate_index][pa_index]"
+            "description": "S/N indexed [rate_index][pa_index], at the best distance"
           },
           "best": {
             "$ref": "#/components/schemas/ShiftStackResult"
@@ -1479,12 +1558,35 @@
                 }
               }
             }
+          },
+          "distances_au": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number"
+            },
+            "description": "Distance grid searched (null when no distance axis)"
+          },
+          "distance_profile": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number"
+            },
+            "description": "Best S/N over the rate x PA grid at each distance"
+          },
+          "n_hypotheses": {
+            "type": "integer"
           }
         }
       },
       "OrbitRequest": {
         "type": "object",
-        "description": "Either `elements` or `observation` must be given.",
+        "description": "Exactly one of detections, elements, observation or target_id.",
         "properties": {
           "elements": {
             "type": "object",
@@ -1572,6 +1674,15 @@
             "default": 24,
             "minimum": 1,
             "maximum": 365
+          },
+          "detections": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 500,
+            "items": {
+              "$ref": "#/components/schemas/Astrometry"
+            },
+            "description": "Geocentric astrometry; a heliocentric state is fitted by least squares (Earth parallax included) and forecast with REBOUND."
           }
         }
       },
@@ -1679,6 +1790,47 @@
           "input": {
             "type": "object",
             "additionalProperties": true
+          },
+          "fit": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Orbit-determination summary when detections were given",
+            "properties": {
+              "distance_au": {
+                "type": "number"
+              },
+              "distance_err_au": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "rate_arcsec_yr": {
+                "type": "number"
+              },
+              "rate_err_arcsec_yr": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "pa_deg": {
+                "type": "number"
+              },
+              "rms_residual_arcsec": {
+                "type": "number"
+              },
+              "reduced_chi2": {
+                "type": "number"
+              },
+              "converged": {
+                "type": "boolean"
+              },
+              "elements": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
           }
         }
       },
@@ -1780,6 +1932,37 @@
           },
           "notes": {
             "type": "string"
+          }
+        }
+      },
+      "Astrometry": {
+        "type": "object",
+        "required": [
+          "t",
+          "ra",
+          "dec",
+          "sigma_arcsec"
+        ],
+        "properties": {
+          "t": {
+            "type": "number",
+            "description": "decimal year"
+          },
+          "ra": {
+            "type": "number"
+          },
+          "dec": {
+            "type": "number"
+          },
+          "sigma_arcsec": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "snr": {
+            "type": "number"
+          },
+          "n_frames": {
+            "type": "integer"
           }
         }
       }
