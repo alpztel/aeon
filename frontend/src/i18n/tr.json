@@ -179,6 +179,20 @@
     "normalAnomaly": "Normal Alan / Katalog",
     "models": "Modeller"
   },
+  "community": {
+    "gcnLabel": "NASA GCN Canlı Uyarılar",
+    "poolTitle": "Yurttaş Bilimi Aday Havuzu & Liderlik Tablosu",
+    "sortVotes": "En Çok Oy Alan",
+    "sortAnomaly": "En Yüksek Anomali",
+    "sortRecent": "En Yeni",
+    "submitCurrent": "Mevcut Hedefi Gönder",
+    "submitting": "Gönderiliyor...",
+    "observerPlaceholder": "Gözlemci adı / rumuz",
+    "notesPlaceholder": "Keşif notları (ör. dipol S/N, CH4 derinliği)...",
+    "vote": "Oy Ver",
+    "flyTo": "İncele",
+    "issueOpened": "GitHub Issue"
+  },
   "classes": {
     "cold_brown_dwarf": "Soğuk Kahverengi Cüce",
     "planet_x_candidate": "Planet X Adayı",

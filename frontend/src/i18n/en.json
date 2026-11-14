@@ -179,6 +179,20 @@
     "normalAnomaly": "Nominal Field / Catalog",
     "models": "Models"
   },
+  "community": {
+    "gcnLabel": "NASA GCN Live Notices",
+    "poolTitle": "Citizen-Science Candidate Pool & Leaderboard",
+    "sortVotes": "Top Voted",
+    "sortAnomaly": "Highest Anomaly",
+    "sortRecent": "Most Recent",
+    "submitCurrent": "Submit Current Target",
+    "submitting": "Submitting...",
+    "observerPlaceholder": "Observer name / callsign",
+    "notesPlaceholder": "Discovery notes (e.g. dipole S/N, CH4 depth)...",
+    "vote": "Upvote",
+    "flyTo": "Inspect",
+    "issueOpened": "GitHub Issue"
+  },
   "classes": {
     "cold_brown_dwarf": "Cold Brown Dwarf",
     "planet_x_candidate": "Planet X Candidate",

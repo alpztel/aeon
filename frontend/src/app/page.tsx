@@ -3,9 +3,11 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Layers, Orbit, Radar, Sparkles } from "lucide-react";
 import { AstroLlmModal } from "@/components/AstroLlmModal";
+import { CandidatePoolPanel } from "@/components/CandidatePoolPanel";
 import { ClassificationCard } from "@/components/ClassificationCard";
 import { CrossmatchSedPanel } from "@/components/CrossmatchSedPanel";
 import { DifferencePanel } from "@/components/DifferencePanel";
+import { GcnTicker } from "@/components/GcnTicker";
 import { Header } from "@/components/Header";
 import { JwstPipWindow } from "@/components/JwstPipWindow";
 import { ShiftStackPanel } from "@/components/ShiftStackPanel";
@@ -105,7 +107,12 @@ export default function HomePage() {
         const p = act.params ?? {};
         switch (act.type) {
           case "FLY_TO": {
-            const q = typeof p.target_id === "string" ? p.target_id : typeof p.q === "string" ? p.q : null;
+            const q =
+              typeof p.target_id === "string"
+                ? p.target_id
+                : typeof p.q === "string"
+                  ? p.q
+                  : null;
             const ra = typeof p.ra === "number" ? p.ra : undefined;
             const dec = typeof p.dec === "number" ? p.dec : undefined;
             if (q) {
@@ -173,6 +180,12 @@ export default function HomePage() {
         dataMode={dataMode}
         onOpenShortcuts={() => setShortcutsOpen(true)}
         onOpenCmdPalette={() => setCmdOpen(true)}
+      />
+      <GcnTicker
+        onFlyTo={(ra, dec) => {
+          setSelectedObject(null);
+          setCoords({ ra, dec });
+        }}
       />
       <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-5 px-4 py-5 sm:px-6">
         <SkyMapPanel
@@ -276,6 +289,15 @@ export default function HomePage() {
             astrometry={astrometry}
           />
         )}
+
+        <CandidatePoolPanel
+          coords={coords}
+          selectedObject={selectedObject}
+          onInspectCoords={(ra, dec) => {
+            setSelectedObject(null);
+            setCoords({ ra, dec });
+          }}
+        />
       </main>
 
       <JwstPipWindow

@@ -16,12 +16,15 @@ export type AstrometryPoint = components["schemas"]["Astrometry"];
 export type OrbitRequest = components["schemas"]["OrbitRequest"];
 export type OrbitResult = components["schemas"]["OrbitResult"];
 export type UiAction = components["schemas"]["UiAction"];
+export type Candidate = components["schemas"]["Candidate"];
 export type AiCommandResponse =
   operations["aiCommand"]["responses"]["200"]["content"]["application/json"];
 export type AiClassifyResponse =
   operations["aiClassify"]["responses"]["200"]["content"]["application/json"];
 export type CrossmatchResult =
   operations["missionsCrossmatch"]["responses"]["200"]["content"]["application/json"];
+export type GcnAlert =
+  operations["gcnAlerts"]["responses"]["200"]["content"]["application/json"][number];
 
 export type DataMode = "fits_archive" | "physical_model" | "offline_cache";
 
@@ -509,7 +512,6 @@ export async function sendAiCommand(params: {
     });
     return { data, fromCache: false };
   } catch {
-    // Rule-based bilingual fallback parser when ai-engine is offline
     const lower = params.message.toLowerCase();
     const actions: UiAction[] = [];
 
@@ -682,5 +684,176 @@ export async function classifyTarget(params: {
         },
       },
     };
+  }
+}
+
+const FALLBACK_GCN_ALERTS: GcnAlert[] = [
+  {
+    id: "GCN-2026-40112",
+    kind: "GRB",
+    time_utc: "2026-04-19T14:22:10Z",
+    ra: 133.82,
+    dec: -7.21,
+    error_radius_deg: 0.08,
+    title: "Fermi-GBM & Swift-BAT GRB 260419A Localization (Archived Notice)",
+    url: "https://gcn.nasa.gov/circulars",
+  },
+  {
+    id: "GCN-2026-40098",
+    kind: "Neutrino",
+    time_utc: "2026-04-18T21:05:44Z",
+    ra: 77.04,
+    dec: 30.38,
+    error_radius_deg: 0.45,
+    title: "IceCube-260418A High-Energy Track Alert near Auriga (Archived Notice)",
+    url: "https://gcn.nasa.gov/circulars",
+  },
+  {
+    id: "GCN-2026-40071",
+    kind: "SN",
+    time_utc: "2026-04-17T08:14:00Z",
+    ra: 51.18,
+    dec: 14.82,
+    error_radius_deg: 0.02,
+    title: "ZTF26aakq Transient Counterpart Candidate Follow-up (Archived Notice)",
+    url: "https://gcn.nasa.gov/circulars",
+  },
+];
+
+export async function getGcnAlerts(
+  limit = 10
+): Promise<{ data: GcnAlert[]; fromCache: boolean }> {
+  try {
+    const data = await fetchJson<GcnAlert[]>(`/api/v1/alerts/gcn?limit=${limit}`);
+    return { data, fromCache: false };
+  } catch {
+    return { data: FALLBACK_GCN_ALERTS.slice(0, limit), fromCache: true };
+  }
+}
+
+const CANDIDATES_STORAGE_KEY = "aeon_candidates_pool";
+
+const INITIAL_CANDIDATES: Candidate[] = [
+  {
+    id: "cand-wise-0855",
+    ra: 133.79513,
+    dec: -7.24514,
+    object_class: "cold_brown_dwarf",
+    anomaly_score: 0.88,
+    snr: 18.4,
+    votes: 14,
+    submitted_by: "IMU-AstroTeam",
+    created_utc: "2026-04-19T10:00:00Z",
+    notes: "High proper-motion (8.1 arcsec/yr) Y-dwarf dipole + deep 3.3 um CH4 band.",
+  },
+  {
+    id: "cand-px-2026-09",
+    ra: 51.2,
+    dec: 14.8,
+    object_class: "planet_x_candidate",
+    anomaly_score: 0.96,
+    snr: 7.4,
+    votes: 23,
+    submitted_by: "AEON-ShiftStack-Bot",
+    created_utc: "2026-04-19T11:30:00Z",
+    github_issue_url: "https://github.com/alpztel/aeon/issues",
+    notes: "[SYNTHETIC TEST] Recovered at 110 arcsec/yr, PA 62 deg, d = 520 AU.",
+  },
+  {
+    id: "cand-rw-aur",
+    ra: 76.9564,
+    dec: 30.4013,
+    object_class: "young_variable_star",
+    anomaly_score: 0.72,
+    snr: 42.1,
+    votes: 9,
+    submitted_by: "T-Tauri-Patrol",
+    created_utc: "2026-04-18T19:15:00Z",
+    notes: "Strong 102-band continuum variability across 2026-Q1..Q4.",
+  },
+];
+
+function loadLocalCandidates(): Candidate[] {
+  try {
+    const raw = window.sessionStorage.getItem(CANDIDATES_STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as Candidate[];
+  } catch {
+    // Ignore storage error
+  }
+  return INITIAL_CANDIDATES;
+}
+
+function saveLocalCandidates(list: Candidate[]): void {
+  try {
+    window.sessionStorage.setItem(CANDIDATES_STORAGE_KEY, JSON.stringify(list));
+  } catch {
+    // Ignore storage error
+  }
+}
+
+export async function getCandidates(
+  sort: "votes" | "recent" | "anomaly" = "votes",
+  limit = 20
+): Promise<{ data: Candidate[]; fromCache: boolean }> {
+  try {
+    const data = await fetchJson<Candidate[]>(
+      `/api/v1/candidates?sort=${sort}&limit=${limit}`
+    );
+    return { data, fromCache: false };
+  } catch {
+    const list = [...loadLocalCandidates()];
+    if (sort === "votes") {
+      list.sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
+    } else if (sort === "anomaly") {
+      list.sort((a, b) => (b.anomaly_score ?? 0) - (a.anomaly_score ?? 0));
+    } else {
+      list.sort((a, b) =>
+        String(b.created_utc ?? "").localeCompare(String(a.created_utc ?? ""))
+      );
+    }
+    return { data: list.slice(0, limit), fromCache: true };
+  }
+}
+
+export async function submitOrVoteCandidate(body: {
+  action: "submit" | "vote";
+  candidate_id?: string;
+  candidate?: Candidate;
+}): Promise<{ data: Candidate; fromCache: boolean }> {
+  try {
+    const data = await fetchJson<Candidate>("/api/v1/candidates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { data, fromCache: false };
+  } catch {
+    const list = [...loadLocalCandidates()];
+    if (body.action === "vote" && body.candidate_id) {
+      const idx = list.findIndex((c) => c.id === body.candidate_id);
+      if (idx >= 0) {
+        const updated: Candidate = {
+          ...list[idx],
+          votes: (list[idx].votes ?? 0) + 1,
+        };
+        list[idx] = updated;
+        saveLocalCandidates(list);
+        return { data: updated, fromCache: true };
+      }
+    }
+
+    if (body.action === "submit" && body.candidate) {
+      const created: Candidate = {
+        ...body.candidate,
+        id: body.candidate.id ?? `cand-${Date.now()}`,
+        votes: body.candidate.votes ?? 1,
+        created_utc: new Date().toISOString(),
+      };
+      list.unshift(created);
+      saveLocalCandidates(list);
+      return { data: created, fromCache: true };
+    }
+
+    throw new ApiError("Candidate operation failed", 400);
   }
 }
