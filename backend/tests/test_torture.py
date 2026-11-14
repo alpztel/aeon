@@ -148,3 +148,13 @@ def test_deterministic_under_concurrency(client):
     with ThreadPoolExecutor(max_workers=8) as ex:
         bodies = list(ex.map(lambda _: client.get("/api/v1/spectrum", params=q).text, range(16)))
     assert len(set(bodies)) == 1
+
+
+@pytest.mark.parametrize("path", ["/api/v1/analysis/difference", "/api/v1/analysis/shift-stack",
+                                  "/api/v1/analysis/blind-search", "/api/v1/orbit/simulate"])
+@pytest.mark.parametrize("raw", ['{"ra": NaN, "dec": 1}', '{"ra": Infinity, "dec": -Infinity}', '{"ra": 1e999, "dec": 1}'])
+def test_non_finite_numbers_in_a_json_body_are_422_not_500(client, path, raw):
+    """The 422 echoes the rejected input; a NaN in it used to make the error response itself fail."""
+    r = client.post(path, content=raw, headers={"Content-Type": "application/json"})
+    assert r.status_code == 422, r.text[:200]
+    assert "NaN" not in r.text and "Infinity" not in r.text      # strict JSON: non-finite input is echoed as text
