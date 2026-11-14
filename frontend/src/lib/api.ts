@@ -6,6 +6,12 @@ export type ObjectClass = components["schemas"]["ObjectClass"];
 export type CatalogObject = components["schemas"]["CatalogObject"];
 export type CatalogResponse = components["schemas"]["CatalogResponse"];
 export type SkyImage = components["schemas"]["Image"];
+export type SpectrumResponse = components["schemas"]["Spectrum"];
+export type AnalysisRequest = components["schemas"]["AnalysisRequest"];
+export type DifferenceResult = components["schemas"]["DifferenceResult"];
+export type ShiftStackResult = components["schemas"]["ShiftStackResult"];
+export type BlindSearchResult = components["schemas"]["BlindSearchResult"];
+export type Detection = components["schemas"]["Detection"];
 
 export type DataMode = "fits_archive" | "physical_model" | "offline_cache";
 
@@ -75,6 +81,18 @@ async function fetchDemoCache<T>(filename: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+function matchDemoId(ra: number, dec: number): string | null {
+  const candidates = [
+    { id: "wise-0855", ra: 133.79513, dec: -7.24514 },
+    { id: "rw-aur", ra: 76.9564, dec: 30.4013 },
+    { id: "px-2026-09", ra: 51.2, dec: 14.8 },
+  ];
+  const match = candidates.find(
+    (c) => Math.abs(c.ra - ra) < 0.25 && Math.abs(c.dec - dec) < 0.25
+  );
+  return match?.id ?? null;
 }
 
 export async function getHealth(): Promise<{ health: HealthResponse; mode: DataMode }> {
@@ -170,19 +188,131 @@ export async function getSkyCutout(
     return { data, fromCache: false };
   } catch (err) {
     const epoch = params.epoch ?? "2026-Q1";
-    const candidates = [
-      { id: "wise-0855", ra: 133.79513, dec: -7.24514 },
-      { id: "rw-aur", ra: 76.9564, dec: 30.4013 },
-      { id: "px-2026-09", ra: 51.2, dec: 14.8 },
-    ];
-    const match = candidates.find(
-      (c) => Math.abs(c.ra - params.ra) < 0.25 && Math.abs(c.dec - params.dec) < 0.25
-    );
-    if (match) {
-      const cached = await fetchDemoCache<SkyImage>(`cutout-${match.id}-${epoch}.json`);
+    const id = matchDemoId(params.ra, params.dec);
+    if (id) {
+      const cached = await fetchDemoCache<SkyImage>(`cutout-${id}-${epoch}.json`);
       if (cached) {
         return { data: cached, fromCache: true };
       }
+    }
+    throw err;
+  }
+}
+
+export interface SpectrumParams {
+  ra: number;
+  dec: number;
+  epoch?: Epoch;
+  aperture_arcsec?: number;
+}
+
+export async function getSpectrum(
+  params: SpectrumParams
+): Promise<{ data: SpectrumResponse; fromCache: boolean }> {
+  const qs = new URLSearchParams({
+    ra: String(params.ra),
+    dec: String(params.dec),
+    epoch: params.epoch ?? "2026-Q1",
+  });
+  if (params.aperture_arcsec !== undefined) {
+    qs.set("aperture_arcsec", String(params.aperture_arcsec));
+  }
+
+  try {
+    const data = await fetchJson<SpectrumResponse>(`/api/v1/spectrum?${qs.toString()}`);
+    return { data, fromCache: false };
+  } catch (err) {
+    const epoch = params.epoch ?? "2026-Q1";
+    const id = matchDemoId(params.ra, params.dec);
+    if (id) {
+      const cached =
+        (await fetchDemoCache<SpectrumResponse>(`spectrum-${id}-${epoch}.json`)) ??
+        (await fetchDemoCache<SpectrumResponse>(`spectrum-${id}.json`));
+      if (cached) {
+        return { data: cached, fromCache: true };
+      }
+    }
+    throw err;
+  }
+}
+
+function buildAnalysisBody(partial: Partial<AnalysisRequest> & { ra: number; dec: number }): AnalysisRequest {
+  return {
+    ra: partial.ra,
+    dec: partial.dec,
+    size_px: partial.size_px ?? 64,
+    pixel_scale_arcsec: partial.pixel_scale_arcsec ?? 6.2,
+    band: partial.band ?? null,
+    epoch_1: partial.epoch_1 ?? "2026-Q1",
+    epoch_2: partial.epoch_2 ?? "2026-Q3",
+    rate_arcsec_yr: partial.rate_arcsec_yr ?? 0,
+    pa_deg: partial.pa_deg ?? 0,
+    n_frames: partial.n_frames ?? 24,
+    combine: partial.combine ?? "mean",
+    rate_range_arcsec_yr: partial.rate_range_arcsec_yr ?? [20, 200],
+    pa_range_deg: partial.pa_range_deg ?? [30, 90],
+    grid: partial.grid ?? 5,
+  };
+}
+
+export async function runDifference(
+  params: Partial<AnalysisRequest> & { ra: number; dec: number }
+): Promise<{ data: DifferenceResult; fromCache: boolean }> {
+  const body = buildAnalysisBody(params);
+  try {
+    const data = await fetchJson<DifferenceResult>("/api/v1/analysis/difference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { data, fromCache: false };
+  } catch (err) {
+    const id = matchDemoId(params.ra, params.dec);
+    if (id) {
+      const cached = await fetchDemoCache<DifferenceResult>(`diff-${id}.json`);
+      if (cached) return { data: cached, fromCache: true };
+    }
+    throw err;
+  }
+}
+
+export async function runShiftStack(
+  params: Partial<AnalysisRequest> & { ra: number; dec: number }
+): Promise<{ data: ShiftStackResult; fromCache: boolean }> {
+  const body = buildAnalysisBody(params);
+  try {
+    const data = await fetchJson<ShiftStackResult>("/api/v1/analysis/shift-stack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { data, fromCache: false };
+  } catch (err) {
+    const id = matchDemoId(params.ra, params.dec);
+    if (id) {
+      const cached = await fetchDemoCache<ShiftStackResult>(`stack-${id}.json`);
+      if (cached) return { data: cached, fromCache: true };
+    }
+    throw err;
+  }
+}
+
+export async function runBlindSearch(
+  params: Partial<AnalysisRequest> & { ra: number; dec: number }
+): Promise<{ data: BlindSearchResult; fromCache: boolean }> {
+  const body = buildAnalysisBody(params);
+  try {
+    const data = await fetchJson<BlindSearchResult>("/api/v1/analysis/blind-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return { data, fromCache: false };
+  } catch (err) {
+    const id = matchDemoId(params.ra, params.dec);
+    if (id) {
+      const cached = await fetchDemoCache<BlindSearchResult>(`blind-${id}.json`);
+      if (cached) return { data: cached, fromCache: true };
     }
     throw err;
   }

@@ -71,6 +71,13 @@ export function getColormapLut(name: ColormapName): Uint8ClampedArray {
   return lut;
 }
 
+export interface DetectionOverlay {
+  x?: number;
+  y?: number;
+  snr?: number;
+  sign?: "positive" | "negative";
+}
+
 /**
  * Renders a row-major sky array (row 0 = south edge, col 0 = east edge)
  * onto an HTMLCanvasElement with north up and east left.
@@ -80,7 +87,8 @@ export function renderSkyArrayToCanvas(
   data: number[],
   width: number,
   height: number,
-  colormap: ColormapName
+  colormap: ColormapName,
+  options?: { symmetric?: boolean; detections?: DetectionOverlay[] }
 ): void {
   if (width <= 0 || height <= 0 || data.length < width * height) return;
 
@@ -89,29 +97,42 @@ export function renderSkyArrayToCanvas(
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  // Compute robust percentile bounds (p2 .. p99.5) for astronomical dynamic range
   const sorted = [...data].filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
   if (sorted.length === 0) return;
 
-  const pLow = sorted[Math.floor(sorted.length * 0.02)] ?? sorted[0];
-  const pHigh = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.995))] ?? sorted[sorted.length - 1];
-  const span = Math.max(pHigh - pLow, 1e-6);
+  let pLow = sorted[Math.floor(sorted.length * 0.02)] ?? sorted[0];
+  let pHigh = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.995))] ?? sorted[sorted.length - 1];
 
+  if (options?.symmetric) {
+    const maxAbs = Math.max(
+      Math.abs(sorted[Math.floor(sorted.length * 0.005)] ?? pLow),
+      Math.abs(sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.995))] ?? pHigh),
+      1e-6
+    );
+    pLow = -maxAbs;
+    pHigh = maxAbs;
+  }
+
+  const span = Math.max(pHigh - pLow, 1e-6);
   const lut = getColormapLut(colormap);
   const imgData = ctx.createImageData(width, height);
   const pixels = imgData.data;
 
-  // Asinh stretch factor
   const asinhScale = 3.0;
   const normMax = Math.asinh(asinhScale);
 
   for (let row = 0; row < height; row++) {
-    // Sky convention: row 0 = south (bottom of canvas), so canvasY = height - 1 - row
     const canvasY = height - 1 - row;
     for (let col = 0; col < width; col++) {
       const val = data[row * width + col];
-      const linear = Math.max(0, Math.min(1, (val - pLow) / span));
-      const stretched = Math.asinh(linear * asinhScale) / normMax;
+      let stretched: number;
+      if (options?.symmetric) {
+        const signed = Math.max(-1, Math.min(1, val / (span / 2)));
+        stretched = 0.5 + 0.5 * (Math.asinh(signed * asinhScale) / normMax);
+      } else {
+        const linear = Math.max(0, Math.min(1, (val - pLow) / span));
+        stretched = Math.asinh(linear * asinhScale) / normMax;
+      }
       const idx = Math.max(0, Math.min(255, Math.round(stretched * 255)));
 
       const outOffset = (canvasY * width + col) * 4;
@@ -123,4 +144,19 @@ export function renderSkyArrayToCanvas(
   }
 
   ctx.putImageData(imgData, 0, 0);
+
+  if (options?.detections && options.detections.length > 0) {
+    for (const det of options.detections) {
+      if (det.x === undefined || det.y === undefined) continue;
+      const cx = det.x;
+      const cy = height - 1 - det.y;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4.2, 0, Math.PI * 2);
+      ctx.lineWidth = 1.25;
+      ctx.strokeStyle = det.sign === "negative" ? "#f43f5e" : "#10b981";
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
 }

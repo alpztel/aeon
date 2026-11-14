@@ -1,9 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { Layers, Radar } from "lucide-react";
+import { DifferencePanel } from "@/components/DifferencePanel";
 import { Header } from "@/components/Header";
+import { ShiftStackPanel } from "@/components/ShiftStackPanel";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { SkyMapPanel } from "@/components/SkyMapPanel";
+import { SpectrumPanel } from "@/components/SpectrumPanel";
+import { useI18n } from "@/i18n/context";
 import {
   getHealth,
   searchCatalog,
@@ -13,8 +18,11 @@ import {
 } from "@/lib/api";
 
 export default function HomePage() {
+  const { dict } = useI18n();
   const [dataMode, setDataMode] = useState<DataMode | "checking">("checking");
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(true);
+  const [stackOpen, setStackOpen] = useState(true);
   const [epoch, setEpoch] = useState<Epoch>("2026-Q1");
   const [coords, setCoords] = useState<{ ra: number; dec: number }>({
     ra: 133.79513,
@@ -35,9 +43,7 @@ export default function HomePage() {
           setCoords({ ra: hit.ra, dec: hit.dec });
         }
       })
-      .catch(() => {
-        // Initial catalog load can fail if API & cache are both absent; SkyMapPanel handles fallback
-      });
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -49,12 +55,19 @@ export default function HomePage() {
       const isInput =
         target?.tagName === "INPUT" ||
         target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
         target?.isContentEditable;
       if (isInput) return;
 
       if (e.key === "?") {
         e.preventDefault();
         setShortcutsOpen((prev) => !prev);
+      } else if (e.key === "d" || e.key === "D") {
+        e.preventDefault();
+        setDiffOpen((prev) => !prev);
+      } else if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        setStackOpen((prev) => !prev);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -78,6 +91,49 @@ export default function HomePage() {
           onEpochChange={setEpoch}
           coords={coords}
         />
+
+        {/* Mode Toolbar */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDiffOpen((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+              diffOpen
+                ? "border-amber-400/50 bg-amber-500/20 text-amber-200"
+                : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            <span>{dict.diff.toggle}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStackOpen((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+              stackOpen
+                ? "border-violet-400/50 bg-violet-500/20 text-violet-200"
+                : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            <Radar className="h-3.5 w-3.5" />
+            <span>{dict.stack.toggle}</span>
+          </button>
+        </div>
+
+        {diffOpen && (
+          <DifferencePanel coords={coords} selectedObject={selectedObject} />
+        )}
+
+        <SpectrumPanel
+          coords={coords}
+          epoch={epoch}
+          selectedObject={selectedObject}
+        />
+
+        {stackOpen && (
+          <ShiftStackPanel coords={coords} selectedObject={selectedObject} />
+        )}
       </main>
       <ShortcutsModal
         open={shortcutsOpen}
