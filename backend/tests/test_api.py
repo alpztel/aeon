@@ -154,3 +154,51 @@ def test_orbit_elements_jupiter_period(client):
 def test_orbit_rejects_star(client):
     assert client.post("/api/v1/orbit/simulate", json={"target_id": "wise-0855"}).status_code == 422
     assert client.post("/api/v1/orbit/simulate", json={}).status_code == 422
+
+
+def test_discovery_to_orbit_chain(client):
+    # Shift-and-stack -> measured group astrometry -> least-squares orbit -> REBOUND forecast.
+    stack = client.post("/api/v1/analysis/shift-stack", json={
+        "ra": PX[0], "dec": PX[1], "rate_arcsec_yr": 110, "pa_deg": 62, "distance_au": 520}).json()
+    astro = stack["astrometry"]
+    assert len(astro) >= 3 and all(a["sigma_arcsec"] > 0 and a["snr"] >= 3 for a in astro)
+    body = client.post("/api/v1/orbit/simulate", json={"detections": astro}).json()
+    assert_schema(body, "OrbitResult")
+    fit = body["fit"]
+    assert fit["converged"] and abs(fit["distance_au"] - 520) / 520 < 0.02
+    assert abs(fit["rate_arcsec_yr"] - 110) < 10 and abs(fit["pa_deg"] - 62) < 5
+    assert fit["distance_err_au"] < 10 and fit["rms_residual_arcsec"] < 3
+    assert body["engine"].startswith("rebound")
+
+
+def test_orbit_fit_needs_three_detections(client):
+    r = client.post("/api/v1/orbit/simulate", json={"detections": [{"t": 2026.1, "ra": 10, "dec": 0}, {"t": 2026.2, "ra": 10.01, "dec": 0}]})
+    assert r.status_code == 422
+
+
+def test_gzip_and_server_timing(client):
+    r = client.get("/api/v1/sky/cutout", params={"ra": 10.0, "dec": 20.0, "size_px": 64}, headers={"Accept-Encoding": "gzip"})
+    assert r.headers.get("content-encoding") == "gzip"
+    assert r.headers["server-timing"].startswith("app;dur=")
+
+
+def test_stack_cache_makes_repeat_fast(client):
+    import time
+
+    q = {"ra": 33.3, "dec": -5.5, "rate_arcsec_yr": 50, "pa_deg": 10, "distance_au": 800}
+    t0 = time.perf_counter()
+    client.post("/api/v1/analysis/shift-stack", json=q)
+    first = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    client.post("/api/v1/analysis/shift-stack", json={**q, "pa_deg": 12})     # slider move, same frames
+    assert time.perf_counter() - t0 < max(0.5 * first, 0.3)
+
+
+def test_spherex_cadence_tracking(client):
+    body = client.post("/api/v1/analysis/shift-stack", json={
+        "ra": PX[0], "dec": PX[1], "rate_arcsec_yr": 110, "pa_deg": 62, "distance_au": 520, "cadence": "spherex"}).json()
+    assert_schema(body, "ShiftStackResult")
+    t = sorted(body["frame_times"])
+    gaps = [b - a for a, b in zip(t, t[1:])]
+    assert max(gaps) > 0.3                       # two visit windows half a year apart
+    assert body["cadence"] == "spherex" and body["snr_stacked"] > 5
