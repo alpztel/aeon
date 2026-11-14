@@ -73,7 +73,15 @@ class Observation(BaseModel):
     radial_velocity_km_s: float = 0.0
 
 
+class Detection(BaseModel):
+    t: float = Field(ge=1900, le=2200, description="decimal year")
+    ra: float = Field(ge=0, le=360)
+    dec: float = Field(ge=-90, le=90)
+    sigma_arcsec: float = Field(1.0, gt=0, le=3600)
+
+
 class OrbitRequest(BaseModel):
+    detections: list[Detection] | None = Field(None, min_length=3, max_length=500)
     elements: Elements | None = None
     observation: Observation | None = None
     target_id: str | None = None
@@ -82,8 +90,8 @@ class OrbitRequest(BaseModel):
 
     @model_validator(mode="after")
     def _one_source(self):
-        if not (self.elements or self.observation or self.target_id):
-            raise ValueError("Provide elements, observation or target_id")
+        if not (self.elements or self.observation or self.target_id or self.detections):
+            raise ValueError("Provide detections, elements, observation or target_id")
         return self
 
 

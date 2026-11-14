@@ -12,7 +12,7 @@ import numpy as np
 from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-from . import __version__, analysis, bands, ephem, orbit, photometry, sky
+from . import __version__, analysis, bands, ephem, orbit, orbit_fit, photometry, sky
 from .archive import FitsArchive
 from .catalog import ENTRIES, ENTRIES_BY_ID, CatalogEntry, get_catalog, position_at
 from .epochs import DEFAULT_EPOCH, SURVEY_END, SURVEY_START, epoch_year
@@ -256,6 +256,7 @@ def _stack_payload(r: dict, band: int | None, n_frames: int, times: np.ndarray, 
         "track": [{"t": round(float(t), 5), "ra": round(float(a), 7), "dec": round(float(b), 7)}
                   for t, a, b in zip(times, tra, tdec)],
         "peak": r["peak"],
+        "astrometry": r.get("astrometry", []),
     }
 
 
@@ -392,6 +393,16 @@ def simulate_orbit(req: dict) -> dict:
     spy = int(req.get("samples_per_year") or 24)
     obs, el = req.get("observation"), req.get("elements")
     tid = req.get("target_id")
+    dets = req.get("detections")
+    if dets:
+        try:
+            f = orbit_fit.fit(dets)
+        except ValueError as exc:
+            raise RequestError(str(exc)) from exc
+        out = orbit.simulate(f["r0_ecl_au"], f["v0_ecl_au_yr"], f["t0"], horizons, spy)
+        out["fit"] = f["summary"]
+        out["input"] = {"detections": len(dets)}
+        return out
     if tid:
         e = ENTRIES_BY_ID.get(tid)
         if e is None:

@@ -154,3 +154,23 @@ def test_orbit_elements_jupiter_period(client):
 def test_orbit_rejects_star(client):
     assert client.post("/api/v1/orbit/simulate", json={"target_id": "wise-0855"}).status_code == 422
     assert client.post("/api/v1/orbit/simulate", json={}).status_code == 422
+
+
+def test_discovery_to_orbit_chain(client):
+    # Shift-and-stack -> measured group astrometry -> least-squares orbit -> REBOUND forecast.
+    stack = client.post("/api/v1/analysis/shift-stack", json={
+        "ra": PX[0], "dec": PX[1], "rate_arcsec_yr": 110, "pa_deg": 62, "distance_au": 520}).json()
+    astro = stack["astrometry"]
+    assert len(astro) >= 3 and all(a["sigma_arcsec"] > 0 and a["snr"] >= 3 for a in astro)
+    body = client.post("/api/v1/orbit/simulate", json={"detections": astro}).json()
+    assert_schema(body, "OrbitResult")
+    fit = body["fit"]
+    assert fit["converged"] and abs(fit["distance_au"] - 520) / 520 < 0.02
+    assert abs(fit["rate_arcsec_yr"] - 110) < 10 and abs(fit["pa_deg"] - 62) < 5
+    assert fit["distance_err_au"] < 10 and fit["rms_residual_arcsec"] < 3
+    assert body["engine"].startswith("rebound")
+
+
+def test_orbit_fit_needs_three_detections(client):
+    r = client.post("/api/v1/orbit/simulate", json={"detections": [{"t": 2026.1, "ra": 10, "dec": 0}, {"t": 2026.2, "ra": 10.01, "dec": 0}]})
+    assert r.status_code == 422

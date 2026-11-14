@@ -131,7 +131,11 @@ class Tracker:
         single = ndimage.convolve(residuals[0], self.kernel, mode="nearest")
         _, _, self.sigma_single = sigma_clipped_stats(single, sigma=3.0, maxiters=10)
 
-    def stack(self, dx: np.ndarray, dy: np.ndarray, size: int, combine: str = "mean"):
+    def stack(self, dx: np.ndarray, dy: np.ndarray, size: int, combine: str = "mean", idx=None):
+        if idx is not None:
+            sub = Tracker.__new__(Tracker)
+            sub.res, sub.n, sub.cx, sub.cy = self.res[idx], len(idx), self.cx, self.cy
+            return Tracker.stack(sub, np.asarray(dx)[idx], np.asarray(dy)[idx], size, combine)
         g = np.arange(size) - (size - 1) / 2.0
         gy, gx = np.meshgrid(g, g, indexing="ij")
         # The offset of a hypothesis is constant over the stamp in each frame, so bilinear
@@ -216,9 +220,53 @@ def run_tracked(tracker: Tracker, w: WCS, times: np.ndarray, t_ref: float, dx: n
     fx = tracker.cx + dx[i_ref] + (x - c)
     fy = tracker.cy + dy[i_ref] + (y - c)
     single = tracker.single_frame_snr(i_ref, fx, fy)
+    astrometry = group_astrometry(tracker, w, times, dx, dy, x - c, y - c, combine)
     return {
+        "astrometry": astrometry,
         "stacked": st, "coverage": cov, "single_frame": tracker.single_frame_stamp(i_ref, dx[i_ref], dy[i_ref], size),
         "snr_stacked": snr, "snr_single_frame": single,
         "snr_gain": snr / single if single and single > 0 and math.isfinite(single) else None,
         "peak": to_detection(x, y, sw, flux, snr), "t_ref": t_ref, "wcs": sw,
     }
+
+
+def group_astrometry(tracker: Tracker, w: WCS, times: np.ndarray, dx: np.ndarray, dy: np.ndarray,
+                     ox: float, oy: float, combine: str = "mean", n_groups: int = 4,
+                     min_snr: float = 3.0, stamp: int = 15) -> list[dict]:
+    """Measured positions from sub-stacks of consecutive frames along the track.
+
+    The full stack fixes the object's offset (ox, oy) from the hypothesis track; each group of
+    frames is stacked on its own and the object is re-centroided near that offset, so the result is
+    an independent position measurement at the group's middle epoch (not the hypothesis itself).
+    Uncertainty: FWHM / (2.355 * S/N) per axis, floored at 0.05 arcsec.
+    """
+    n = len(times)
+    if n < 2 * n_groups:
+        n_groups = max(n // 2, 1)
+    scale = abs(float(w.wcs.cdelt[1])) * 3600.0
+    fwhm = 2.3548 * max(tracker.psf_sigma_px, 0.5) * scale
+    out = []
+    c = (stamp - 1) / 2.0
+    for idx in np.array_split(np.arange(n), n_groups):
+        if len(idx) == 0:
+            continue
+        st, cov = tracker.stack(dx, dy, stamp, combine, idx=idx)
+        snr = tracker._filter(st, cov) / (tracker.sigma_filt * math.sqrt(tracker.n / len(idx)))
+        yy, xx = np.mgrid[:stamp, :stamp]
+        mask = (np.hypot(xx - (c + ox), yy - (c + oy)) <= 2.5) & (cov >= 0.75)
+        if not mask.any():
+            continue
+        masked = np.where(mask, snr, -np.inf)
+        iy, ix = np.unravel_index(int(np.argmax(masked)), masked.shape)
+        peak = float(masked[iy, ix])
+        if peak < min_snr:
+            continue
+        gx, gy, _ = refine_centroid(st, iy, ix, half=1)
+        im = int(idx[len(idx) // 2])
+        fx = tracker.cx + dx[im] + (gx - c)
+        fy = tracker.cy + dy[im] + (gy - c)
+        ra, dec = w.all_pix2world([[fx, fy]], 0)[0]
+        out.append({"t": round(float(times[im]), 6), "ra": round(float(ra) % 360, 7), "dec": round(float(dec), 7),
+                    "sigma_arcsec": round(max(fwhm / (2.3548 * peak), 0.05), 3), "snr": round(peak, 2),
+                    "n_frames": int(len(idx))})
+    return out
