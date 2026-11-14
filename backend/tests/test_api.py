@@ -234,3 +234,9 @@ def test_tracker_cache_respects_byte_budget(monkeypatch):
     total = sum(v[0].res.nbytes for v in service._TRACKERS.values())
     assert total <= 6_000_000 and len(service._TRACKERS) >= 1
     service._TRACKERS.clear()
+
+
+def test_stack_pixel_budget(client):
+    r = client.post("/api/v1/analysis/shift-stack", json={"ra": 10.0, "dec": 10.0, "size_px": 256, "n_frames": 64,
+                                                          "rate_arcsec_yr": 50, "pa_deg": 30, "distance_au": 1000})
+    assert r.status_code == 422 and "budget" in r.json()["detail"]   # 384 px frames x 64 > 8e6 pixels

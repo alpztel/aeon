@@ -434,6 +434,15 @@ def _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale):
     return np.asarray(x), np.asarray(y), tra, tdec
 
 
+MAX_STACK_PIXELS = int(float(os.environ.get("AEON_MAX_STACK_PIXELS", "8e6")))   # frames x pixels (~64 MB float64)
+
+
+def _check_stack_budget(fsize: int, n_frames: int) -> None:
+    if fsize * fsize * n_frames > MAX_STACK_PIXELS:
+        raise RequestError(f"Stack of {n_frames} frames of {fsize}x{fsize} px exceeds the {MAX_STACK_PIXELS:.0f}-pixel "
+                           "budget; use fewer frames, a smaller size_px or a slower track.")
+
+
 def _frame_size(max_offset_px: float, stamp: int) -> int:
     if not math.isfinite(max_offset_px):
         raise RequestError("Track leaves the tangent plane (object too close or too fast); raise distance_au.")
@@ -532,6 +541,7 @@ def _shift_stack(req: dict) -> dict:
     t_ref = MID_SURVEY            # the (ra, dec) of a hypothesis refers to mid-survey 2026.5
     dx, dy, tra, tdec = _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale)
     fsize = _frame_size(float(np.max(np.abs(np.concatenate([dx, dy])))), size)
+    _check_stack_budget(fsize, n)
     tracker, w, _ = _tracker(ra, dec, n, fsize, scale, band, cadence)
     r = analysis.run_tracked(tracker, w, times, t_ref, dx, dy, size, 6.0, req.get("combine", "mean"))
     return _stack_payload(r, band, n, times, rate, pa, dist, tra, tdec)
@@ -577,6 +587,7 @@ def _blind_search(req: dict) -> dict:
                 hyps[(k, i, j)] = (dx, dy)
                 max_off = max(max_off, float(np.max(np.abs(np.concatenate([dx, dy])))))
     fsize = _frame_size(max_off + 2.0, max(size, BLIND_STAMP_PX))
+    _check_stack_budget(fsize, n)
     tracker, w, _ = _tracker(ra, dec, n, fsize, scale, band, cadence)
     c = tracker.cx
 
