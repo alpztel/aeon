@@ -821,10 +821,10 @@ export interface operations {
                             [key: string]: string;
                         };
                         /**
-                         * @description request: flux_ujy from the request; archive: read from the core backend by (ra, dec); none: no spectrum was available, probabilities are an uninformative uniform prior
+                         * @description request: flux_ujy from the request; archive: read from the core backend by (ra, dec); none: the backend has no usable spectrum at this position; unavailable: the backend could not be reached or did not answer in time (retry later). For none and unavailable the probabilities are an uninformative uniform prior
                          * @enum {string}
                          */
-                        spectrum_source?: "request" | "archive" | "none";
+                        spectrum_source?: "request" | "archive" | "none" | "unavailable";
                         /** @description Median per-band S/N of the archive spectrum (null otherwise) */
                         spectrum_snr_median?: number | null;
                     };

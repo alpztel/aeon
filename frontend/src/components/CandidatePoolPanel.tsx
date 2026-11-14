@@ -72,7 +72,10 @@ export function CandidatePoolPanel({
         runDifference({ ra: coords.ra, dec: coords.dec }).catch(() => null),
       ]);
       // Without a spectrum the engine only returns an uninformative prior: do not submit it as a measurement.
-      const ai = aiRes && aiRes.data.spectrum_source !== "none" ? aiRes.data : null;
+      const ai =
+        aiRes && aiRes.data.spectrum_source !== "none" && aiRes.data.spectrum_source !== "unavailable"
+          ? aiRes.data
+          : null;
       const measuredSnr = diffRes?.data.detections?.[0]?.snr ?? 5.0;
       const measuredAnomaly = ai?.anomaly_score ?? 0.5;
       const notePrefix = selectedObject?.is_synthetic ? "[SYNTHETIC TEST] " : "";

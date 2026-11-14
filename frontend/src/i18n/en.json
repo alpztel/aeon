@@ -242,6 +242,7 @@
     "retry": "Retry",
     "requestRejected": "The AI engine rejected this request",
     "noSpectrum": "No usable spectrum at this position — nothing was classified.",
+    "spectrumUnavailable": "The spectrum service is not answering right now — nothing was classified.",
     "sourceArchive": "Archive spectrum",
     "sourceRequest": "Supplied spectrum",
     "snrMedian": "median S/N",

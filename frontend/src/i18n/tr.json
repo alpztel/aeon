@@ -242,6 +242,7 @@
     "retry": "Yeniden dene",
     "requestRejected": "AI motoru bu isteği reddetti",
     "noSpectrum": "Bu konum için kullanılabilir tayf yok — sınıflandırma yapılmadı.",
+    "spectrumUnavailable": "Tayf servisi şu anda yanıt vermiyor — sınıflandırma yapılamadı.",
     "sourceArchive": "Arşiv tayfı",
     "sourceRequest": "Gönderilen tayf",
     "snrMedian": "medyan S/N",

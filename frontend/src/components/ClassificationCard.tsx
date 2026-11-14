@@ -76,7 +76,9 @@ export function ClassificationCard({
     (answered != null &&
       answered.spectrum_source === undefined &&
       (answered as { physics_diagnostics?: unknown }).physics_diagnostics === null);
-  const result = answered && !noSpectrum ? answered : null;
+  // The backend holding the spectra was down or too slow: worth another try, unlike an empty position.
+  const spectrumDown = answered?.spectrum_source === "unavailable";
+  const result = answered && !noSpectrum && !spectrumDown ? answered : null;
   const rawSnr = result?.spectrum_snr_median;
   const snr = typeof rawSnr === "number" && Number.isFinite(rawSnr) ? rawSnr : null;
   const source =
@@ -86,7 +88,8 @@ export function ClassificationCard({
         ? dict.ai.sourceArchive
         : null;
 
-  const aiState = current === null ? "loading" : noSpectrum ? "no-spectrum" : current.kind;
+  const aiState =
+    current === null ? "loading" : noSpectrum ? "no-spectrum" : spectrumDown ? "spectrum-unavailable" : current.kind;
 
   const anomaly = unit(result?.anomaly_score);
   const topClass = result?.top_class && ALL_CLASSES.includes(result.top_class) ? result.top_class : undefined;
@@ -116,6 +119,12 @@ export function ClassificationCard({
             {dict.ai.requestRejected}
             {current.detail ? `: ${current.detail}` : ""}
           </span>
+          {retryButton}
+        </div>
+      )}
+      {spectrumDown && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <span>{dict.ai.spectrumUnavailable}</span>
           {retryButton}
         </div>
       )}

@@ -9,6 +9,7 @@ from __future__ import annotations
 import concurrent.futures as cf
 import itertools
 import json
+import threading
 import time
 
 import httpx
@@ -16,7 +17,7 @@ import pytest
 import respx
 from httpx import Response
 
-from app import parser
+from app import main, parser
 from app.models import OBJECT_CLASSES, synthesize_spectrum
 from conftest import CONTRACT, assert_path_response_schema
 
@@ -71,7 +72,7 @@ def test_contract_documents_coordinates_and_spectrum_source():
     props = op["requestBody"]["content"]["application/json"]["schema"]["properties"]
     assert {"flux_ujy", "image", "ra", "dec"} <= set(props)
     out = op["responses"]["200"]["content"]["application/json"]["schema"]["properties"]
-    assert out["spectrum_source"]["enum"] == ["request", "archive", "none"]
+    assert out["spectrum_source"]["enum"] == ["request", "archive", "none", "unavailable"]
 
 
 # ---------------------------------------------------------------- medium: invalid coordinates
@@ -102,28 +103,30 @@ def test_edge_coordinates_are_accepted(client, ra, dec):
 
 # ---------------------------------------------------------------- hard: a broken backend answer
 
+# name -> (backend answer, expected spectrum_source). "none": the backend answered and has nothing usable
+# there. "unavailable": the backend (or the gateway in front of it) is broken or overloaded -> worth a retry.
 BROKEN_UPSTREAM = {
-    "all_null": Response(200, json=spectrum_body([None] * 102)),
-    "some_null": Response(200, json=spectrum_body([1.0] * 50 + [None] * 2 + [2.0] * 50)),
-    "nan_inf": Response(200, text='{"flux_ujy": [NaN, Infinity' + ", 1.0" * 100 + "]}"),
-    "too_short": Response(200, json=spectrum_body([1.0] * 10)),
-    "too_long": Response(200, json=spectrum_body([1.0] * 500)),
-    "strings": Response(200, json=spectrum_body(["a"] * 102)),
-    "numeric_strings": Response(200, json=spectrum_body(["1.0"] * 102)),
-    "booleans": Response(200, json=spectrum_body([True] * 102)),
-    "flux_is_string": Response(200, json={"flux_ujy": "oops"}),
-    "flux_is_dict": Response(200, json={"flux_ujy": {"a": 1}}),
-    "nested_lists": Response(200, json=spectrum_body([[1.0]] * 102)),
-    "body_is_list": Response(200, json=[1, 2, 3]),
-    "body_is_null": Response(200, json=None),
-    "html": Response(200, text="<html>502 Bad Gateway</html>"),
-    "empty_text": Response(200, text=""),
-    "no_flux_key": Response(200, json={}),
-    "not_found": Response(404, json={"detail": "no spectrum"}),
-    "unprocessable": Response(422, json={"detail": "bad"}),
-    "server_error": Response(500, text="boom"),
-    "bad_gateway": Response(502, text="<html>"),
-    "rate_limited": Response(429, json={"detail": "slow down"}),
+    "all_null": (Response(200, json=spectrum_body([None] * 102)), "none"),
+    "some_null": (Response(200, json=spectrum_body([1.0] * 50 + [None] * 2 + [2.0] * 50)), "none"),
+    "nan_inf": (Response(200, text='{"flux_ujy": [NaN, Infinity' + ", 1.0" * 100 + "]}"), "none"),
+    "too_short": (Response(200, json=spectrum_body([1.0] * 10)), "none"),
+    "too_long": (Response(200, json=spectrum_body([1.0] * 500)), "none"),
+    "strings": (Response(200, json=spectrum_body(["a"] * 102)), "none"),
+    "numeric_strings": (Response(200, json=spectrum_body(["1.0"] * 102)), "none"),
+    "booleans": (Response(200, json=spectrum_body([True] * 102)), "none"),
+    "flux_is_string": (Response(200, json={"flux_ujy": "oops"}), "none"),
+    "flux_is_dict": (Response(200, json={"flux_ujy": {"a": 1}}), "none"),
+    "nested_lists": (Response(200, json=spectrum_body([[1.0]] * 102)), "none"),
+    "no_flux_key": (Response(200, json={}), "none"),
+    "not_found": (Response(404, json={"detail": "no spectrum"}), "none"),
+    "unprocessable": (Response(422, json={"detail": "bad"}), "none"),
+    "body_is_list": (Response(200, json=[1, 2, 3]), "unavailable"),
+    "body_is_null": (Response(200, json=None), "unavailable"),
+    "html": (Response(200, text="<html>502 Bad Gateway</html>"), "unavailable"),
+    "empty_text": (Response(200, text=""), "unavailable"),
+    "server_error": (Response(500, text="boom"), "unavailable"),
+    "bad_gateway": (Response(502, text="<html>"), "unavailable"),
+    "rate_limited": (Response(429, json={"detail": "slow down"}), "unavailable"),
 }
 
 
@@ -131,12 +134,13 @@ BROKEN_UPSTREAM = {
 @respx.mock
 def test_broken_upstream_answer_never_becomes_an_error(client, name):
     """Whatever the backend answers, the caller gets 200 with an honest 'no spectrum' result."""
-    respx.get(SPECTRUM).mock(return_value=BROKEN_UPSTREAM[name])
+    answer, expected = BROKEN_UPSTREAM[name]
+    respx.get(SPECTRUM).mock(return_value=answer)
     r = client.post(CLASSIFY, json={"ra": 10.0, "dec": 5.0})
     assert r.status_code == 200, r.text
     body = r.json()
     assert_path_response_schema(body, CLASSIFY, "post", "200")
-    assert body["spectrum_source"] == "none" and body["spectrum_snr_median"] is None
+    assert body["spectrum_source"] == expected and body["spectrum_snr_median"] is None
     assert body["physics_diagnostics"] is None
     assert len(set(body["probabilities"].values())) == 1          # uniform prior, no invented class
 
@@ -160,13 +164,86 @@ def test_extreme_but_finite_archive_spectra_do_not_crash(client, flux):
     assert_path_response_schema(r.json(), CLASSIFY, "post", "200")
 
 
-@pytest.mark.parametrize("exc", [httpx.ConnectError("refused"), httpx.ReadTimeout("slow"), httpx.RemoteProtocolError("reset"),
-                                 httpx.PoolTimeout("pool"), RuntimeError("unexpected")])
+@pytest.mark.parametrize("exc", [httpx.ConnectError("refused"), httpx.ConnectTimeout("no route"),
+                                 httpx.RemoteProtocolError("reset"), RuntimeError("unexpected")])
 @respx.mock
-def test_backend_transport_failure_is_still_a_200(client, exc):
-    respx.get(SPECTRUM).mock(side_effect=exc)
-    r = client.post(CLASSIFY, json={"ra": 10.0, "dec": 5.0})
-    assert r.status_code == 200 and r.json()["spectrum_source"] == "none"
+def test_dead_backend_is_a_200_and_backs_off(client, exc):
+    route = respx.get(SPECTRUM).mock(side_effect=exc)
+    for _ in range(5):
+        r = client.post(CLASSIFY, json={"ra": 10.0, "dec": 5.0})
+        assert r.status_code == 200 and r.json()["spectrum_source"] == "unavailable"
+    assert route.call_count == 1                                  # dead backend: stop asking for a while
+
+
+@pytest.mark.parametrize("exc", [httpx.ReadTimeout("slow"), httpx.WriteTimeout("slow"), httpx.PoolTimeout("pool")])
+@respx.mock
+def test_one_slow_position_does_not_block_the_next_caller(client, exc):
+    """Measured on the live VM: a slow spectrum made the NEXT classification (a fast position) come back
+    empty too, because the time-out put the whole backend into back-off."""
+    answers = iter([exc, Response(200, json=spectrum_body())])
+
+    def reply(request):
+        nxt = next(answers)
+        if isinstance(nxt, Exception):
+            raise nxt
+        return nxt
+
+    route = respx.get(SPECTRUM).mock(side_effect=reply)
+    slow = client.post(CLASSIFY, json={"ra": 76.9431, "dec": 30.4102})
+    assert slow.status_code == 200 and slow.json()["spectrum_source"] == "unavailable"
+    fast = client.post(CLASSIFY, json={"ra": 133.7512, "dec": -7.2333})
+    assert fast.status_code == 200 and fast.json()["spectrum_source"] == "archive"
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_spectrum_fetch_waits_longer_than_the_command_path(client):
+    """Fresh positions over real frames need seconds; 2.5 s (the command-path limit) lost them."""
+    route = respx.get(SPECTRUM).mock(return_value=Response(200, json=spectrum_body()))
+    client.post(CLASSIFY, json={"ra": 10.0, "dec": 5.0})
+    timeout = route.calls.last.request.extensions["timeout"]
+    assert timeout["read"] == main.SPECTRUM_TIMEOUT_S >= 8.0
+    assert main.SPECTRUM_TIMEOUT_S < 15.0                         # the browser gives up at 15 s
+
+
+@respx.mock
+def test_slow_spectrum_reads_cannot_take_every_worker_thread(client, monkeypatch):
+    """Only a bounded number of callers may wait on a slow backend; the others are told at once."""
+    monkeypatch.setattr(main, "_SPECTRUM_SLOTS", threading.BoundedSemaphore(2))
+    monkeypatch.setattr(main, "_SLOT_WAIT_S", 0.05)
+    lock, live, peak = threading.Lock(), [0], [0]
+
+    def slow(request):
+        with lock:
+            live[0] += 1
+            peak[0] = max(peak[0], live[0])
+        time.sleep(0.6)
+        with lock:
+            live[0] -= 1
+        return Response(200, json=spectrum_body())
+
+    respx.get(SPECTRUM).mock(side_effect=slow)
+    with cf.ThreadPoolExecutor(8) as ex:
+        results = list(ex.map(lambda i: client.post(CLASSIFY, json={"ra": 10.0 + i, "dec": 5.0}), range(8)))
+    sources = [r.json()["spectrum_source"] for r in results]
+    assert [r.status_code for r in results] == [200] * 8
+    assert peak[0] <= 2
+    assert sources.count("archive") == 2 and sources.count("unavailable") == 6
+    # slots are returned: the next caller is served
+    assert client.post(CLASSIFY, json={"ra": 10.0, "dec": 5.0}).json()["spectrum_source"] == "archive"
+
+
+@respx.mock
+def test_slots_are_released_when_the_backend_fails(client, monkeypatch):
+    monkeypatch.setattr(main, "_SPECTRUM_SLOTS", threading.BoundedSemaphore(1))
+    monkeypatch.setattr(parser, "_UPSTREAM_BACKOFF_S", 0.0)
+    route = respx.get(SPECTRUM).mock(side_effect=httpx.ReadTimeout("slow"))
+    for _ in range(5):
+        assert client.post(CLASSIFY, json={"ra": 10.0, "dec": 5.0}).json()["spectrum_source"] == "unavailable"
+    route.side_effect = httpx.ConnectError("down")
+    for _ in range(5):
+        assert client.post(CLASSIFY, json={"ra": 10.0, "dec": 5.0}).json()["spectrum_source"] == "unavailable"
+    assert route.call_count == 10                                 # never stuck waiting for a leaked slot
 
 
 # ---------------------------------------------------------------- torture: outage, recovery, concurrency
@@ -178,7 +255,7 @@ def test_outage_then_recovery(client, monkeypatch):
     route = respx.get(SPECTRUM).mock(side_effect=httpx.ConnectError("down"))
     for _ in range(20):
         r = client.post(CLASSIFY, json={"ra": 133.76, "dec": -7.24})
-        assert r.status_code == 200 and r.json()["spectrum_source"] == "none"
+        assert r.status_code == 200 and r.json()["spectrum_source"] == "unavailable"
     assert route.call_count == 1
 
     route.side_effect = None
@@ -214,7 +291,7 @@ def test_flapping_backend_under_concurrent_callers(client):
     with cf.ThreadPoolExecutor(16) as ex:
         results = list(ex.map(call, coords))
     assert [code for code, _ in results] == [200] * len(coords)
-    assert {src for _, src in results} <= {"archive", "none"}
+    assert {src for _, src in results} <= {"archive", "none", "unavailable"}
 
 
 @respx.mock
