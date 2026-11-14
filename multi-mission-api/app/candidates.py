@@ -169,7 +169,7 @@ class CandidateStore:
 
         return cand, is_synthetic
 
-    def _maybe_open_github_issue(self, cand: dict[str, Any], is_synthetic: bool) -> str | None:
+    def _maybe_open_github_issue(self, cand: dict[str, Any], is_synthetic: bool, quota_checked: bool = False) -> str | None:
         """Open a GitHub Issue on alpztel/aeon when anomaly_score >= 0.90 and snr >= 5.0."""
         anomaly = float(cand.get("anomaly_score") or 0.0)
         snr = float(cand.get("snr") or 0.0)
@@ -184,7 +184,7 @@ class CandidateStore:
         dec = float(cand["dec"])
         obj_cls = str(cand.get("object_class", "unknown"))
 
-        if not self._issue_quota_ok():
+        if not quota_checked and not self._issue_quota_ok():
             logger.warning("Issue quota reached; not opening an issue for %s", cand.get("id"))
             return None
 
@@ -258,13 +258,26 @@ class CandidateStore:
                 "notes": str(candidate_data.get("notes") or "")[:1000],
             }
 
-            record, is_synthetic = self._enrich_candidate(record)
-            issue_url = self._maybe_open_github_issue(record, is_synthetic=is_synthetic)
-            if issue_url:
-                record["github_issue_url"] = issue_url
-
+            # Reserve the position atomically (dedupe stays exact), then release the lock: the network
+            # calls below (core spectrum, ai-engine, GitHub) must not serialise every other request.
             self._col.insert_one(dict(record))
-            return self._clean(record)
+
+        record, is_synthetic = self._enrich_candidate(record)
+        with self._lock:
+            issue_url = None
+            quota_ok = self._issue_quota_ok() if self._issue_wanted(record) else False
+        if quota_ok:
+            issue_url = self._maybe_open_github_issue(record, is_synthetic=is_synthetic, quota_checked=True)
+        if issue_url:
+            record["github_issue_url"] = issue_url
+        update = {k: record[k] for k in ("object_class", "anomaly_score", "snr", "notes", "github_issue_url")}
+        with self._lock:
+            self._col.update_one({"id": record["id"]}, {"$set": update})
+        return self._clean(record)
+
+    @staticmethod
+    def _issue_wanted(cand: dict[str, Any]) -> bool:
+        return float(cand.get("anomaly_score") or 0.0) >= 0.90 and float(cand.get("snr") or 0.0) >= 5.0
 
     def vote(self, candidate_id: str) -> dict[str, Any] | None:
         with self._lock:

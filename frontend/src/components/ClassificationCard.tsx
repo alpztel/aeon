@@ -91,6 +91,7 @@ export function ClassificationCard({
         )}
       </div>
 
+      {result && (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
         {/* 5 Class Probability Bars */}
         <div className="space-y-2.5 md:col-span-8">
@@ -161,6 +162,7 @@ export function ClassificationCard({
           )}
         </div>
       </div>
+      )}
     </section>
   );
 }

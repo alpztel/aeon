@@ -436,7 +436,8 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
                 <span>{feat.center_um?.toFixed(2)} µm</span>
                 {feat.depth !== undefined && (
                   <span>
-                    {dict.spectrum.depth}: {(feat.depth * 100).toFixed(0)}%
+                    {dict.spectrum.depth}:{" "}
+                    {Math.abs(feat.depth) >= 0.99 ? "n/a" : `${(feat.depth * 100).toFixed(0)}%`}
                   </span>
                 )}
                 <span className="rounded bg-black/40 px-1.5 py-0.2 text-[10px]">

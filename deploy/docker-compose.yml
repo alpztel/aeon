@@ -5,6 +5,14 @@ services:
     environment:
       AEON_DATA_DIR: /data/fits
       AEON_CORS_ORIGINS: https://www.a-eon.engineer,https://a-eon.engineer,http://localhost:3000
+      # Memory profile for a 2 GB droplet: 2 web workers + 1 heavy-job process each (4 processes).
+      WEB_CONCURRENCY: "2"
+      AEON_HEAVY_WORKERS: "1"
+      AEON_TRACKER_CACHE_MB: "64"
+      AEON_TILE_CACHE: "96"
+      AEON_TILE_SED_CACHE: "16"
+      AEON_SPECTRUM_CACHE: "128"
+      MALLOC_ARENA_MAX: "2"
     volumes:
       - fits-data:/data/fits
     expose: ["8000"]

@@ -202,3 +202,41 @@ def test_spherex_cadence_tracking(client):
     gaps = [b - a for a, b in zip(t, t[1:])]
     assert max(gaps) > 0.3                       # two visit windows half a year apart
     assert body["cadence"] == "spherex" and body["snr_stacked"] > 5
+
+
+def test_orbit_work_cap(client):
+    r = client.post("/api/v1/orbit/simulate", json={"target_id": "px-2026-09", "horizons_years": [1000], "samples_per_year": 365})
+    assert r.status_code == 422 and "samples_per_year" in r.json()["detail"]
+
+
+def test_heavy_queue_full_answers_503_fast(client, monkeypatch):
+    import asyncio
+    import time
+    from aeon import main
+
+    full = asyncio.Semaphore(1)
+    full._value = 0                                  # simulate a saturated heavy-job queue
+    monkeypatch.setattr(main, "_heavy_slots", full)
+    monkeypatch.setattr(main, "HEAVY_WORKERS", 1)
+    t0 = time.perf_counter()
+    r = client.post("/api/v1/analysis/blind-search", json={"ra": 51.295473, "dec": 14.8325559})
+    assert r.status_code == 503 and r.headers.get("retry-after") == "10"
+    assert time.perf_counter() - t0 < 1.0
+
+
+def test_tracker_cache_respects_byte_budget(monkeypatch):
+    from aeon import service
+
+    monkeypatch.setattr(service, "_TRACKER_BUDGET", 6_000_000)
+    service._TRACKERS.clear()
+    for i in range(4):
+        service._tracker(10.0 + i, 5.0, 24, 128, 6.2, None)
+    total = sum(v[0].res.nbytes for v in service._TRACKERS.values())
+    assert total <= 6_000_000 and len(service._TRACKERS) >= 1
+    service._TRACKERS.clear()
+
+
+def test_stack_pixel_budget(client):
+    r = client.post("/api/v1/analysis/shift-stack", json={"ra": 10.0, "dec": 10.0, "size_px": 256, "n_frames": 64,
+                                                          "rate_arcsec_yr": 50, "pa_deg": 30, "distance_au": 1000})
+    assert r.status_code == 422 and "budget" in r.json()["detail"]   # 384 px frames x 64 > 8e6 pixels

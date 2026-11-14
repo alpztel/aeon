@@ -17,6 +17,7 @@ exactly like archive FITS data.
 from __future__ import annotations
 
 import math
+import os
 import zlib
 from dataclasses import dataclass
 from functools import lru_cache
@@ -72,7 +73,8 @@ class SourceSet:
     ids: list[str | None]
 
 
-@lru_cache(maxsize=512)
+# ~0.3 MB per tile; AEON_TILE_CACHE tiles per process (default 256 ~ 80 MB)
+@lru_cache(maxsize=int(os.environ.get("AEON_TILE_CACHE", "256")))
 def _tile_sources(k: int, j: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Deterministic field population of one tile: ra, dec, mag_w2, teff, is_galaxy."""
     dec_lo = -90.0 + k * TILE_DEG
@@ -125,17 +127,19 @@ def _angsep_deg(ra1, dec1, ra2, dec2):
     return np.degrees(2 * np.arcsin(np.sqrt(np.clip(h, 0, 1))))
 
 
-@lru_cache(maxsize=512)
+# ~3 MB per tile in float32 (was 6 MB float64 x 512 tiles = 3 GB per worker under random-sky load)
+@lru_cache(maxsize=int(os.environ.get("AEON_TILE_SED_CACHE", "48")))   # ~3 MB each
 def _tile_seds(k: int, j: int) -> np.ndarray:
-    """Band fluxes (N, 102) uJy of a tile's field population (stars: Planck; galaxies: z-model)."""
+    """Band fluxes (N, 102) uJy, float32, of a tile's field population (stars: Planck; galaxies: z-model)."""
     ra, _, mag, teff, is_gal = _tile_sources(k, j)
-    flux = np.zeros((len(ra), 102))
+    flux = np.zeros((len(ra), 102), dtype=np.float32)
     stars = ~is_gal
     if stars.any():
         flux[stars] = spectra.blackbody_bands(mag[stars], teff[stars])
-    for i in np.flatnonzero(is_gal):
-        z = 0.5 + (zlib.crc32(f"{ra[i]:.6f}".encode()) % 1000) / 1000 * 2.5
-        flux[i] = spectra.high_z_galaxy(mag[i], z)
+    gi = np.flatnonzero(is_gal)
+    if len(gi):
+        z = np.array([0.5 + (zlib.crc32(f"{ra[i]:.6f}".encode()) % 1000) / 1000 * 2.5 for i in gi])
+        flux[gi] = spectra.high_z_galaxies(mag[gi], z)
     return flux
 
 
@@ -296,13 +300,16 @@ def render_cube(ra: float, dec: float, times: list[float], size_px: int = 25,
         x, y = w.all_world2pix(src.ra.ravel(), src.dec.ravel(), 0)
         x = x.reshape(src.ra.shape)
         y = y.reshape(src.ra.shape)
-        for i in range(x.shape[0]):
-            for ti in range(nt):
-                if not (-10 < x[i, ti] < size_px + 10 and -10 < y[i, ti] < size_px + 10):
-                    continue
-                wx = _gauss_pixel_weights(np.full(102, x[i, ti]), sigma_px, size_px)   # (102, nx)
-                wy = _gauss_pixel_weights(np.full(102, y[i, ti]), sigma_px, size_px)   # (102, ny)
-                cube += (src.flux[i, ti] / nt)[:, None, None] * wy[:, :, None] * wx[:, None, :]
+        ii, tt = np.nonzero((x > -10) & (x < size_px + 10) & (y > -10) & (y < size_px + 10))
+        # Vectorised: per-band pixel-integrated Gaussians for all (source, time) pairs, in chunks to
+        # bound memory, combined with einsum.
+        for c0 in range(0, len(ii), 256):
+            ci, ct = ii[c0:c0 + 256], tt[c0:c0 + 256]
+            xs, ys = x[ci, ct], y[ci, ct]
+            wx = _gauss_pixel_weights(np.repeat(xs[:, None], 102, axis=1), np.broadcast_to(sigma_px, (len(xs), 102)), size_px)
+            wy = _gauss_pixel_weights(np.repeat(ys[:, None], 102, axis=1), np.broadcast_to(sigma_px, (len(ys), 102)), size_px)
+            f = src.flux[ci, ct] / nt                                       # (n, 102)
+            cube += np.einsum("nb,nby,nbx->byx", f, wy, wx, optimize=True)
     nea = np.maximum(4 * np.pi * sigma_px**2, 1.0)
     sigma_pix = bands.POINT_SOURCE_SIGMA_UJY / np.sqrt(nea)
     pedestal = zodi_pedestal_ujy_per_arcsec2(lam) * scale_arcsec**2

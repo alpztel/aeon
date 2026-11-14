@@ -522,7 +522,7 @@ export function ShiftStackPanel({
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-400">{dict.stack.snrGain}</span>
               <span className="aeon-mono text-lg font-bold text-emerald-300">
-                ×{snrGain.toFixed(2)}
+                {snrSingle > 0 && snrGain > 0 ? `×${snrGain.toFixed(2)}` : "—"}
               </span>
             </div>
 
