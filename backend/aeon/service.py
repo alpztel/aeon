@@ -433,6 +433,8 @@ def _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale):
 
 
 def _frame_size(max_offset_px: float, stamp: int) -> int:
+    if not math.isfinite(max_offset_px):
+        raise RequestError("Track leaves the tangent plane (object too close or too fast); raise distance_au.")
     size = int(2 * math.ceil(max_offset_px) + stamp + 12)
     size = int(math.ceil(size / 64.0) * 64)          # quantised so slider changes reuse the cache
     if size > MAX_FRAME_PX:
@@ -526,7 +528,14 @@ def _blind_search(req: dict) -> dict:
         if d_lo <= 0:
             raise RequestError("distance_range_au must be positive.")
         step = PARALLAX_STEP_PX * scale
+        # Reject before enumerating: the largest parallax plus half a year of the fastest rate
+        # must fit in a frame, and the distance axis is capped.
+        worst_px = (ephem.AU_PER_PC / d_lo + float(max(rr)) * 0.5) / scale
+        if 2 * worst_px + max(size, BLIND_STAMP_PX) + 12 > MAX_FRAME_PX:
+            raise RequestError(f"distance_range_au minimum {d_lo:g} AU gives a {worst_px:.0f} px track; raise it.")
         amps = np.arange(ephem.AU_PER_PC / d_hi, ephem.AU_PER_PC / d_lo + step, step)
+        if len(amps) > 400:
+            raise RequestError("distance_range_au spans too many parallax steps (> 400); narrow it.")
         distances = [float(ephem.AU_PER_PC / a) for a in amps]
     else:
         distances = [None]
@@ -628,6 +637,26 @@ def run_analysis(method: str, req: dict) -> dict:
     raise RequestError(f"Unknown method {method!r}")
 
 
+MIN_PERIHELION_AU = 0.01      # ~2 solar radii: closer orbits hit the Sun / need relativistic terms
+MAX_DISTANCE_AU = 1e5
+
+
+def _check_orbit(r0, v0) -> None:
+    """Reject states the integrator cannot (or should not) follow: sun-grazing or escaping far
+    beyond the solar system, or non-finite input. Keeps every request bounded in time."""
+    r0, v0 = np.asarray(r0, float), np.asarray(v0, float)
+    if not (np.all(np.isfinite(r0)) and np.all(np.isfinite(v0))):
+        raise RequestError("Non-finite orbital state.")
+    r = float(np.linalg.norm(r0))
+    if r < MIN_PERIHELION_AU or r > MAX_DISTANCE_AU:
+        raise RequestError(f"Heliocentric distance {r:g} AU outside [{MIN_PERIHELION_AU}, {MAX_DISTANCE_AU:g}].")
+    h = float(np.linalg.norm(np.cross(r0, v0)))
+    e = float(orbit.elements_from_state(r0, v0)["e"])
+    q = h * h / (orbit.G * (1.0 + e))                 # perihelion distance, valid for any conic
+    if q < MIN_PERIHELION_AU:
+        raise RequestError(f"Perihelion {q:.2e} AU: the orbit hits the Sun.")
+
+
 def simulate_orbit(req: dict) -> dict:
     horizons = sorted({float(h) for h in (req.get("horizons_years") or [1, 5, 10])})
     if not horizons or horizons[0] <= 0 or horizons[-1] > 1000:
@@ -641,6 +670,7 @@ def simulate_orbit(req: dict) -> dict:
             f = orbit_fit.fit(dets)
         except ValueError as exc:
             raise RequestError(str(exc)) from exc
+        _check_orbit(f["r0_ecl_au"], f["v0_ecl_au_yr"])
         out = orbit.simulate(f["r0_ecl_au"], f["v0_ecl_au_yr"], f["t0"], horizons, spy)
         out["fit"] = f["summary"]
         out["input"] = {"detections": len(dets)}
@@ -663,6 +693,7 @@ def simulate_orbit(req: dict) -> dict:
                                     math.radians(el.get("omega_deg", 0.0)), math.radians(el.get("M_deg", 0.0)))
     else:
         raise RequestError("Provide observation, elements or target_id.")
+    _check_orbit(r0, v0)
     out = orbit.simulate(r0, v0, MID_SURVEY, horizons, spy)
     if obs:
         out["input"] = {"observation": obs}
