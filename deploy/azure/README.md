@@ -19,6 +19,8 @@ makinesine (VM) çeken ve Azure Blob Storage'a yedekleyen paketi içerir.
 | `provision.sh` | Azure kaynaklarını kurar: kaynak grubu, depolama, VM, yetki | **Azure Cloud Shell** |
 | `setup-vm.sh` | VM'in içine kodu, Python ortamını ve zamanlayıcıyı kurar | **VM'in terminali** |
 | `ingest.py` | Asıl iş: veriyi çeker, raporlar, Blob'a yükler | VM (zamanlayıcı çalıştırır) |
+| `link-backend.sh` | Çalışan backend'i `/data/aeon`'u okuyacak şekilde bağlar (bir kez) | VM |
+| `update-api.sh` | Canlı API'yi GitHub `main` ile tek komutta günceller | VM |
 | `targets.json` | Hangi gök cisimleri izlenecek | düzenlenebilir |
 | `aeon-ingest.service` / `.timer` | Haftalık otomatik çalıştırma | VM (`setup-vm.sh` kurar) |
 | `test_ingest.py` | Çevrimdışı testler (CI'da çalışır) | — |
@@ -301,3 +303,31 @@ yapar, çalıştırma başına boyut sınırı vardır ve zamanlayıcı yükü d
 İndirilen dosyalar AEON backend'in beklediği düzendedir. Aynı VM'de `deploy/docker-compose.yml`
 çalıştırılır ve `fits-data` volume'u `/data/aeon`'a bağlanırsa (`AEON_DATA_DIR`), canlı sitede
 gerçek SPHEREx görüntüleri ve tayfları görünür.
+
+---
+
+## 12. Canlı API'yi güncellemek  *(yer: A — Cloud Shell)*
+
+Ekip `backend/`, `ai-engine/`, `multi-mission-api/` veya `deploy/` altında bir değişikliği `main`'e
+birleştirdiğinde canlı API **kendiliğinden güncellenmez**. Güncellemek için Cloud Shell'de önce
+değişkenleri tanımla:
+
+```bash
+VM=aeon-api
+RG=$(az vm list --query "[?name=='aeon-api'].resourceGroup" -o tsv)
+```
+
+Sonra tek komut (5–15 dk; servisler yeniden derlenir):
+
+```bash
+az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript --scripts "git -C /root/aeon pull -q && bash /root/aeon/deploy/azure/update-api.sh" --query "value[0].message" -o tsv
+```
+
+`update-api.sh` şunları yapar: çalışan compose projesini bulur, kodu `git pull --ff-only` ile
+günceller (yerel değişiklik varsa hiçbir şeyi yeniden başlatmadan durur), tüm servisleri yeniden
+derleyip başlatır, backend / yapay zekâ motoru / görev API'sinin sağlık kontrollerini bekler,
+haftalık çekme işini tazeler ve kullanılmayan imajları siler. `main` değişmemişse yalnızca sağlık
+kontrolü yapar; yine de yeniden derlemek için komutta `bash` yerine `FORCE=1 bash` yaz.
+
+Başarılı bitişte son satır `UPDATED: <commit>` olur. Bir servis sağlıklı açılmazsa `FAIL <servis>`
+yazar ve hata koduyla çıkar.
