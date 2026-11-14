@@ -54,10 +54,32 @@ def extract_spectrum(cube: np.ndarray, w: WCS, ra: float, dec: float, aperture_a
     }
 
 
-def absorption_features(flux: np.ndarray, err: np.ndarray) -> list[dict]:
+def forced_point(img: np.ndarray, x: float, y: float, aperture_px: float, psf_sigma_px: float) -> dict:
+    """Forced photometry of one image at pixel (x, y): same estimator as extract_spectrum (aperture,
+    sigma-clipped annulus background, Gaussian aperture correction), NaN-aware. Returns NaN flux if
+    any pixel inside the aperture is NaN."""
+    r = max(aperture_px, 0.75)
+    r_in, r_out = max(3.0 * r, r + 2.0), max(5.0 * r, r + 5.0)
+    aper = CircularAperture((x, y), r=r)
+    ann = CircularAnnulus((x, y), r_in=r_in, r_out=r_out)
+    ap_vals = aper.to_mask(method="center").get_values(img)
+    ann_vals = ann.to_mask(method="center").get_values(img)
+    ann_vals = ann_vals[np.isfinite(ann_vals)]
+    if ap_vals.size == 0 or not np.isfinite(ap_vals).all() or ann_vals.size < 8:
+        return {"flux": float("nan"), "err": float("nan"), "aperture_px": r, "annulus_px": (r_in, r_out)}
+    _, bkg, bstd = sigma_clipped_stats(ann_vals, sigma=3.0)
+    raw = float(aperture_photometry(img, aper)["aperture_sum"][0])
+    area = aper.area
+    ee = 1.0 - math.exp(-r * r / (2 * psf_sigma_px * psf_sigma_px))
+    return {"flux": (raw - bkg * area) / ee, "err": float(bstd) * math.sqrt(area * (1.0 + area / ann_vals.size)) / ee,
+            "aperture_px": r, "annulus_px": (r_in, r_out)}
+
+
+def absorption_features(flux: np.ndarray, err: np.ndarray, lam: np.ndarray | None = None) -> list[dict]:
     """Band depth of each molecular feature relative to a log-linear continuum interpolated from
-    flanking bands (2.5-4 sigma of the feature width away). Detected if depth > 3 sigma and > 5%."""
-    lam = bands.WAVELENGTH_UM
+    flanking bands (2.5-4 sigma of the feature width away). Detected if depth > 3 sigma and > 5%.
+    ``lam`` defaults to the 102 AEON band centres; real spectra pass their own (gappy) grid."""
+    lam = bands.WAVELENGTH_UM if lam is None else np.asarray(lam, dtype=float)
     out = []
     pos = np.clip(flux, 1e-6, None)
     for f in spectra.FEATURES:
