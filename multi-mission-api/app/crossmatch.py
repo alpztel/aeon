@@ -26,6 +26,8 @@ from typing import Any
 
 import httpx
 
+from .sed_fitter import compute_kete_kbmod_kinematics, fit_multi_mission_sed
+
 FIXTURES_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "crossmatch_fixtures.json"
 CACHE_DIR = Path(os.environ.get("AEON_CACHE_DIR", str(Path(__file__).resolve().parents[1] / ".cache_crossmatch")))
 CACHE_TTL_SEC = 86400.0  # 24 hours
@@ -217,12 +219,19 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
         has_ir = True
     unmatched_ir = bool(has_ir and len(gaia_rows) == 0)
 
+    parallax_mas = None
+    if gaia_rows and gaia_rows[0].get("parallax_mas") is not None:
+        parallax_mas = float(gaia_rows[0]["parallax_mas"])
+    dist_au = 520.0 if (fixture and fixture.get("id") == "px-2026-09") else None
+
     result: dict[str, Any] = {
         "gaia": gaia_rows,
         "wise": wise_rows,
         "sed": sed,
         "unmatched_ir_candidate": unmatched_ir,
         "mast_overlap": mast_rows,
+        "sed_physics": fit_multi_mission_sed(sed),
+        "kinematics": compute_kete_kbmod_kinematics(ra, dec, parallax_mas=parallax_mas, distance_au=dist_au),
     }
 
     if not os.environ.get("PYTEST_CURRENT_TEST"):

@@ -127,8 +127,8 @@ def preprocess_flux(flux_ujy: np.ndarray | list[float]) -> np.ndarray:
     if pos_vals.size == 0:
         return np.zeros(102, dtype=np.float32)
 
-    # Pre-scale in float64 by the 90th percentile positive flux so 1e300 or 1e-300 never overflows float32
-    ref_scale = float(np.percentile(pos_vals, 90))
+    # Pre-scale in float64 by the 90th percentile positive flux (with max*1e-100 guard against 400-decade split overflow)
+    ref_scale = max(float(np.percentile(pos_vals, 90)), float(np.max(pos_vals)) * 1e-100)
     if ref_scale <= 0.0 or not math.isfinite(ref_scale):
         return np.zeros(102, dtype=np.float32)
 
