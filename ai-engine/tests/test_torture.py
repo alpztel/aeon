@@ -236,4 +236,14 @@ def test_sexagesimal_hms_dms_and_context_aware_commands(client, monkeypatch):
     assert abs(spec_act["params"]["ra"] - 76.95642) < 1e-3
     assert orb_act["params"]["target_id"] == "rw-aur"
 
+    # Coordinate-only classification bridge (when frontend sends {ra, dec})
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(
+        return_value=Response(200, json={"flux_ujy": synthesize_spectrum("cold_brown_dwarf", 17.2).tolist()})
+    )
+    r_coord = client.post("/api/v1/ai/classify", json={"ra": 133.7605, "dec": -7.2421})
+    assert r_coord.status_code == 200
+    assert_path_response_schema(r_coord.json(), "/api/v1/ai/classify", "post", "200")
+    assert r_coord.json()["top_class"] == "cold_brown_dwarf"
+
+
 

@@ -82,11 +82,13 @@ class ImageInput(BaseModel):
 class ClassifyRequest(BaseModel):
     flux_ujy: list[float] | None = Field(None, min_length=102, max_length=102)
     image: ImageInput | None = None
+    ra: float | None = Field(None, ge=0, le=360)
+    dec: float | None = Field(None, ge=-90, le=90)
 
     @model_validator(mode="after")
     def _at_least_one(self):
-        if self.flux_ujy is None and self.image is None:
-            raise ValueError("Provide at least one of flux_ujy (102 bands) or image")
+        if self.flux_ujy is None and self.image is None and (self.ra is None or self.dec is None):
+            raise ValueError("Provide at least one of flux_ujy (102 bands), image, or (ra, dec)")
         return self
 
 
@@ -109,8 +111,20 @@ def ai_command(req: CommandRequest) -> dict[str, Any]:
 @app.post("/api/v1/ai/classify", tags=["ai"])
 def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
     try:
+        flux = req.flux_ujy
+        if flux is None and req.ra is not None and req.dec is not None:
+            import httpx
+
+            core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
+            try:
+                with httpx.Client(timeout=2.5) as client:
+                    resp = client.get(f"{core_url}/api/v1/spectrum", params={"ra": req.ra, "dec": req.dec})
+                    if resp.status_code == 200:
+                        flux = resp.json().get("flux_ujy")
+            except Exception:
+                pass
         reg = get_registry()
-        probs, top_class, spec_hint = reg.classify_spectrum(req.flux_ujy)
+        probs, top_class, spec_hint = reg.classify_spectrum(flux)
         img_dict = req.image.model_dump() if req.image is not None else None
         anomaly_score = reg.score_image_anomaly(img_dict, spec_hint=spec_hint)
         return {
