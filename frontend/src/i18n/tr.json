@@ -55,7 +55,7 @@
     "realData": "Gerçek SPHEREx",
     "modelData": "Fiziksel model",
     "frames": "kare",
-    "noObservation": "bu dönemde SPHEREx gözlemi yok",
+    "noObservation": "bu dönemde kullanılabilir SPHEREx verisi yok",
     "coverageLegendReal": "gerçek SPHEREx verisi",
     "coverageLegendModel": "fiziksel model"
   },
