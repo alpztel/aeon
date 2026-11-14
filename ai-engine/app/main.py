@@ -17,8 +17,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 
 from . import __version__
+from .astroclip_zogy import compute_astroclip_alignment
 from .models import get_registry
 from .parser import run_command_dispatcher
+from .physics_sed import analyze_spectrum_physics
 
 Lang = Literal["tr", "en"]
 
@@ -127,11 +129,23 @@ def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
         probs, top_class, spec_hint = reg.classify_spectrum(flux)
         img_dict = req.image.model_dump() if req.image is not None else None
         anomaly_score = reg.score_image_anomaly(img_dict, spec_hint=spec_hint)
+
+        physics_diag = analyze_spectrum_physics(flux) if flux is not None else None
+        astroclip_zogy = compute_astroclip_alignment(flux, img_dict)
+        if astroclip_zogy.get("is_moving_dipole") and not astroclip_zogy.get("cosmic_ray_veto"):
+            anomaly_score = round(float(min(1.0, max(anomaly_score, 0.55 + 0.40 * astroclip_zogy["dipole_polarity_score"]))), 4)
+
+        versions = dict(reg.versions)
+        versions["physics_sed"] = "spexpi-sonora-spender-v1.0"
+        versions["astroclip_zogy"] = "astroclip-zogy-v1.0"
+
         return {
             "probabilities": probs,
             "top_class": top_class,
             "anomaly_score": anomaly_score,
-            "model_versions": dict(reg.versions),
+            "model_versions": versions,
+            "physics_diagnostics": physics_diag,
+            "astroclip_zogy": astroclip_zogy,
         }
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

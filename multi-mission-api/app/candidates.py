@@ -14,6 +14,7 @@ import httpx
 import mongomock
 import pymongo
 
+from .active_learning import get_aad_engine
 from .crossmatch import angular_sep_arcsec
 
 logger = logging.getLogger("aeon.candidates")
@@ -92,6 +93,7 @@ class CandidateStore:
     @staticmethod
     def _clean(doc: dict[str, Any]) -> dict[str, Any]:
         out = {k: v for k, v in doc.items() if k != "_id"}
+        out["active_priority_score"] = get_aad_engine().score_candidate(out)
         return out
 
     def list_candidates(self, sort: str = "votes", limit: int = 50) -> list[dict[str, Any]]:
@@ -273,6 +275,7 @@ class CandidateStore:
             )
             if doc is None:
                 return None
+            get_aad_engine().update_from_vote(doc)
             return self._clean(doc)
 
 
