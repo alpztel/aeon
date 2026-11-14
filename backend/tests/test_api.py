@@ -174,3 +174,21 @@ def test_discovery_to_orbit_chain(client):
 def test_orbit_fit_needs_three_detections(client):
     r = client.post("/api/v1/orbit/simulate", json={"detections": [{"t": 2026.1, "ra": 10, "dec": 0}, {"t": 2026.2, "ra": 10.01, "dec": 0}]})
     assert r.status_code == 422
+
+
+def test_gzip_and_server_timing(client):
+    r = client.get("/api/v1/sky/cutout", params={"ra": 10.0, "dec": 20.0, "size_px": 64}, headers={"Accept-Encoding": "gzip"})
+    assert r.headers.get("content-encoding") == "gzip"
+    assert r.headers["server-timing"].startswith("app;dur=")
+
+
+def test_stack_cache_makes_repeat_fast(client):
+    import time
+
+    q = {"ra": 33.3, "dec": -5.5, "rate_arcsec_yr": 50, "pa_deg": 10, "distance_au": 800}
+    t0 = time.perf_counter()
+    client.post("/api/v1/analysis/shift-stack", json=q)
+    first = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    client.post("/api/v1/analysis/shift-stack", json={**q, "pa_deg": 12})     # slider move, same frames
+    assert time.perf_counter() - t0 < max(0.5 * first, 0.3)

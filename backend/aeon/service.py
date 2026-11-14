@@ -178,6 +178,11 @@ def cutout(ra: float, dec: float, epoch: str, size_px: int, scale: float, band: 
 
 
 def spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float) -> dict:
+    return _spectrum_cached(round(float(ra), 7), round(float(dec), 7), epoch, round(float(aperture_arcsec), 3))
+
+
+@lru_cache(maxsize=256)
+def _spectrum_cached(ra: float, dec: float, epoch: str, aperture_arcsec: float) -> dict:
     t = epoch_year(epoch)
     hit = resolve_target(ra, dec, t, tol_arcsec=max(aperture_arcsec, 2 * sky.NATIVE_PIXEL_SCALE))
     ra_c, dec_c = (hit[1], hit[2]) if hit else (ra, dec)
@@ -231,9 +236,22 @@ def _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale):
 
 def _frame_size(max_offset_px: float, stamp: int) -> int:
     size = int(2 * math.ceil(max_offset_px) + stamp + 12)
+    size = int(math.ceil(size / 64.0) * 64)          # quantised so slider changes reuse the cache
     if size > MAX_FRAME_PX:
         raise RequestError(f"Track spans {max_offset_px:.0f} px; reduce rates or raise the minimum distance.")
     return size
+
+
+@lru_cache(maxsize=6)
+def _tracker_cached(ra: float, dec: float, n: int, fsize: int, scale: float, band: int | None):
+    times = _frame_times(n)
+    frames, w = _render_frames(ra, dec, times, fsize, scale, band)
+    c = (fsize - 1) / 2.0
+    return analysis.Tracker(analysis.remove_static_sky(frames), _psf_sigma_px(band, scale), c, c), w, times
+
+
+def _tracker(ra: float, dec: float, n: int, fsize: int, scale: float, band: int | None):
+    return _tracker_cached(round(float(ra), 7), round(float(dec), 7), int(n), int(fsize), float(scale), band)
 
 
 def _stack_payload(r: dict, band: int | None, n_frames: int, times: np.ndarray, rate: float, pa: float,
@@ -270,9 +288,7 @@ def _shift_stack(req: dict) -> dict:
     t_ref = float(np.mean(times))
     dx, dy, tra, tdec = _hypothesis(ra, dec, t_ref, times, rate, pa, dist, scale)
     fsize = _frame_size(float(np.max(np.abs(np.concatenate([dx, dy])))), size)
-    frames, w = _render_frames(ra, dec, times, fsize, scale, band)
-    c = (fsize - 1) / 2.0
-    tracker = analysis.Tracker(analysis.remove_static_sky(frames), _psf_sigma_px(band, scale), c, c)
+    tracker, w, _ = _tracker(ra, dec, n, fsize, scale, band)
     r = analysis.run_tracked(tracker, w, times, t_ref, dx, dy, size, 6.0, req.get("combine", "mean"))
     return _stack_payload(r, band, n, times, rate, pa, dist, tra, tdec)
 
@@ -309,9 +325,8 @@ def _blind_search(req: dict) -> dict:
                 hyps[(k, i, j)] = (dx, dy)
                 max_off = max(max_off, float(np.max(np.abs(np.concatenate([dx, dy])))))
     fsize = _frame_size(max_off + 2.0, max(size, BLIND_STAMP_PX))
-    frames, w = _render_frames(ra, dec, times, fsize, scale, band)
-    c = (fsize - 1) / 2.0
-    tracker = analysis.Tracker(analysis.remove_static_sky(frames), _psf_sigma_px(band, scale), c, c)
+    tracker, w, _ = _tracker(ra, dec, n, fsize, scale, band)
+    c = tracker.cx
 
     scores = np.full((len(distances), grid, grid), -np.inf)
     for (k, i, j), (dx, dy) in hyps.items():

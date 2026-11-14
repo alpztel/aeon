@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, model_validator
 
@@ -26,7 +28,18 @@ app.add_middleware(
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["Server-Timing"],
 )
+# Image arrays compress ~4-6x; the frontend's fetch() decompresses transparently.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
+
+
+@app.middleware("http")
+async def server_timing(request: Request, call_next):
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - t0) * 1000:.1f}"
+    return response
 
 
 def _guard(fn, *args, **kwargs):
