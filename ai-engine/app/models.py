@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -114,16 +115,33 @@ def synthesize_spectrum(
 
 
 def preprocess_flux(flux_ujy: np.ndarray | list[float]) -> np.ndarray:
-    """Log-normalize 102-band flux and standardize to zero mean / unit std."""
-    arr = np.asarray(flux_ujy, dtype=np.float32).reshape(-1)
-    if arr.size != 102:
-        raise ValueError(f"Expected 102 bands, got {arr.size}")
-    # Signed log transform to handle noisy negative bands while preserving dynamic range
-    pos = np.maximum(arr, 1e-6)
-    log_f = np.log10(pos)
+    """Scale-invariant log normalization in float64 that safely handles extreme magnitudes (1e-300..1e300)
+    and background-subtracted negative bands without 7-decade clipping artifacts."""
+    arr64 = np.asarray(flux_ujy, dtype=np.float64).reshape(-1)
+    if arr64.size != 102:
+        raise ValueError(f"Expected 102 bands, got {arr64.size}")
+    if not np.all(np.isfinite(arr64)):
+        raise ValueError("Spectrum contains non-finite (NaN or Inf) flux values")
+
+    pos_vals = arr64[arr64 > 0.0]
+    if pos_vals.size == 0:
+        return np.zeros(102, dtype=np.float32)
+
+    # Pre-scale in float64 by the 90th percentile positive flux so 1e300 or 1e-300 never overflows float32
+    ref_scale = float(np.percentile(pos_vals, 90))
+    if ref_scale <= 0.0 or not math.isfinite(ref_scale):
+        return np.zeros(102, dtype=np.float32)
+
+    scaled = arr64 / ref_scale
+    # Floor at 1e-4 of peak (4 decades = 10 AB magnitudes dynamic range)
+    log_f = np.log10(np.maximum(scaled, 1e-4))
     mean = float(np.mean(log_f))
     std = float(np.std(log_f))
-    normed = (log_f - mean) / max(std, 1e-4)
+    if std < 1e-5:
+        return np.zeros(102, dtype=np.float32)
+    # Subtracting mean(log_f) removes apparent magnitude / distance scaling (100% scale-invariant),
+    # while dividing by fixed 1.2 decades (3 AB mag) preserves true physical colour amplitude (J - W2)!
+    normed = (log_f - mean) / 1.2
     return normed.astype(np.float32)
 
 
@@ -140,12 +158,10 @@ class Spectral1DCNN(nn.Module):
         self.pool = nn.AdaptiveAvgPool1d(16)
         self.fc1 = nn.Linear(64 * 16, 64)
         self.fc2 = nn.Linear(64, n_classes)
-        # Direct residual spectral template projection for calibrated small-sample robustness
         self.template_proj = nn.Linear(102, n_classes, bias=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x shape: (B, 102)
-        h = x.unsqueeze(1)  # (B, 1, 102)
+        h = x.unsqueeze(1)
         h = F.gelu(self.bn1(self.conv1(h)))
         h = F.max_pool1d(h, 2)
         h = F.gelu(self.bn2(self.conv2(h)))
@@ -164,8 +180,8 @@ class PatchAnomalyViT(nn.Module):
         super().__init__()
         self.patch_size = patch_size
         self.img_size = img_size
-        n_patches = (img_size // patch_size) ** 2  # 64 patches
-        patch_dim = patch_size * patch_size        # 64 pixels per patch
+        n_patches = (img_size // patch_size) ** 2
+        patch_dim = patch_size * patch_size
 
         self.patch_embed = nn.Linear(patch_dim, d_model)
         self.pos_embed = nn.Parameter(torch.zeros(1, n_patches, d_model))
@@ -181,7 +197,6 @@ class PatchAnomalyViT(nn.Module):
         self.reconstruct = nn.Linear(d_model, patch_dim)
 
     def patchify(self, img: torch.Tensor) -> torch.Tensor:
-        # img: (B, H, W) where H=W=64
         b, h, w = img.shape
         p = self.patch_size
         patches = img.reshape(b, h // p, p, w // p, p).permute(0, 1, 3, 2, 4).reshape(b, -1, p * p)
@@ -202,7 +217,6 @@ def _init_calibrated_weights(cnn: Spectral1DCNN, vit: PatchAnomalyViT) -> None:
     with torch.no_grad():
         for p in cnn.parameters():
             p.mul_(0.02)
-        # Build canonical normalized templates for the 5 classes
         templates = []
         for cls_name in OBJECT_CLASSES:
             if cls_name == "cold_brown_dwarf":
@@ -216,18 +230,15 @@ def _init_calibrated_weights(cnn: Spectral1DCNN, vit: PatchAnomalyViT) -> None:
             else:
                 specs = [preprocess_flux(synthesize_spectrum(cls_name, 19.0, redshift=z)) for z in (1.5, 2.0, 3.0)]
             tpl = np.mean(specs, axis=0)
-            tpl = tpl / max(float(np.linalg.norm(tpl)), 1e-6)
             templates.append(tpl)
 
-        tpl_mat = np.stack(templates, axis=0)  # (5, 102)
-        gram = tpl_mat @ tpl_mat.T + 1e-2 * np.eye(len(OBJECT_CLASSES))
-        disc_weights = np.linalg.solve(gram, tpl_mat) * 12.0  # (5, 102)
+        tpl_mat = np.stack(templates, axis=0)
+        gram = tpl_mat @ tpl_mat.T + 5e-2 * np.eye(len(OBJECT_CLASSES))
+        disc_weights = np.linalg.solve(gram, tpl_mat) * 14.0
         bias_vec = -0.5 * np.sum(disc_weights * tpl_mat, axis=1)
         cnn.template_proj.weight.copy_(torch.from_numpy(disc_weights.astype(np.float32)))
         cnn.template_proj.bias.copy_(torch.from_numpy(bias_vec.astype(np.float32)))
 
-        # Initialize ViT as near-identity spatial smoother so smooth background has low MSE
-        # and sharp dipoles / point-source anomalies produce elevated reconstruction error.
         nn.init.orthogonal_(vit.patch_embed.weight, gain=0.5)
         vit.patch_embed.bias.zero_()
         nn.init.orthogonal_(vit.reconstruct.weight, gain=0.5)
@@ -290,10 +301,15 @@ class ModelRegistry:
         """Return (probabilities_dict, top_class, spectral_anomaly_hint)."""
         if flux_ujy is None:
             probs = {cls: round(1.0 / len(OBJECT_CLASSES), 4) for cls in OBJECT_CLASSES}
-            return probs, "main_sequence_star", 0.25
+            return probs, "main_sequence_star", 0.10
 
         norm_x = preprocess_flux(flux_ujy)
-        tensor_x = torch.from_numpy(norm_x).unsqueeze(0)  # (1, 102)
+        # If the spectrum is completely flat, zero, or negative everywhere, return uniform prior & low anomaly
+        if float(np.std(norm_x)) < 1e-5:
+            probs = {cls: round(1.0 / len(OBJECT_CLASSES), 4) for cls in OBJECT_CLASSES}
+            return probs, "main_sequence_star", 0.10
+
+        tensor_x = torch.from_numpy(norm_x).unsqueeze(0)
         with torch.no_grad():
             logits = self.cnn(tensor_x)[0]
             prob_tensor = F.softmax(logits, dim=-1).cpu().numpy()
@@ -308,46 +324,61 @@ class ModelRegistry:
 
         top_class = max(probs.items(), key=lambda kv: kv[1])[0]
 
-        # Compute spectral rarity / anomaly hint: planet_x_candidate & cold_brown_dwarf or high entropy
         px_p = probs.get("planet_x_candidate", 0.0)
         bd_p = probs.get("cold_brown_dwarf", 0.0)
         hz_p = probs.get("high_z_galaxy", 0.0)
         spec_anom = float(np.clip(0.20 + 0.75 * px_p + 0.55 * bd_p + 0.45 * hz_p, 0.05, 0.98))
         return probs, top_class, spec_anom
 
-    def score_image_anomaly(self, image_dict: dict[str, Any] | None, spec_hint: float = 0.25) -> float:
-        """Compute PatchAnomalyViT anomaly score in [0.00, 1.00]."""
+    def score_image_anomaly(self, image_dict: dict[str, Any] | None, spec_hint: float = 0.10) -> float:
+        """Compute PatchAnomalyViT anomaly score in [0.00, 1.00], distinguishing multi-pixel PSF/dipoles
+        from blank images and single-pixel cosmic-ray artifacts."""
         if not image_dict or "data" not in image_dict:
             return round(float(np.clip(spec_hint, 0.0, 1.0)), 4)
 
         width = int(image_dict.get("width", 64))
         height = int(image_dict.get("height", 64))
-        raw = np.asarray(image_dict["data"], dtype=np.float32)
-        if raw.size != width * height or raw.size == 0:
+        raw64 = np.asarray(image_dict["data"], dtype=np.float64)
+        if raw64.size != width * height or raw64.size == 0:
             return round(float(np.clip(spec_hint, 0.0, 1.0)), 4)
+        if not np.all(np.isfinite(raw64)):
+            raise ValueError("Image data contains non-finite (NaN or Inf) values")
 
-        img2d = raw.reshape(height, width)
+        std_raw = float(np.std(raw64))
+        if std_raw < 1e-12:
+            # Blank / constant cutout has zero spatial structure
+            return round(float(min(0.05, spec_hint)), 4)
+
+        img2d = raw64.reshape(height, width)
         med = float(np.median(img2d))
         mad = float(np.median(np.abs(img2d - med)))
-        robust_sigma = max(1.4826 * mad, float(np.std(img2d)) * 0.5, 1e-6)
-        z_img = (img2d - med) / robust_sigma
+        robust_sigma = max(1.4826 * mad, std_raw * 0.25, 1e-9)
+        z_img = ((img2d - med) / robust_sigma).astype(np.float32)
 
-        # Resize/interpolate to 64x64 for PatchAnomalyViT
-        t_img = torch.from_numpy(z_img).unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
+        # Check PSF spatial coherence around peak pixel to reject 1-pixel cosmic rays / hot pixels
+        peak_idx = int(np.argmax(z_img))
+        py, px = divmod(peak_idx, width)
+        y0, y1 = max(0, py - 1), min(height, py + 2)
+        x0, x1 = max(0, px - 1), min(width, px + 2)
+        patch_3x3 = z_img[y0:y1, x0:x1]
+        peak_pos = float(z_img[py, px])
+        neighbor_sum = float(np.sum(np.maximum(patch_3x3, 0.0)) - max(peak_pos, 0.0))
+        # A real SPHEREx PSF distributes flux into neighboring pixels; a 1-px cosmic ray has neighbor_sum ~ 0
+        psf_coherence = float(np.clip(neighbor_sum / max(peak_pos * 1.5, 1e-6), 0.15, 1.0))
+
+        t_img = torch.from_numpy(z_img).unsqueeze(0).unsqueeze(0)
         if (height, width) != (64, 64):
             t_img = F.interpolate(t_img, size=(64, 64), mode="bilinear", align_corners=False)
-        t_img_64 = torch.clamp(t_img.squeeze(0), -10.0, 25.0)  # (1, 64, 64)
+        t_img_64 = torch.clamp(t_img.squeeze(0), -10.0, 25.0)
 
         with torch.no_grad():
             mse, _ = self.vit(t_img_64)
             vit_err = float(mse[0].item())
 
-        peak_pos = float(np.max(z_img))
         peak_neg = float(np.max(-z_img))
-        # Dipole signature (both strong positive and negative lobe, as in difference image)
-        dipole_bonus = 0.22 if (peak_pos > 4.0 and peak_neg > 4.0) else 0.0
-        snr_term = float(np.tanh(max(peak_pos - 2.5, 0.0) / 8.0))
-        vit_term = float(np.tanh(vit_err / 6.0))
+        dipole_bonus = 0.25 if (peak_pos > 4.0 and peak_neg > 4.0 and psf_coherence > 0.35) else 0.0
+        snr_term = float(np.tanh(max(peak_pos - 2.5, 0.0) / 8.0)) * psf_coherence
+        vit_term = float(np.tanh(vit_err / 6.0)) * psf_coherence
 
         combined = 0.45 * vit_term + 0.40 * snr_term + dipole_bonus + 0.15 * spec_hint
         return round(float(np.clip(combined, 0.0, 1.0)), 4)

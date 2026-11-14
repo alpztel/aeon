@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import logging
 import os
+import threading
 import time
 import uuid
 from typing import Any
@@ -25,15 +26,18 @@ OBJECT_CLASSES = (
     "high_z_galaxy",
 )
 
-# Synthetic target PX-2026-09 reference coordinates
-PX_SYNTHETIC_RA = 51.20000
-PX_SYNTHETIC_DEC = 14.80000
+# Synthetic target PX-2026-09 reference (heliocentric) and 2026-Q1 geocentric (Earth parallax) coordinates
+PX_SYNTHETIC_POSITIONS: tuple[tuple[float, float], ...] = (
+    (51.20000, 14.80000),
+    (51.295473, 14.8325559),
+)
 
 
 class CandidateStore:
-    """MongoDB Atlas or in-memory mongomock repository for citizen-science candidates."""
+    """Thread-safe MongoDB Atlas or in-memory mongomock repository for citizen-science candidates."""
 
     def __init__(self) -> None:
+        self._lock = threading.RLock()
         uri = os.environ.get("MONGODB_URI", "").strip()
         if uri and not os.environ.get("PYTEST_CURRENT_TEST"):
             self._client: Any = pymongo.MongoClient(uri, serverSelectionTimeoutMS=3000)
@@ -45,9 +49,10 @@ class CandidateStore:
         self._seed_initial_candidates()
 
     def reset_for_tests(self) -> None:
-        self._col.delete_many({})
-        self._ip_hits.clear()
-        self._seed_initial_candidates()
+        with self._lock:
+            self._col.delete_many({})
+            self._ip_hits.clear()
+            self._seed_initial_candidates()
 
     def _seed_initial_candidates(self) -> None:
         if self._col.count_documents({}) > 0:
@@ -84,15 +89,16 @@ class CandidateStore:
         self._col.insert_many(seeds)
 
     def check_rate_limit(self, client_ip: str) -> bool:
-        limit = int(os.environ.get("AEON_RATE_LIMIT_PER_MIN", "60"))
-        now = time.time()
-        window = [t for t in self._ip_hits.get(client_ip, []) if now - t < 60.0]
-        if len(window) >= limit:
+        with self._lock:
+            limit = int(os.environ.get("AEON_RATE_LIMIT_PER_MIN", "60"))
+            now = time.time()
+            window = [t for t in self._ip_hits.get(client_ip, []) if now - t < 60.0]
+            if len(window) >= limit:
+                self._ip_hits[client_ip] = window
+                return False
+            window.append(now)
             self._ip_hits[client_ip] = window
-            return False
-        window.append(now)
-        self._ip_hits[client_ip] = window
-        return True
+            return True
 
     @staticmethod
     def _clean(doc: dict[str, Any]) -> dict[str, Any]:
@@ -100,20 +106,22 @@ class CandidateStore:
         return out
 
     def list_candidates(self, sort: str = "votes", limit: int = 50) -> list[dict[str, Any]]:
-        sort_field = {
-            "votes": ("votes", pymongo.DESCENDING),
-            "recent": ("created_utc", pymongo.DESCENDING),
-            "anomaly": ("anomaly_score", pymongo.DESCENDING),
-        }.get(sort, ("votes", pymongo.DESCENDING))
-        cursor = self._col.find({}).sort([sort_field]).limit(int(limit))
-        return [self._clean(doc) for doc in cursor]
+        with self._lock:
+            sort_field = {
+                "votes": ("votes", pymongo.DESCENDING),
+                "recent": ("created_utc", pymongo.DESCENDING),
+                "anomaly": ("anomaly_score", pymongo.DESCENDING),
+            }.get(sort, ("votes", pymongo.DESCENDING))
+            cursor = self._col.find({}).sort([sort_field]).limit(int(limit))
+            return [self._clean(doc) for doc in cursor]
 
     def find_within_arcsec(self, ra: float, dec: float, max_sep_arcsec: float = 3.0) -> dict[str, Any] | None:
-        for doc in self._col.find({}):
-            sep = angular_sep_arcsec(ra, dec, float(doc["ra"]), float(doc["dec"]))
-            if sep <= max_sep_arcsec:
-                return self._clean(doc)
-        return None
+        with self._lock:
+            for doc in self._col.find({}):
+                sep = angular_sep_arcsec(ra, dec, float(doc["ra"]), float(doc["dec"]))
+                if sep <= max_sep_arcsec:
+                    return self._clean(doc)
+            return None
 
     def _enrich_candidate(self, cand: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         ra = float(cand["ra"])
@@ -122,12 +130,16 @@ class CandidateStore:
         ai_url = os.environ.get("AEON_AI_URL", "http://localhost:8100").rstrip("/")
 
         notes_str = str(cand.get("notes") or "")
+        near_px = any(
+            angular_sep_arcsec(ra, dec, px_ra, px_dec) <= 600.0
+            for px_ra, px_dec in PX_SYNTHETIC_POSITIONS
+        )
         is_synthetic = bool(
             cand.get("is_synthetic")
             or "synthetic" in notes_str.lower()
             or "sentetik" in notes_str.lower()
             or "px-2026-09" in notes_str.lower()
-            or angular_sep_arcsec(ra, dec, PX_SYNTHETIC_RA, PX_SYNTHETIC_DEC) <= 300.0
+            or near_px
         )
 
         flux_ujy: list[float] | None = None
@@ -236,43 +248,45 @@ class CandidateStore:
         ra = float(candidate_data["ra"])
         dec = float(candidate_data["dec"])
 
-        # Deduplicate within <= 3 arcsec
-        existing = self.find_within_arcsec(ra, dec, max_sep_arcsec=3.0)
-        if existing is not None:
-            return existing
+        with self._lock:
+            # Atomic deduplication within <= 3 arcsec
+            existing = self.find_within_arcsec(ra, dec, max_sep_arcsec=3.0)
+            if existing is not None:
+                return existing
 
-        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        record: dict[str, Any] = {
-            "id": str(candidate_data.get("id") or f"cand-{uuid.uuid4().hex[:8]}"),
-            "ra": ra,
-            "dec": dec,
-            "object_class": candidate_data.get("object_class"),
-            "anomaly_score": candidate_data.get("anomaly_score"),
-            "snr": candidate_data.get("snr"),
-            "votes": int(candidate_data.get("votes") if candidate_data.get("votes") is not None else 1),
-            "submitted_by": str(candidate_data.get("submitted_by") or "citizen-scientist"),
-            "created_utc": str(candidate_data.get("created_utc") or now_iso),
-            "github_issue_url": candidate_data.get("github_issue_url"),
-            "notes": str(candidate_data.get("notes") or ""),
-        }
+            now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            record: dict[str, Any] = {
+                "id": str(candidate_data.get("id") or f"cand-{uuid.uuid4().hex[:8]}"),
+                "ra": ra,
+                "dec": dec,
+                "object_class": candidate_data.get("object_class"),
+                "anomaly_score": candidate_data.get("anomaly_score"),
+                "snr": candidate_data.get("snr"),
+                "votes": int(candidate_data.get("votes") if candidate_data.get("votes") is not None else 1),
+                "submitted_by": str(candidate_data.get("submitted_by") or "citizen-scientist"),
+                "created_utc": str(candidate_data.get("created_utc") or now_iso),
+                "github_issue_url": candidate_data.get("github_issue_url"),
+                "notes": str(candidate_data.get("notes") or ""),
+            }
 
-        record, is_synthetic = self._enrich_candidate(record)
-        issue_url = self._maybe_open_github_issue(record, is_synthetic=is_synthetic)
-        if issue_url:
-            record["github_issue_url"] = issue_url
+            record, is_synthetic = self._enrich_candidate(record)
+            issue_url = self._maybe_open_github_issue(record, is_synthetic=is_synthetic)
+            if issue_url:
+                record["github_issue_url"] = issue_url
 
-        self._col.insert_one(dict(record))
-        return self._clean(record)
+            self._col.insert_one(dict(record))
+            return self._clean(record)
 
     def vote(self, candidate_id: str) -> dict[str, Any] | None:
-        doc = self._col.find_one_and_update(
-            {"id": candidate_id},
-            {"$inc": {"votes": 1}},
-            return_document=pymongo.ReturnDocument.AFTER,
-        )
-        if doc is None:
-            return None
-        return self._clean(doc)
+        with self._lock:
+            doc = self._col.find_one_and_update(
+                {"id": candidate_id},
+                {"$inc": {"votes": 1}},
+                return_document=pymongo.ReturnDocument.AFTER,
+            )
+            if doc is None:
+                return None
+            return self._clean(doc)
 
 
 _store: CandidateStore | None = None

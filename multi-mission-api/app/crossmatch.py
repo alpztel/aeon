@@ -129,12 +129,17 @@ def _build_sed(
         flx = spherex_spec.get("flux_ujy") or []
         err = spherex_spec.get("flux_err_ujy") or []
         for idx, (lam, f_val) in enumerate(zip(wls, flx)):
-            e_val = err[idx] if idx < len(err) else abs(float(f_val)) * 0.05
+            lam_f = float(lam)
+            f_f = float(f_val)
+            if not (math.isfinite(lam_f) and math.isfinite(f_f)) or lam_f <= 0.0:
+                continue
+            e_raw = float(err[idx]) if idx < len(err) else abs(f_f) * 0.05
+            e_f = max(0.0, e_raw) if math.isfinite(e_raw) else abs(f_f) * 0.05
             sed.append(
                 {
-                    "wavelength_um": round(float(lam), 4),
-                    "flux_ujy": round(float(f_val), 4),
-                    "flux_err_ujy": round(float(e_val), 4),
+                    "wavelength_um": round(lam_f, 4),
+                    "flux_ujy": round(max(0.0, f_f), 4),
+                    "flux_err_ujy": round(e_f, 4),
                     "survey": "SPHEREx",
                 }
             )

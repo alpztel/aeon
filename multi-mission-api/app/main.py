@@ -62,11 +62,11 @@ async def server_timing(request: Request, call_next):
 
 class CandidateInput(BaseModel):
     id: str | None = None
-    ra: float = Field(..., ge=0.0, le=360.0)
-    dec: float = Field(..., ge=-90.0, le=90.0)
+    ra: float = Field(..., ge=0.0, le=360.0, allow_inf_nan=False)
+    dec: float = Field(..., ge=-90.0, le=90.0, allow_inf_nan=False)
     object_class: ObjectClass | None = None
-    anomaly_score: float | None = Field(None, ge=0.0, le=1.0)
-    snr: float | None = None
+    anomaly_score: float | None = Field(None, ge=0.0, le=1.0, allow_inf_nan=False)
+    snr: float | None = Field(None, allow_inf_nan=False)
     votes: int | None = None
     submitted_by: str | None = None
     created_utc: str | None = None
@@ -87,9 +87,9 @@ def healthz() -> dict[str, Any]:
 
 @app.get("/api/v1/missions/crossmatch", tags=["missions"])
 def missions_crossmatch(
-    ra: float = Query(..., ge=0.0, le=360.0),
-    dec: float = Query(..., ge=-90.0, le=90.0),
-    radius_arcsec: float = Query(6.0, gt=0.0, le=3600.0),
+    ra: float = Query(..., ge=0.0, le=360.0, allow_inf_nan=False),
+    dec: float = Query(..., ge=-90.0, le=90.0, allow_inf_nan=False),
+    radius_arcsec: float = Query(6.0, gt=0.0, le=3600.0, allow_inf_nan=False),
 ) -> dict[str, Any]:
     return run_crossmatch(ra=ra, dec=dec, radius_arcsec=radius_arcsec)
 

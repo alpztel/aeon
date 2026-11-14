@@ -48,8 +48,8 @@ KNOWN_TARGETS: dict[str, dict[str, Any]] = {
     "px-2026-09": {
         "id": "px-2026-09",
         "name": "PX-2026-09",
-        "ra": 51.20312,
-        "dec": 14.80163,
+        "ra": 51.295473,
+        "dec": 14.8325559,
         "object_class": "planet_x_candidate",
         "is_synthetic": True,
         "rate_arcsec_yr": 110.0,
@@ -314,7 +314,7 @@ def _execute_knowledge_tool(name: str, tool_input: dict[str, Any]) -> dict[str, 
 
 
 def _extract_target(text: str) -> dict[str, Any] | None:
-    low = text.lower()
+    low = text.lower().replace("i\u0307", "i")
     for tid, info in KNOWN_TARGETS.items():
         if any(re.search(pat, low) for pat in info["patterns"]):
             remote = _lookup_catalog_remote_or_local(tid)
@@ -343,6 +343,14 @@ def _extract_coords(text: str) -> tuple[float, float] | None:
     )
     if m_pair:
         ra, dec = float(m_pair.group(1)), float(m_pair.group(2))
+        if 0.0 <= ra <= 360.0 and -90.0 <= dec <= 90.0:
+            return ra, dec
+    m_bare = re.match(
+        r"^\s*([0-9]{1,3}\.[0-9]+)\s*[,;\s]+\s*([+\-]?[0-9]{1,2}\.[0-9]+)\s*$",
+        text,
+    )
+    if m_bare:
+        ra, dec = float(m_bare.group(1)), float(m_bare.group(2))
         if 0.0 <= ra <= 360.0 and -90.0 <= dec <= 90.0:
             return ra, dec
     return None
@@ -431,6 +439,10 @@ def parse_rule_based(message: str, lang: str | None = None, context: dict[str, A
         rate_val = float(rate_m.group(1)) if rate_m else float(target.get("rate_arcsec_yr", 110.0) if target else 110.0)
         pa_val = float(pa_m.group(1)) if pa_m else float(target.get("pa_deg", 62.0) if target else 62.0)
         dist_val = float(dist_m.group(1)) if dist_m else (float(target["distance_au"]) if target and target.get("distance_au") else 520.0)
+        # Enforce physical bounds matching backend AnalysisRequest
+        rate_val = max(0.0, min(5000.0, rate_val))
+        pa_val = round(pa_val % 360.0, 4)
+        dist_val = max(1.0, min(1e6, dist_val))
         add_action(
             m_stack,
             "RUN_SHIFT_STACK",
