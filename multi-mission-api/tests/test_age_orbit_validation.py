@@ -189,8 +189,14 @@ def test_simbad_live_row_and_outage(monkeypatch):
     astro = simbad.astrometry(got["row"])
     assert math.isclose(astro["distance_pc"], 1000 / 546.9759, rel_tol=1e-9) and astro["radial_velocity_km_s"] == -110.47
     route.mock(return_value=Response(404, text="<!doctype html><title>Page unavailable</title>"))
+    mirror = respx.post(simbad.DEFAULT_SERVERS[1]).mock(return_value=Response(404, text="<!doctype html>"))
     down = simbad.lookup("NAME Barnard's star", 269.45, 4.69)
     assert down["status"] == "unavailable" and down["row"] is None and "SIMBAD did not answer" in down["reason"]
+    # CDS down, the Harvard mirror up: the mirror answers
+    mirror.mock(return_value=Response(200, text=SIMBAD_CSV))
+    via = simbad.lookup("NAME Barnard's star", 269.45, 4.69)
+    assert via["status"] == "live" and "simbad.cfa.harvard.edu" in via["source"]
+    mirror.mock(return_value=Response(404, text="<!doctype html>"))
     snap = simbad.lookup("NAME Barnard's star", 269.45, 4.69, snapshot={"row": got["row"], "retrieved_utc": "2026-01-01T00:00:00Z"})
     assert snap["status"] == "snapshot" and snap["row"]["main_id"].startswith("NAME Barnard")
     assert simbad.astrometry({"plx_value": None}) is None
@@ -259,7 +265,8 @@ def test_crossmatch_w0855_envelope_and_simbad_outage(client, monkeypatch):
         "matched_object": {"id": "wise-0855", "name": "WISE J085510.83-071442.5", "object_class": "cold_brown_dwarf",
                            "distance_pc": 2.28, "pm_ra_cosdec_arcsec_yr": -8.118, "pm_dec_arcsec_yr": 0.680}}))
     respx.post(f"{CORE}/api/v1/orbit/simulate").mock(side_effect=_orbit_answer)
-    respx.post(simbad.SIMBAD_TAP).mock(return_value=Response(404, text="<!doctype html>"))
+    for url in simbad.SIMBAD_SERVERS:
+        respx.post(url).mock(return_value=Response(404, text="<!doctype html>"))
     body = client.get("/api/v1/missions/crossmatch", params={"ra": 133.79513, "dec": -7.24514}).json()
     assert_path_response_schema(body, "/api/v1/missions/crossmatch")
     gal = body["kinematics"]["galactic"]
@@ -269,8 +276,11 @@ def test_crossmatch_w0855_envelope_and_simbad_outage(client, monkeypatch):
     assert am["spectral"]["constraint"] == "unconstrained" and am["joint"]["channels"] == ["spectral", "kinematic"]
     val = body["validation"]
     rows = {r["key"]: r for r in val["rows"]}
-    assert val["simbad"]["status"] == "unavailable"
-    assert rows["u_lsr_km_s"]["agreement"] == "not_comparable" and "SIMBAD" in rows["u_lsr_km_s"]["not_comparable_reason"]
+    # every SIMBAD server down: the stored SIMBAD row (fixtures) is the reference, never an invented one
+    assert val["simbad"]["status"] == "snapshot" and val["simbad"]["object"]["main_id"].startswith("WISEA J085510")
+    assert val["reference_kinematics"]["rv_status"] == "marginalized_envelope"     # SIMBAD has no RV either
+    assert rows["u_lsr_km_s"]["agreement"] != "not_comparable"
+    assert {"rv_envelope", "ref_rv_missing"} <= set(rows["u_lsr_km_s"]["causes"])
     assert rows["mass"]["agreement"] == "consistent" and rows["mass"]["unit"] == "M_Jup"       # Luhman 2014: 3-10 M_Jup
     assert rows["teff_k"]["agreement"] == "consistent"                                          # Luhman 2014: 225-260 K
     assert "2014ApJ...786L..18L" in rows["mass"]["reference_source"]
@@ -294,3 +304,10 @@ def test_crossmatch_planet_x_is_not_a_star(client):
 def test_no_live_queries_leak_from_tests():
     assert os.environ.get("AEON_ENABLE_LIVE_SIMBAD") != "1"
     assert simbad.lookup("x", 1.0, 1.0)["status"] == "unavailable"
+
+
+def test_simbad_snapshot_covers_every_reference_target():
+    targets = validation.reference_data()["targets"]
+    for tid, t in targets.items():
+        row = (t["simbad_snapshot"] or {}).get("row")
+        assert row and row["main_id"] and row["plx_value"] > 0, tid
