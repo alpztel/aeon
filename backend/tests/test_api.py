@@ -151,8 +151,10 @@ def test_orbit_elements_jupiter_period(client):
     assert math.hypot(x - 5.2026, y) < 0.5
 
 
-def test_orbit_rejects_star(client):
-    assert client.post("/api/v1/orbit/simulate", json={"target_id": "wise-0855"}).status_code == 422
+def test_orbit_rejects_what_has_no_orbit(client):
+    # a quasar has neither a solar-system nor a Galactic orbit; a brown dwarf is not a solar-system body
+    assert client.post("/api/v1/orbit/simulate", json={"target_id": "apm-08279"}).status_code == 422
+    assert client.post("/api/v1/orbit/simulate", json={"target_id": "wise-0855", "regime": "solar_system"}).status_code == 422
     assert client.post("/api/v1/orbit/simulate", json={}).status_code == 422
 
 

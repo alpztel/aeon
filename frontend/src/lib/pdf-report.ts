@@ -350,8 +350,8 @@ export async function generateAndDownloadDiscoveryPdf(params: {
     false,
     [0.1, 0.1, 0.15],
     aiRes && (aiRes.data.spectrum_source === "none" || aiRes.data.spectrum_source === "unavailable")
-      ? "1D-CNN Top Class: N/A (no spectrum available)  |  PatchAnomalyViT Score: N/A"
-      : `1D-CNN Top Class: ${aiRes?.data.top_class ?? "N/A"}  |  PatchAnomalyViT Score: ${aiRes?.data.anomaly_score?.toFixed(2) ?? "N/A"} / 1.00`
+      ? "1D-CNN Top Class: N/A (no spectrum available)"
+      : `1D-CNN Top Class: ${aiRes?.data.top_class ?? "N/A"}`
   );
 
   // Section 5: REBOUND N-Body Forecast

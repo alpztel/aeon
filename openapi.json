@@ -899,6 +899,79 @@
                         },
                         "kbmod_expected_snr_gain": {
                           "type": "number"
+                        },
+                        "galactic": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "description": "Galactic space velocity w.r.t. the LSR (solar motion 11.1, 12.24, 7.25 km/s, Schoenrich et al. 2010) and population membership (Bensby et al. 2014). Without a measured radial velocity: three solutions (RV -30, 0, +30 km/s) and their envelope, never an invented RV.",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ok",
+                                "unmeasured",
+                                "not_applicable"
+                              ]
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "rv_status": {
+                              "type": "string",
+                              "enum": [
+                                "measured",
+                                "marginalized_envelope"
+                              ]
+                            },
+                            "inputs": {
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "additionalProperties": true,
+                              "description": "Astrometry used, with the source of every value."
+                            },
+                            "solutions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "properties": {
+                                  "rv_km_s": {
+                                    "type": "number"
+                                  },
+                                  "u_lsr_km_s": {
+                                    "type": "number"
+                                  },
+                                  "v_lsr_km_s": {
+                                    "type": "number"
+                                  },
+                                  "w_lsr_km_s": {
+                                    "type": "number"
+                                  },
+                                  "v_tot_km_s": {
+                                    "type": "number"
+                                  },
+                                  "membership": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                  }
+                                }
+                              }
+                            },
+                            "envelope": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     },
@@ -926,6 +999,700 @@
                           "preview_url": {
                             "type": "string",
                             "format": "uri"
+                          }
+                        }
+                      }
+                    },
+                    "age_mass": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "description": "Stage 2: age and mass from a spectral channel (brightness / temperature against Sonora Bobcat and BHAC15 evolution models on a mass-age grid) and a kinematic channel (age-velocity dispersion relation, Aumer & Binney 2009), and their product. A channel without data reports status 'unmeasured' and a reason; no value is filled in.",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ok",
+                            "partial",
+                            "unmeasured",
+                            "not_applicable"
+                          ]
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "substellar_w2",
+                            "stellar_hr",
+                            "none"
+                          ]
+                        },
+                        "inputs": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "description": "Measured values the fit used and the assumed uncertainty floors."
+                        },
+                        "assumptions": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "age_grid_gyr": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "spectral": {
+                          "type": "object",
+                          "description": "Posterior summary of one channel (16-84 % interval).",
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ok",
+                                "unmeasured",
+                                "no_model_match",
+                                "inconsistent"
+                              ]
+                            },
+                            "median_gyr": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "lo_gyr": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "hi_gyr": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "constraint": {
+                              "type": "string",
+                              "enum": [
+                                "constrained",
+                                "weak",
+                                "unconstrained"
+                              ],
+                              "description": "Width of the interval against the flat prior."
+                            },
+                            "pdf": {
+                              "type": [
+                                "array",
+                                "null"
+                              ],
+                              "items": {
+                                "type": "number"
+                              },
+                              "description": "Density per unit age on age_grid_gyr, peak = 1."
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "kinematic": {
+                          "type": "object",
+                          "description": "Posterior summary of one channel (16-84 % interval).",
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ok",
+                                "unmeasured",
+                                "no_model_match",
+                                "inconsistent"
+                              ]
+                            },
+                            "median_gyr": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "lo_gyr": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "hi_gyr": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "constraint": {
+                              "type": "string",
+                              "enum": [
+                                "constrained",
+                                "weak",
+                                "unconstrained"
+                              ],
+                              "description": "Width of the interval against the flat prior."
+                            },
+                            "pdf": {
+                              "type": [
+                                "array",
+                                "null"
+                              ],
+                              "items": {
+                                "type": "number"
+                              },
+                              "description": "Density per unit age on age_grid_gyr, peak = 1."
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "joint": {
+                          "type": "object",
+                          "description": "Posterior summary of one channel (16-84 % interval).",
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ok",
+                                "unmeasured",
+                                "no_model_match",
+                                "inconsistent"
+                              ]
+                            },
+                            "median_gyr": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "lo_gyr": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "hi_gyr": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "constraint": {
+                              "type": "string",
+                              "enum": [
+                                "constrained",
+                                "weak",
+                                "unconstrained"
+                              ],
+                              "description": "Width of the interval against the flat prior."
+                            },
+                            "pdf": {
+                              "type": [
+                                "array",
+                                "null"
+                              ],
+                              "items": {
+                                "type": "number"
+                              },
+                              "description": "Density per unit age on age_grid_gyr, peak = 1."
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "mass": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "additionalProperties": true,
+                          "properties": {
+                            "median_msun": {
+                              "type": "number"
+                            },
+                            "lo_msun": {
+                              "type": "number"
+                            },
+                            "hi_msun": {
+                              "type": "number"
+                            },
+                            "median_mjup": {
+                              "type": "number"
+                            },
+                            "lo_mjup": {
+                              "type": "number"
+                            },
+                            "hi_mjup": {
+                              "type": "number"
+                            },
+                            "from": {
+                              "type": "string"
+                            },
+                            "model_teff_k": {
+                              "type": "object",
+                              "properties": {
+                                "median": {
+                                  "type": "number"
+                                },
+                                "lo": {
+                                  "type": "number"
+                                },
+                                "hi": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "model_log_g_cgs": {
+                              "type": "object",
+                              "properties": {
+                                "median": {
+                                  "type": "number"
+                                },
+                                "lo": {
+                                  "type": "number"
+                                },
+                                "hi": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "model_radius_rjup": {
+                              "type": "object",
+                              "properties": {
+                                "median": {
+                                  "type": "number"
+                                },
+                                "lo": {
+                                  "type": "number"
+                                },
+                                "hi": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "model_log_l_lsun": {
+                              "type": "object",
+                              "properties": {
+                                "median": {
+                                  "type": "number"
+                                },
+                                "lo": {
+                                  "type": "number"
+                                },
+                                "hi": {
+                                  "type": "number"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "mass_spectral_only": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "additionalProperties": true
+                        },
+                        "degeneracy_track": {
+                          "type": "array",
+                          "description": "The mass-age degeneracy: the best-fitting mass at each age for the spectral observable alone.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "age_gyr": {
+                                "type": "number"
+                              },
+                              "mass_mjup": {
+                                "type": "number"
+                              },
+                              "teff_k": {
+                                "type": "number"
+                              },
+                              "log_g_cgs": {
+                                "type": "number"
+                              }
+                            }
+                          }
+                        },
+                        "references": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "galactic_orbit": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "description": "Stage 3 summary from the core backend (galpy, MWPotential2014): Galactic orbit over +/- 250 Myr and the closest approach to the Sun within +/- 50 kyr. Trajectories come from POST /api/v1/orbit/simulate.",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ok",
+                            "unavailable",
+                            "unmeasured",
+                            "not_applicable"
+                          ]
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "regime": {
+                          "type": "string",
+                          "enum": [
+                            "galactic",
+                            "solar_system"
+                          ]
+                        },
+                        "engine": {
+                          "type": "string"
+                        },
+                        "rv_status": {
+                          "type": "string",
+                          "enum": [
+                            "measured",
+                            "marginalized_envelope"
+                          ]
+                        },
+                        "summary": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "properties": {
+                            "r_peri_kpc": {
+                              "oneOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              ]
+                            },
+                            "r_apo_kpc": {
+                              "oneOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              ]
+                            },
+                            "z_max_kpc": {
+                              "oneOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              ]
+                            },
+                            "eccentricity": {
+                              "oneOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              ]
+                            },
+                            "t_min_kyr": {
+                              "oneOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              ]
+                            },
+                            "d_min_pc": {
+                              "oneOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number"
+                                  },
+                                  "minItems": 2,
+                                  "maxItems": 2
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "validation": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "description": "Stage 4 scorecard: AEON's result next to SIMBAD astrometry (pushed through the same kinematics and orbit) and peer-reviewed literature values. Verdicts follow a fixed rule (do the intervals overlap); the synthesis text is assembled from the rows only.",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ok",
+                            "no_reference",
+                            "not_applicable"
+                          ]
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "target_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "simbad": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "live",
+                                "cached",
+                                "snapshot",
+                                "not_found",
+                                "unavailable"
+                              ]
+                            },
+                            "source": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "object": {
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "additionalProperties": true
+                            }
+                          }
+                        },
+                        "literature": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "additionalProperties": true
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "key",
+                              "agreement"
+                            ],
+                            "additionalProperties": true,
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "object",
+                                "properties": {
+                                  "en": {
+                                    "type": "string"
+                                  },
+                                  "tr": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "aeon": {
+                                "type": [
+                                  "number",
+                                  "object",
+                                  "array",
+                                  "null"
+                                ]
+                              },
+                              "reference": {
+                                "type": [
+                                  "number",
+                                  "object",
+                                  "array",
+                                  "null"
+                                ]
+                              },
+                              "aeon_text": {
+                                "type": "string"
+                              },
+                              "reference_text": {
+                                "type": "string"
+                              },
+                              "aeon_source": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "reference_source": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "agreement": {
+                                "type": "string",
+                                "enum": [
+                                  "consistent",
+                                  "partial",
+                                  "discrepant",
+                                  "not_comparable"
+                                ]
+                              },
+                              "causes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "explanation": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "en": {
+                                    "type": "string"
+                                  },
+                                  "tr": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "not_comparable_reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "counts": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer"
+                          }
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "synthesis": {
+                          "type": "object",
+                          "properties": {
+                            "en": {
+                              "type": "string"
+                            },
+                            "tr": {
+                              "type": "string"
+                            },
+                            "method": {
+                              "type": "string"
+                            }
                           }
                         }
                       }
@@ -1931,7 +2698,7 @@
       },
       "OrbitRequest": {
         "type": "object",
-        "description": "Exactly one of detections, elements, observation or target_id.",
+        "description": "One of detections, elements, observation, galactic or target_id. Solar-system bodies are integrated with REBOUND (heliocentric); stars and brown dwarfs with galpy in the Milky Way potential (regime 'galactic'). regime 'auto' picks by the input: a galactic block, or a target_id whose catalog entry has a distance in parsec, is Galactic.",
         "properties": {
           "elements": {
             "type": "object",
@@ -2028,6 +2795,65 @@
               "$ref": "#/components/schemas/Astrometry"
             },
             "description": "Geocentric astrometry; a heliocentric state is fitted by least squares (Earth parallax included) and forecast with REBOUND."
+          },
+          "galactic": {
+            "type": "object",
+            "required": [
+              "ra",
+              "dec",
+              "distance_pc",
+              "pm_ra_cosdec_mas_yr",
+              "pm_dec_mas_yr"
+            ],
+            "description": "Astrometry of a star or brown dwarf (ICRS).",
+            "properties": {
+              "ra": {
+                "type": "number"
+              },
+              "dec": {
+                "type": "number"
+              },
+              "distance_pc": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "pm_ra_cosdec_mas_yr": {
+                "type": "number"
+              },
+              "pm_dec_mas_yr": {
+                "type": "number"
+              },
+              "radial_velocity_km_s": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Omit or null when not measured: the orbit is then integrated for -30, 0 and +30 km/s and reported as an envelope, never with an invented value."
+              }
+            }
+          },
+          "regime": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "solar_system",
+              "galactic"
+            ],
+            "default": "auto"
+          },
+          "span_myr": {
+            "type": "number",
+            "default": 250,
+            "exclusiveMinimum": 0,
+            "maximum": 1000,
+            "description": "Galactic regime: integrate this far into the past and the future."
+          },
+          "encounter_kyr": {
+            "type": "number",
+            "default": 50,
+            "exclusiveMinimum": 0,
+            "maximum": 500,
+            "description": "Galactic regime: window searched for the closest approach to the Sun."
           }
         }
       },
@@ -2042,11 +2868,14 @@
         "properties": {
           "engine": {
             "type": "string",
-            "description": "e.g. rebound-4.x/ias15 or numpy-leapfrog"
+            "description": "e.g. rebound-4.x/ias15, numpy-leapfrog or galpy-1.x/MWPotential2014"
           },
           "frame": {
             "type": "string",
-            "const": "heliocentric_ecliptic_J2000_au"
+            "enum": [
+              "heliocentric_ecliptic_J2000_au",
+              "galactocentric_cartesian_kpc"
+            ]
           },
           "epoch_start": {
             "type": "number"
@@ -2174,6 +3003,306 @@
               "elements": {
                 "type": "object",
                 "additionalProperties": true
+              }
+            }
+          },
+          "regime": {
+            "type": "string",
+            "enum": [
+              "solar_system",
+              "galactic"
+            ]
+          },
+          "galactic": {
+            "type": "object",
+            "description": "Galactic regime only (particle is then empty and planets is []): orbit in MWPotential2014 and the closest approach to the Sun.",
+            "properties": {
+              "engine": {
+                "type": "string"
+              },
+              "potential": {
+                "type": "string"
+              },
+              "r0_kpc": {
+                "type": "number"
+              },
+              "v0_km_s": {
+                "type": "number"
+              },
+              "solar_motion_km_s": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "rv_status": {
+                "type": "string",
+                "enum": [
+                  "measured",
+                  "marginalized_envelope"
+                ]
+              },
+              "rv_note": {
+                "type": "string"
+              },
+              "span_myr": {
+                "type": "number"
+              },
+              "encounter_window_kyr": {
+                "type": "number"
+              },
+              "input": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "orbits": {
+                "type": "array",
+                "description": "One per radial velocity (one if measured, three for the envelope).",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "rv_km_s": {
+                      "type": "number"
+                    },
+                    "r_peri_kpc": {
+                      "type": "number"
+                    },
+                    "r_apo_kpc": {
+                      "type": "number"
+                    },
+                    "z_max_kpc": {
+                      "type": "number"
+                    },
+                    "eccentricity": {
+                      "type": "number"
+                    },
+                    "trajectory": {
+                      "type": "object",
+                      "properties": {
+                        "t_myr": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "x_kpc": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "y_kpc": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "z_kpc": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "r_kpc": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "encounters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "rv_km_s": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "found",
+                        "beyond_window"
+                      ]
+                    },
+                    "t_min_kyr": {
+                      "type": "number",
+                      "description": "Time of closest approach, kyr from now (negative: past)."
+                    },
+                    "d_min_pc": {
+                      "type": "number"
+                    },
+                    "d_now_pc": {
+                      "type": "number"
+                    },
+                    "linear_check": {
+                      "type": "object",
+                      "properties": {
+                        "t_min_kyr": {
+                          "type": "number"
+                        },
+                        "d_min_pc": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "curve": {
+                      "type": "object",
+                      "properties": {
+                        "t_kyr": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "distance_pc": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "sun": {
+                "type": "object",
+                "properties": {
+                  "t_myr": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  },
+                  "x_kpc": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  },
+                  "y_kpc": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  },
+                  "z_kpc": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  },
+                  "r_kpc": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "summary": {
+                "type": "object",
+                "description": "A number when the radial velocity is measured, a [min, max] envelope otherwise.",
+                "properties": {
+                  "r_peri_kpc": {
+                    "oneOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    ]
+                  },
+                  "r_apo_kpc": {
+                    "oneOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    ]
+                  },
+                  "z_max_kpc": {
+                    "oneOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    ]
+                  },
+                  "eccentricity": {
+                    "oneOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    ]
+                  },
+                  "t_min_kyr": {
+                    "oneOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    ]
+                  },
+                  "d_min_pc": {
+                    "oneOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    ]
+                  },
+                  "encounter_status": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }

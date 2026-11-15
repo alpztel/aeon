@@ -16,7 +16,7 @@ import numpy as np
 from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-from . import __version__, analysis, bands, ephem, orbit, orbit_fit, photometry, sky
+from . import __version__, analysis, bands, ephem, galactic, orbit, orbit_fit, photometry, sky
 from .archive import FitsArchive, Frame, target_wcs
 from .archive import grid_world as archive_grid_world
 from .catalog import ENTRIES, ENTRIES_BY_ID, CatalogEntry, get_catalog, position_at
@@ -107,6 +107,7 @@ def health() -> dict:
         "data_mode": data_mode(),
         "engines": {
             "orbit": f"rebound-{orbit.REBOUND_VERSION}" if orbit.REBOUND_VERSION else "numpy-leapfrog",
+            "galactic_orbit": f"galpy-{galactic.GALPY_VERSION}/MWPotential2014" if galactic.GALPY_VERSION else "unavailable",
             "catalog": "duckdb",
             "photometry": "photutils",
             "fits": "astropy",
@@ -850,7 +851,64 @@ def _check_orbit(r0, v0) -> None:
 MAX_ORBIT_SAMPLES = 10_000
 
 
+def _galactic_request(req: dict) -> dict | None:
+    """Astrometry for the Galactic regime, or None when the request is a solar-system one.
+
+    regime "auto": an explicit `galactic` block, or a catalog target that has a distance in parsec
+    (a star or brown dwarf) and none in AU. Those bodies orbit the Galactic centre, not the Sun."""
+    regime = req.get("regime") or "auto"
+    g = req.get("galactic")
+    if g:
+        if regime == "solar_system":
+            raise RequestError("regime 'solar_system' cannot be combined with galactic astrometry.")
+        return {**g, "source": "request"}
+    tid = req.get("target_id")
+    if not tid or req.get("detections") or req.get("observation") or req.get("elements"):
+        if regime == "galactic":
+            raise RequestError("regime 'galactic' needs a galactic block or a target_id.")
+        return None
+    e = ENTRIES_BY_ID.get(str(tid))
+    if e is None:
+        raise RequestError(f"Unknown target_id {tid!r}")
+    if e.distance_au and regime != "galactic":
+        return None
+    if regime == "solar_system":
+        return None
+    if not e.distance_pc:
+        raise RequestError(f"{e.name} has no distance in the catalog; neither a solar-system nor a Galactic orbit "
+                           "can be computed.")
+    return {"ra": e.ra, "dec": e.dec, "distance_pc": e.distance_pc,
+            "pm_ra_cosdec_mas_yr": e.pm_ra_cosdec_arcsec_yr * 1000.0, "pm_dec_mas_yr": e.pm_dec_arcsec_yr * 1000.0,
+            "radial_velocity_km_s": None, "source": f"AEON catalog entry {e.id} (position at {e.ref_epoch:g})",
+            "target_id": e.id}
+
+
+@lru_cache(maxsize=128)
+def _galactic_cached(ra: float, dec: float, d_pc: float, pmra: float, pmdec: float, rv: float | None,
+                     span_myr: float, encounter_kyr: float) -> dict:
+    return galactic.simulate(ra, dec, d_pc, pmra, pmdec, rv, span_myr, encounter_kyr)
+
+
 def simulate_orbit(req: dict) -> dict:
+    g = _galactic_request(req)
+    if g is not None:
+        rv = g.get("radial_velocity_km_s")
+        try:
+            res = _galactic_cached(round(float(g["ra"]), 7), round(float(g["dec"]), 7), round(float(g["distance_pc"]), 6),
+                                   round(float(g["pm_ra_cosdec_mas_yr"]), 4), round(float(g["pm_dec_mas_yr"]), 4),
+                                   None if rv is None else round(float(rv), 3),
+                                   float(req.get("span_myr") or 250.0), float(req.get("encounter_kyr") or 50.0))
+        except galactic.GalacticError as exc:
+            raise RequestError(str(exc)) from exc
+        return {"engine": res["engine"], "frame": "galactocentric_cartesian_kpc", "regime": "galactic",
+                "particle": {}, "planets": [],
+                "input": {"galactic": {k: v for k, v in g.items()}}, "galactic": res}
+    out = _solar_system_orbit(req)
+    out["regime"] = "solar_system"
+    return out
+
+
+def _solar_system_orbit(req: dict) -> dict:
     horizons = sorted({float(h) for h in (req.get("horizons_years") or [1, 5, 10])})
     if not horizons or horizons[0] <= 0 or horizons[-1] > 1000:
         raise RequestError("horizons_years must be in (0, 1000].")
@@ -859,7 +917,7 @@ def simulate_orbit(req: dict) -> dict:
         raise RequestError(f"horizons_years x samples_per_year must be <= {MAX_ORBIT_SAMPLES} "
                            f"(asked {horizons[-1] * spy:.0f}); lower samples_per_year for long horizons.")
     if req.get("target_id") and not (req.get("detections") or req.get("observation") or req.get("elements")):
-        return _target_orbit_cached(str(req["target_id"]), tuple(horizons), spy)
+        return dict(_target_orbit_cached(str(req["target_id"]), tuple(horizons), spy))
     return _simulate_orbit(req, horizons, spy)
 
 

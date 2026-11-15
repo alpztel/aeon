@@ -6,8 +6,6 @@ import {
   AlertTriangle,
   Bookmark,
   Loader2,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import { DataFacts, DataModeBadge, dateRange, fill, num } from "@/components/DataFacts";
@@ -67,11 +65,8 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
     label: string;
     data: SpectrumResponse;
   } | null>(null);
-  const [playingBand, setPlayingBand] = useState<number | null>(null);
 
   const plotRef = useRef<HTMLDivElement | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const timerRef = useRef<number | null>(null);
 
   const reqKey = `${coords.ra}:${coords.dec}:${epoch}`;
   const loading = loadedKey !== reqKey;
@@ -192,20 +187,6 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
         }
       }
 
-      if (playingBand !== null && spectrum.wavelength_um[playingBand] !== undefined) {
-        const wl = spectrum.wavelength_um[playingBand];
-        shapes.push({
-          type: "line",
-          xref: "x",
-          yref: "paper",
-          x0: wl,
-          x1: wl,
-          y0: 0,
-          y1: 1,
-          line: { width: 2, color: "#ff5a1f" },
-        });
-      }
-
       Plotly.react(
         container,
         traces,
@@ -247,24 +228,11 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
     return () => {
       cancelled = true;
     };
-  }, [spectrum, pinned, logScale, playingBand, epoch, dict.spectrum]);
-
-  const stopSonification = () => {
-    if (timerRef.current !== null) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {});
-      audioCtxRef.current = null;
-    }
-    setPlayingBand(null);
-  };
+  }, [spectrum, pinned, logScale, epoch, dict.spectrum]);
 
   useEffect(() => {
     const container = plotRef.current;
     return () => {
-      stopSonification();
       if (container) {
         import("plotly.js-dist-min")
           .then((Plotly) => Plotly.purge(container))
@@ -272,51 +240,6 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
       }
     };
   }, []);
-
-  const handleToggleSonify = () => {
-    if (playingBand !== null) {
-      stopSonification();
-      return;
-    }
-    if (!spectrum || spectrum.flux_ujy.length === 0) return;
-
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new AudioCtx();
-    audioCtxRef.current = ctx;
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    gain.gain.value = 0.001;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-
-    const fluxes = spectrum.flux_ujy;
-    const finite = fluxes.filter((v) => Number.isFinite(v));
-    const minF = Math.min(...finite, 0);
-    const maxF = Math.max(...finite, minF + 1);
-
-    let idx = 0;
-    setPlayingBand(0);
-
-    timerRef.current = window.setInterval(() => {
-      if (idx >= spectrum.wavelength_um.length) {
-        stopSonification();
-        return;
-      }
-      const fVal = fluxes[idx] ?? 0;
-      const norm = Math.max(0, Math.min(1, (fVal - minF) / (maxF - minF)));
-      // Map band index 0..101 -> 220..1100 Hz, modulate pitch & volume with normalized flux
-      const freq = 220 + (idx / 101) * 660 + norm * 240;
-      const amp = 0.02 + norm * 0.16;
-
-      osc.frequency.setTargetAtTime(freq, ctx.currentTime, 0.02);
-      gain.gain.setTargetAtTime(amp, ctx.currentTime, 0.02);
-      setPlayingBand(idx);
-      idx += 1;
-    }, 45);
-  };
 
   const isSynthetic =
     selectedObject?.is_synthetic || spectrum?.matched_object?.is_synthetic;
@@ -396,29 +319,6 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
             </button>
           )}
 
-          {/* Web Audio Sonification */}
-          <button
-            type="button"
-            disabled={!spectrum}
-            onClick={handleToggleSonify}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-medium transition disabled:opacity-40 ${
-              playingBand !== null
-                ? "border-amber-400/50 bg-amber-500/25 text-amber-200"
-                : "border-cyan-400/35 bg-cyan-500/15 text-cyan-200 hover:bg-cyan-500/25"
-            }`}
-          >
-            {playingBand !== null ? (
-              <>
-                <VolumeX className="h-3.5 w-3.5" />
-                <span>{dict.spectrum.stopSonify}</span>
-              </>
-            ) : (
-              <>
-                <Volume2 className="h-3.5 w-3.5" />
-                <span>{dict.spectrum.sonify}</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
 

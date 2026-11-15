@@ -1,0 +1,100 @@
+{
+  "metadata": {
+    "purpose": "Reference values the AEON results are compared with (validation scorecard).",
+    "literature": "Peer-reviewed values, each read from the paper itself (arXiv abstract or full text) on 2026-11-15. A quantity a paper does not give is absent here; nothing is filled in from memory. ref: authors, year and journal as given by the arXiv record / DOI; volume and page only where the arXiv record states them. bibcode: the ADS arXiv bibcode (resolves to the published record) unless the journal reference is in the arXiv record.",
+    "simbad": "SIMBAD rows are added by scripts/build_validation_fixtures.py. simbad_snapshot is null where SIMBAD could not be reached when the file was built; the API then queries SIMBAD live.",
+    "simbad_built_utc": null,
+    "simbad_status": "not built: simbad.cds.unistra.fr answered 'Page unavailable' on 2026-11-15"
+  },
+  "targets": {
+    "wise-0855": {
+      "simbad_id": "WISE J085510.83-071442.5",
+      "literature": {
+        "teff_k": {"lo": 225, "hi": 260},
+        "mass_mjup": {"lo": 3, "hi": 10},
+        "age_gyr": {"lo": 1, "hi": 10, "kind": "assumed", "note": "age range assumed by the paper (most nearby stars), not measured"},
+        "sources": [{"ref": "Luhman 2014, ApJ 786, L18", "bibcode": "2014ApJ...786L..18L", "arxiv": "1404.6501", "doi": "10.1088/2041-8205/786/2/L18"}]
+      },
+      "simbad_snapshot": null
+    },
+    "luhman-16": {
+      "simbad_id": "NAME Luhman 16",
+      "literature": {
+        "mass_mjup": {"components": [{"name": "A", "value": 33.5, "err": 0.3}, {"name": "B", "value": 28.6, "err": 0.3}], "lo": 28.3, "hi": 33.8},
+        "parallax_mas": {"value": 501.557, "err": 0.082},
+        "binary": true,
+        "binary_note": "resolved 1.5 arcsec binary (L8 + L/T transition); SPHEREx and WISE measure the combined light",
+        "sources": [{"ref": "Lazorenko & Sahlmann 2018, A&A 618, A111", "bibcode": "2018A&A...618A.111L", "arxiv": "1808.07835", "doi": "10.1051/0004-6361/201833626"},
+                    {"ref": "Luhman 2013, ApJ 767, L1", "bibcode": "2013ApJ...767L...1L", "arxiv": "1303.2401", "doi": "10.1088/2041-8205/767/1/L1"}]
+      },
+      "simbad_snapshot": null
+    },
+    "wise-1828": {
+      "simbad_id": "WISEPA J182831.08+265037.8",
+      "literature": {
+        "teff_k": {"value": 325, "kind": "approximate", "note": "each component of the best-matching model, an equal binary"},
+        "mass_mjup": {"value": 5, "kind": "approximate", "note": "each component of the best-matching model binary"},
+        "age_gyr": {"value": 1, "kind": "approximate"},
+        "log_l_lsun": {"value": -6.50, "err": 0.02},
+        "binary": true,
+        "binary_note": "best literature match is an unresolved binary of two ~325 K, ~5 M_Jup brown dwarfs",
+        "sources": [{"ref": "Cushing et al. 2021, ApJ", "bibcode": "2021arXiv210700506C", "arxiv": "2107.00506", "doi": "10.3847/1538-4357/ac12cb"}]
+      },
+      "simbad_snapshot": null
+    },
+    "wise-1738": {"simbad_id": "WISE J173835.52+273258.9", "literature": null, "simbad_snapshot": null},
+    "barnard": {
+      "simbad_id": "NAME Barnard's star",
+      "literature": {
+        "teff_k": {"value": 3278, "err": 51},
+        "mass_msun": {"value": 0.163, "err": 0.022},
+        "age_gyr": {"lo": 7, "hi": 10},
+        "sources": [{"ref": "Ribas et al. 2018, Nature", "bibcode": "2018arXiv181105955R", "arxiv": "1811.05955", "doi": "10.1038/s41586-018-0677-y"}]
+      },
+      "simbad_snapshot": null
+    },
+    "18-sco": {
+      "simbad_id": "18 Sco",
+      "literature": {
+        "mass_msun": {"value": 1.02, "err": 0.03},
+        "radius_rsun": {"value": 1.010, "err": 0.009},
+        "sources": [{"ref": "Bazot et al. 2011, A&A 526, L4", "bibcode": "2011A&A...526L...4B", "arxiv": "1209.0217", "doi": "10.1051/0004-6361/201015679"}]
+      },
+      "simbad_snapshot": null
+    },
+    "tw-hya": {
+      "simbad_id": "V* TW Hya",
+      "literature": {
+        "teff_k": {"value": 3800, "kind": "best-fit model"},
+        "log_g_cgs": {"value": 4.2, "kind": "best-fit model"},
+        "age_gyr": {"lo": 0.007, "hi": 0.013, "note": "10 +/- 3 Myr, TW Hya association (Bell et al. 2015); 8 Myr for the star itself (Sokal et al. 2018)"},
+        "sources": [{"ref": "Sokal et al. 2018, ApJ", "bibcode": "2017arXiv171204785S", "arxiv": "1712.04785", "doi": "10.3847/1538-4357/aaa1e4"},
+                    {"ref": "Bell, Mamajek & Naylor 2015, MNRAS", "bibcode": "2015arXiv150805955B", "arxiv": "1508.05955", "doi": "10.1093/mnras/stv1981"}]
+      },
+      "simbad_snapshot": null
+    },
+    "rw-aur": {"simbad_id": "V* RW Aur", "literature": null, "simbad_snapshot": null},
+    "trappist-1": {
+      "simbad_id": "TRAPPIST-1",
+      "literature": {
+        "teff_k": {"value": 2566, "err": 26},
+        "mass_msun": {"value": 0.0898, "err": 0.0023},
+        "age_gyr": {"lo": 5.4, "hi": 9.8, "note": "7.6 +/- 2.2 Gyr"},
+        "sources": [{"ref": "Agol et al. 2020, arXiv:2010.01074", "bibcode": "2020arXiv201001074A", "arxiv": "2010.01074", "doi": null},
+                    {"ref": "Burgasser & Mamajek 2017, ApJ", "bibcode": "2017arXiv170602018B", "arxiv": "1706.02018", "doi": "10.3847/1538-4357/aa7fea"}]
+      },
+      "simbad_snapshot": null
+    },
+    "lhs-1140": {
+      "simbad_id": "LHS 1140",
+      "literature": {
+        "teff_k": {"value": 3131, "err": 100},
+        "mass_msun": {"value": 0.146, "err": 0.019},
+        "age_gyr": {"lo": 5, "hi": null, "note": "older than 5 Gyr"},
+        "radial_velocity_km_s": {"value": -13.23, "err": 0.60},
+        "sources": [{"ref": "Dittmann et al. 2017, Nature", "bibcode": "2017arXiv170405556D", "arxiv": "1704.05556", "doi": "10.1038/nature22055"}]
+      },
+      "simbad_snapshot": null
+    }
+  }
+}

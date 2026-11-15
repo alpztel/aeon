@@ -3,15 +3,19 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle, Cpu, RotateCw, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n/context";
+import { AgeMassCard } from "@/components/AgeMassCard";
 import { DataFacts, DataModeBadge, fill, num, signed } from "@/components/DataFacts";
+import { ValidationScorecard } from "@/components/ValidationScorecard";
 import {
   ApiError,
   classifyTarget,
   isServiceDown,
+  stage24,
   type AiClassifyResponse,
   type CatalogObject,
   type ObjectClass,
 } from "@/lib/api";
+import { useCrossmatch } from "@/lib/useCrossmatch";
 
 interface ClassificationCardProps {
   coords: { ra: number; dec: number };
@@ -46,6 +50,8 @@ export function ClassificationCard({
 }: ClassificationCardProps) {
   const { dict } = useI18n();
 
+  const xm = useCrossmatch(coords.ra, coords.dec);
+  const stage = stage24(xm.data);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [attempt, setAttempt] = useState(0);
   const key = `${coords.ra},${coords.dec},${attempt}`;
@@ -93,9 +99,7 @@ export function ClassificationCard({
     current === null ? "loading" : noSpectrum ? "no-spectrum" : spectrumDown ? "spectrum-unavailable" : current.kind;
 
   const physics = result?.physics_diagnostics ?? null;
-  const zogy = result?.astroclip_zogy ?? null;
 
-  const anomaly = unit(result?.anomaly_score);
   const topClass = result?.top_class && ALL_CLASSES.includes(result.top_class) ? result.top_class : undefined;
 
   const retryButton = (
@@ -220,7 +224,7 @@ export function ClassificationCard({
       )}
       <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-12">
         {/* 5 Class Probability Bars */}
-        <div className="space-y-2.5 @2xl:col-span-8">
+        <div className="space-y-2.5 @2xl:col-span-12">
           {ALL_CLASSES.map((cls) => {
             const p = unit(result?.probabilities?.[cls]);
             const pct = Math.round(p * 100);
@@ -250,44 +254,14 @@ export function ClassificationCard({
           })}
         </div>
 
-        {/* PatchAnomalyViT Gauge */}
-        <div className="flex flex-col justify-between rounded-xl border border-white/10 bg-black/40 p-4 @2xl:col-span-4">
-          <div>
-            <span className="text-xs font-medium text-slate-400">
-              {dict.ai.anomalyScore}
-            </span>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span
-                className={`aeon-mono text-3xl font-bold ${
-                  anomaly >= 0.85 ? "text-rose-400" : "text-cyan-300"
-                }`}
-              >
-                {anomaly.toFixed(2)}
-              </span>
-              <span className="text-xs text-slate-400">/ 1.00</span>
-            </div>
-            <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className={`h-full rounded-full ${
-                  anomaly >= 0.85 ? "bg-rose-500" : "bg-cyan-400"
-                }`}
-                style={{ width: `${Math.min(100, Math.round(anomaly * 100))}%` }}
-              />
-            </div>
-            <p className="mt-2 text-xs text-slate-300">
-              {anomaly >= 0.85 ? dict.ai.highAnomaly : dict.ai.normalAnomaly}
-            </p>
-          </div>
-
-          {result?.model_versions && (
-            <div className="aeon-mono mt-3 border-t border-white/10 pt-2 text-[10px] text-slate-500">
-              {Object.entries(result.model_versions)
-                .map(([k, v]) => `${k}: ${v}`)
-                .join(" · ")}
-            </div>
-          )}
-        </div>
       </div>
+      {result?.model_versions && (
+        <p className="aeon-mono mt-3 text-[10px] text-slate-500">
+          {Object.entries(result.model_versions)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(" · ")}
+        </p>
+      )}
 
       {physics && (
         <DataFacts
@@ -319,30 +293,10 @@ export function ClassificationCard({
         <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{physics.temperature_note}</p>
       )}
 
-      {zogy &&
-        (zogy.image_provided === false ? (
-          <p className="mt-3 text-[11px] text-slate-500">{dict.data.noImage}</p>
-        ) : (
-          <DataFacts
-            className="mt-3"
-            title={dict.data.zogyTitle}
-            facts={[
-              num(zogy.zogy_peak_snr, 1) !== null && { label: dict.data.zogyPeak, value: num(zogy.zogy_peak_snr, 1) },
-              num(zogy.dipole_polarity_score, 2) !== null && { label: dict.data.dipole, value: num(zogy.dipole_polarity_score, 2) },
-              typeof zogy.is_moving_dipole === "boolean" && {
-                label: dict.data.movingDipole,
-                value: zogy.is_moving_dipole ? dict.data.yes : dict.data.no,
-                tone: zogy.is_moving_dipole ? "warn" : "default",
-              },
-              typeof zogy.cosmic_ray_veto === "boolean" && {
-                label: dict.data.crVeto,
-                value: zogy.cosmic_ray_veto ? dict.data.yes : dict.data.no,
-              },
-              num(zogy.astroclip_similarity, 3) !== null && { label: dict.data.similarity, value: num(zogy.astroclip_similarity, 3) },
-              num(zogy.cross_modal_tension, 3) !== null && { label: dict.data.tension, value: num(zogy.cross_modal_tension, 3) },
-            ]}
-          />
-        ))}
+      <div className="mt-4 space-y-4">
+        <AgeMassCard ageMass={stage.ageMass} galactic={stage.galactic} loading={xm.loading} failed={xm.failed} />
+        <ValidationScorecard validation={stage.validation} loading={xm.loading} failed={xm.failed} />
+      </div>
       </>
       )}
     </section>

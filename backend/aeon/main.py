@@ -146,18 +146,32 @@ class Detection(BaseModel):
     sigma_arcsec: float = Field(1.0, gt=0, le=3600)
 
 
+class GalacticInput(BaseModel):
+    """Astrometry of a star or brown dwarf for the Galactic-orbit regime."""
+    ra: float = Field(ge=0, le=360)
+    dec: float = Field(ge=-90, le=90)
+    distance_pc: float = Field(gt=0, le=1e5)
+    pm_ra_cosdec_mas_yr: float = Field(ge=-1e5, le=1e5)
+    pm_dec_mas_yr: float = Field(ge=-1e5, le=1e5)
+    radial_velocity_km_s: float | None = Field(None, ge=-2000, le=2000)
+
+
 class OrbitRequest(BaseModel):
     detections: list[Detection] | None = Field(None, min_length=3, max_length=500)
     elements: Elements | None = None
     observation: Observation | None = None
     target_id: str | None = None
+    galactic: GalacticInput | None = None
+    regime: Literal["auto", "solar_system", "galactic"] = "auto"
     horizons_years: list[float] = [1, 5, 10]
     samples_per_year: int = Field(24, ge=1, le=365)
+    span_myr: float = Field(250.0, gt=0, le=1000)
+    encounter_kyr: float = Field(50.0, gt=0, le=500)
 
     @model_validator(mode="after")
     def _one_source(self):
-        if not (self.elements or self.observation or self.target_id or self.detections):
-            raise ValueError("Provide detections, elements, observation or target_id")
+        if not (self.elements or self.observation or self.target_id or self.detections or self.galactic):
+            raise ValueError("Provide detections, elements, observation, galactic or target_id")
         return self
 
 
