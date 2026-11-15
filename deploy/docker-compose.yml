@@ -12,6 +12,9 @@ services:
       AEON_TILE_CACHE: "96"
       AEON_TILE_SED_CACHE: "16"
       AEON_SPECTRUM_CACHE: "128"
+      # SPHEREx cutout pixels kept in memory per process (~790 frames of 96x96); spectra and cutouts
+      # at new positions then need no disk reads. 0 disables.
+      AEON_PIXEL_CACHE_MB: "64"
       MALLOC_ARENA_MAX: "2"
     volumes:
       # Named volume by default; set AEON_FITS_SOURCE=/data/aeon in deploy/.env to serve the files the

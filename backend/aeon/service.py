@@ -18,6 +18,7 @@ from astropy.wcs.utils import proj_plane_pixel_scales
 
 from . import __version__, analysis, bands, ephem, orbit, orbit_fit, photometry, sky
 from .archive import FitsArchive, Frame, target_wcs
+from .archive import grid_world as archive_grid_world
 from .catalog import ENTRIES, ENTRIES_BY_ID, CatalogEntry, get_catalog, position_at
 from .epochs import DEFAULT_EPOCH, SURVEY_END, SURVEY_START, epoch_year
 
@@ -190,8 +191,10 @@ def archive_stack(frames: list[Frame], ra: float, dec: float, size_px: int, scal
     MIN_ARCHIVE_COVERAGE of the cutout or miss its centre."""
     arch = get_archive()
     imgs, used = [], []
+    w0 = target_wcs(ra, dec, size_px, scale)
+    grid = (w0, archive_grid_world(w0, (size_px, size_px)))      # same sky grid for every frame
     for f in frames:
-        im, _, w = arch.resampled(f.image, ra, dec, size_px, scale)
+        im, _, w = arch.resampled(f.image, ra, dec, size_px, scale, with_var=False, grid=grid)
         if np.isfinite(im).any():
             imgs.append(im)
             used.append(f)

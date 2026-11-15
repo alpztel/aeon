@@ -27,9 +27,12 @@ from __future__ import annotations
 
 import math
 import os
+import threading
 import warnings
+from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
 import numpy as np
@@ -64,6 +67,12 @@ SPHEREX_REJECT = ("TRANSIENT", "OVERFLOW", "SUR_ERROR", "NONFUNC", "MISSING_DATA
 SPHEREX_REJECT_MASK = sum(1 << SPHEREX_FLAG_BITS[n] for n in SPHEREX_REJECT)
 
 QUARTER_EPOCHS = ("2026-Q1", "2026-Q2", "2026-Q3", "2026-Q4")
+
+# Pixel arrays of small files (IRSA cutouts, the bulk of the archive) are kept in memory after the
+# first read, up to AEON_PIXEL_CACHE_MB per process (LRU). Larger files (complete 2040x2040 L2
+# images) are never cached whole: only the window a request needs is read from disk.
+PIXEL_CACHE_BYTES = int(float(os.environ.get("AEON_PIXEL_CACHE_MB", "96")) * 1024 * 1024)
+CACHE_MAX_PIXELS = 512 * 512
 SURVEY_GROUP_DAYS = 60.0     # frames within this many days of the best frame form one visit
 
 
@@ -90,13 +99,16 @@ class ArchiveImage:
     unit: str = "uJy/pixel"
     psf_fwhm_arcsec: float | None = None
     omega_arcsec2: float | None = None    # median pixel solid angle (SPHEREx OMEGA_MEDIAN)
-    _wave_cache: dict = field(default_factory=dict, repr=False)
+    hdu_flags: int | None = None          # SPHEREx FLAGS / VARIANCE extension indices (no name lookups per read)
+    hdu_var: int | None = None
+    wave: tuple | None = field(default=None, repr=False)   # WCS-WAVE model read once at indexing (wave_model)
 
-    @property
+    # Read on every request for every frame; astropy Time is too slow to rebuild each time.
+    @cached_property
     def date_obs(self) -> str | None:
         return None if self.mjd is None else Time(self.mjd, format="mjd").isot[:19]
 
-    @property
+    @cached_property
     def decimal_year(self) -> float | None:
         return None if self.mjd is None else float(Time(self.mjd, format="mjd").decimalyear)
 
@@ -184,14 +196,28 @@ def wave_table_lookup(header: fits.Header, table: fits.FITS_rec, x0: float, y0: 
     the index vector (columns X, Y = raw-detector control points) and VALUES (2, nx, ny) — or
     (2, nx, ny) per the TDIM — is bilinearly interpolated. Independent of astropy's -TAB support.
     """
-    px, py = x0 + 1.0, y0 + 1.0
-    psi_x = float(header.get("CDELT1W", 1.0)) * (px - float(header["CRPIX1W"])) + float(header.get("CRVAL1W", 1.0))
-    psi_y = float(header.get("CDELT2W", 1.0)) * (py - float(header["CRPIX2W"])) + float(header.get("CRVAL2W", 1.0))
-    xs = np.asarray(table["X"][0], dtype=float)
-    ys = np.asarray(table["Y"][0], dtype=float)
+    return wave_model_eval(wave_model(header, table), x0, y0)
+
+
+def wave_model(header: fits.Header, table: fits.FITS_rec) -> tuple:
+    """The few numbers wave_table_lookup needs, copied out of the file (a few kB per image), so the
+    wavelength at any pixel is evaluated later without opening the file again."""
+    xs = np.asarray(table["X"][0], dtype=float).copy()
+    ys = np.asarray(table["Y"][0], dtype=float).copy()
     vals = np.asarray(table["VALUES"][0], dtype=float)        # numpy shape (ny, nx, 2) for TDIM (2,nx,ny)
     if vals.shape[:2] != (ys.size, xs.size):
         vals = vals.reshape(ys.size, xs.size, 2)
+    vals = np.ascontiguousarray(vals)
+    return (float(header.get("CDELT1W", 1.0)), float(header["CRPIX1W"]), float(header.get("CRVAL1W", 1.0)),
+            float(header.get("CDELT2W", 1.0)), float(header["CRPIX2W"]), float(header.get("CRVAL2W", 1.0)),
+            xs, ys, vals)
+
+
+def wave_model_eval(model: tuple, x0: float, y0: float) -> tuple[float, float]:
+    cd1, cp1, cv1, cd2, cp2, cv2, xs, ys, vals = model
+    px, py = x0 + 1.0, y0 + 1.0
+    psi_x = cd1 * (px - cp1) + cv1
+    psi_y = cd2 * (py - cp2) + cv2
     # Fractional index (0-based) of psi within the control-point vectors.
     fx = float(np.interp(psi_x, xs, np.arange(xs.size)))
     fy = float(np.interp(psi_y, ys, np.arange(ys.size)))
@@ -243,19 +269,53 @@ def target_wcs(ra: float, dec: float, size_px: int, scale_arcsec: float) -> WCS:
 
 def resample(data: np.ndarray, src_wcs: WCS, dst_wcs: WCS, shape: tuple[int, int]) -> np.ndarray:
     """Bilinear resampling of a surface-brightness map; NaN where the source is NaN or absent."""
+    sx, sy = source_coords(src_wcs, dst_wcs, shape)
+    return resample_at(data, sx, sy, shape, data.shape)
+
+
+def grid_world(dst_wcs: WCS, shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
+    """(ra, dec) of every destination pixel, flattened. The same for every frame of a stack."""
     ny, nx = shape
     yy, xx = np.mgrid[0:ny, 0:nx]
-    ra, dec = dst_wcs.all_pix2world(xx.ravel(), yy.ravel(), 0)
+    return dst_wcs.all_pix2world(xx.ravel(), yy.ravel(), 0)
+
+
+def source_coords(src_wcs: WCS, dst_wcs: WCS, shape: tuple[int, int],
+                  world: tuple[np.ndarray, np.ndarray] | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """0-based source pixel (x, y) of every destination pixel (``world`` = grid_world, if known)."""
+    ra, dec = world if world is not None else grid_world(dst_wcs, shape)
     with _quiet():
         sx, sy = src_wcs.all_world2pix(ra, dec, 0, quiet=True)
+    return sx, sy
+
+
+def source_window(sx: np.ndarray, sy: np.ndarray, full_shape: tuple[int, int]) -> tuple[int, int, int, int] | None:
+    """(y0, y1, x0, x1) of the source pixels bilinear interpolation at (sx, sy) can touch, clipped to
+    the image, with one pixel to spare so that interpolation inside the window equals interpolation
+    on the whole image. None when no destination pixel falls on the image."""
+    ny, nx = full_shape
+    ok = np.isfinite(sx) & np.isfinite(sy) & (sx > -1.0) & (sx < nx) & (sy > -1.0) & (sy < ny)
+    if not ok.any():
+        return None
+    x0 = max(int(math.floor(sx[ok].min())) - 1, 0)
+    x1 = min(int(math.floor(sx[ok].max())) + 3, nx)
+    y0 = max(int(math.floor(sy[ok].min())) - 1, 0)
+    y1 = min(int(math.floor(sy[ok].max())) + 3, ny)
+    return y0, y1, x0, x1
+
+
+def resample_at(data: np.ndarray, sx: np.ndarray, sy: np.ndarray, shape: tuple[int, int],
+                full_shape: tuple[int, int], x0: int = 0, y0: int = 0) -> np.ndarray:
+    """Bilinear samples of data at source pixels (sx, sy). ``data`` may be the window of the full
+    image starting at (y0, x0) given by source_window; the result is the same as on the full image."""
     good = np.isfinite(data)
     filled = np.where(good, data, 0.0)
-    coords = np.vstack([sy, sx])
+    coords = np.vstack([sy - y0, sx - x0]) if (x0 or y0) else np.vstack([sy, sx])
     val = ndimage.map_coordinates(filled, coords, order=1, mode="constant", cval=0.0)
     wgt = ndimage.map_coordinates(good.astype(float), coords, order=1, mode="constant", cval=0.0)
-    inside = (sx >= -0.5) & (sx <= data.shape[1] - 0.5) & (sy >= -0.5) & (sy <= data.shape[0] - 0.5)
+    inside = (sx >= -0.5) & (sx <= full_shape[1] - 0.5) & (sy >= -0.5) & (sy <= full_shape[0] - 0.5)
     out = np.where((wgt > 0.75) & inside, val / np.maximum(wgt, 1e-12), np.nan)
-    return out.reshape(ny, nx)
+    return out.reshape(shape)
 
 
 # --------------------------------------------------------------------------------------------
@@ -266,12 +326,21 @@ class FitsArchive:
     def __init__(self, root: str | os.PathLike | None) -> None:
         self.root = Path(root) if root else None
         self.images: list[ArchiveImage] = []
+        self._footprints: tuple | None = None
+        self._pix_cache: OrderedDict = OrderedDict()
+        self._pix_bytes = 0
+        self._pix_lock = threading.Lock()
+        self.wave_check: str | None = None     # result of the one-off WCS-WAVE cross-check (scan)
         if self.root and self.root.is_dir():
             self.scan()
 
     # ---------------------------------------------------------------- indexing
     def scan(self) -> None:
         self.images.clear()
+        self._footprints = None
+        with self._pix_lock:
+            self._pix_cache.clear()
+            self._pix_bytes = 0
         paths = sorted(self.root.glob("**/*.fits")) + sorted(self.root.glob("**/*.fits.gz"))
         for p in paths:
             try:
@@ -280,6 +349,30 @@ class FitsArchive:
                 img = None
             if img is not None:
                 self.images.append(img)
+        self._check_wave_model()
+
+    def _check_wave_model(self) -> None:
+        """Requests evaluate the SPHEREx wavelength with AEON's own -TAB implementation on the table
+        copied at indexing (no file access). Cross-check it once per scan against astropy's reader
+        on the first SPHEREx file; if they disagree, drop the copied tables so every lookup goes
+        through astropy (slower, but never wrong)."""
+        img = next((i for i in self.images if i.wave is not None), None)
+        if img is None:
+            return
+        x, y = (img.shape[1] - 1) / 2.0, (img.shape[0] - 1) / 2.0
+        try:
+            with _quiet(), fits.open(img.path, memmap=False) as hdul:
+                ref = spherex_wavelength(hdul, x, y)
+        except (OSError, KeyError, ValueError):
+            return
+        own = wave_model_eval(img.wave, x, y)
+        if abs(own[0] - ref[0]) <= 1e-4 and abs(own[1] - ref[1]) <= 1e-4:
+            self.wave_check = "ok"
+            return
+        self.wave_check = f"mismatch on {img.path.name}: own {own} vs astropy {ref}; using astropy"
+        warnings.warn(f"AEON WCS-WAVE {self.wave_check}", RuntimeWarning, stacklevel=2)
+        for i in self.images:
+            i.wave = None
 
     def _index(self, p: Path) -> ArchiveImage | None:
         with _quiet(), fits.open(p, memmap=False) as hdul:
@@ -292,12 +385,22 @@ class FitsArchive:
                     return None
                 scale = float(np.mean(proj_plane_pixel_scales(w)) * 3600.0)
                 omega = h.get("OMEGA_MEDIAN")
+                names = [x.name for x in hdul]
+                wave = None
+                if "WCS-WAVE" in names and "CRPIX1W" in h and "CRPIX2W" in h:
+                    try:
+                        wave = wave_model(h, hdul["WCS-WAVE"].data)
+                    except (KeyError, ValueError, IndexError, TypeError):
+                        wave = None
                 return ArchiveImage(
-                    path=p, epoch=epoch, wcs=w, shape=tuple(hdul["IMAGE"].data.shape), scale_arcsec=scale,
-                    kind="spherex", hdu=hdul.index_of("IMAGE"), mjd=None if t is None else float(t.mjd),
+                    path=p, epoch=epoch, wcs=w, shape=(int(h["NAXIS2"]), int(h["NAXIS1"])), scale_arcsec=scale,
+                    kind="spherex", hdu=names.index("IMAGE"), mjd=None if t is None else float(t.mjd),
                     detector=h.get("DETECTOR"), obs_id=h.get("OBSID"), unit=flux_unit_factor(h.get("BUNIT", "")),
                     psf_fwhm_arcsec=float(h["PSF_FWHM"]) if "PSF_FWHM" in h else None,
                     omega_arcsec2=float(omega) if omega else None,
+                    hdu_flags=names.index("FLAGS"),
+                    hdu_var=names.index("VARIANCE") if "VARIANCE" in names else None,
+                    wave=wave,
                 )
             idx, hdu = next((i, x) for i, x in enumerate(hdul) if getattr(x, "data", None) is not None and x.data.ndim == 2)
             w = WCS(hdu.header)
@@ -333,12 +436,34 @@ class FitsArchive:
     def wavelength_at(self, img: ArchiveImage, ra: float, dec: float) -> tuple[float, float] | None:
         if img.kind != "spherex":
             return None
-        key = (round(ra, 5), round(dec, 5))
-        if key not in img._wave_cache:
-            _, x, y = self._contains(img, ra, dec)
-            with _quiet(), fits.open(img.path, memmap=False) as hdul:
-                img._wave_cache[key] = spherex_wavelength(hdul, x, y)
-        return img._wave_cache[key]
+        _, x, y = self._contains(img, ra, dec)
+        if img.wave is not None:
+            return wave_model_eval(img.wave, x, y)
+        with _quiet(), fits.open(img.path, memmap=False) as hdul:
+            return spherex_wavelength(hdul, x, y)
+
+    def _candidates(self, ra: float, dec: float) -> list[ArchiveImage]:
+        """Images whose footprint may contain (ra, dec): a vectorised angular-distance cut on each
+        image's centre and half-diagonal (x1.5 + 1 arcmin for distortion), so the exact WCS test
+        runs on a handful of images instead of the whole archive."""
+        fp = self._footprints
+        if fp is None or fp[0] != len(self.images):
+            n = len(self.images)
+            cra, cdec, rad = np.empty(n), np.empty(n), np.empty(n)
+            for k, img in enumerate(self.images):
+                with _quiet():
+                    c = img.wcs.wcs_pix2world([[(img.shape[1] - 1) / 2.0, (img.shape[0] - 1) / 2.0]], 0)[0]
+                cra[k], cdec[k] = c
+                rad[k] = 1.5 * 0.5 * math.hypot(*img.shape) * img.scale_arcsec / 3600.0 + 1.0 / 60.0
+            fp = self._footprints = (n, np.radians(cra), np.radians(cdec), rad)
+        n, cra, cdec, rad = fp
+        if not n:
+            return []
+        r0, d0 = math.radians(ra), math.radians(dec)
+        cosd = np.sin(d0) * np.sin(cdec) + np.cos(d0) * np.cos(cdec) * np.cos(cra - r0)
+        sep = np.degrees(np.arccos(np.clip(cosd, -1.0, 1.0)))
+        bad = ~np.isfinite(sep)        # undefined centre: keep, the exact test decides
+        return [self.images[k] for k in np.flatnonzero((sep <= rad) | bad)]
 
     def frames(self, ra: float, dec: float, epoch: str, band: int | None = None,
                allowed_bands: set[int] | None = None) -> list[Frame]:
@@ -350,7 +475,7 @@ class FitsArchive:
         restricts to a set of bands (used to match two epochs for differencing).
         """
         hits: list[Frame] = []
-        for img in self.images:
+        for img in self._candidates(ra, dec):
             if img.epoch != epoch:
                 continue
             ok, _, _ = self._contains(img, ra, dec, margin_px=1.0)
@@ -378,21 +503,70 @@ class FitsArchive:
         return fr[0].image if fr else None
 
     # ---------------------------------------------------------------- pixels
-    def read(self, img: ArchiveImage) -> tuple[np.ndarray, np.ndarray | None, np.ndarray]:
+    def _read_file(self, img: ArchiveImage, win: tuple[int, int, int, int] | None):
+        """(image, bad-pixel mask, variance or None) as stored in the file, whole or one window."""
+        sl = (slice(None), slice(None)) if win is None else (slice(win[0], win[1]), slice(win[2], win[3]))
+
+        def get(h):
+            if win is None:
+                return np.asarray(h.data)
+            try:
+                return np.asarray(h.section[sl])
+            except Exception:  # noqa: BLE001 - section unsupported (e.g. some compressed files)
+                return np.asarray(h.data[sl])
+
+        with _quiet(), fits.open(img.path, memmap=False) as hdul:
+            if img.kind == "spherex":
+                i_img = img.hdu
+                i_flags = img.hdu_flags if img.hdu_flags is not None else hdul.index_of("FLAGS")
+                i_var = img.hdu_var if img.hdu_flags is not None else (hdul.index_of("VARIANCE") if "VARIANCE" in hdul else None)
+                data = get(hdul[i_img])
+                bad = bad_pixel_mask(get(hdul[i_flags])) | ~np.isfinite(data)
+                var = get(hdul[i_var]) if i_var is not None else None
+            else:
+                data = get(hdul[img.hdu])
+                bad = ~np.isfinite(data)
+                var = None
+        return data, bad, var
+
+    def _raw(self, img: ArchiveImage, win: tuple[int, int, int, int] | None = None):
+        if img.shape[0] * img.shape[1] > CACHE_MAX_PIXELS or PIXEL_CACHE_BYTES <= 0:
+            return self._read_file(img, win)
+        key = img.path
+        with self._pix_lock:
+            hit = self._pix_cache.get(key)
+            if hit is not None:
+                self._pix_cache.move_to_end(key)
+        if hit is None:
+            data, bad, var = self._read_file(img, None)
+            for a in (data, bad, var):
+                if a is not None:
+                    a.setflags(write=False)     # shared between requests
+            hit = (data, bad, var)
+            nbytes = sum(a.nbytes for a in hit if a is not None)
+            with self._pix_lock:
+                if key not in self._pix_cache:
+                    self._pix_cache[key] = hit
+                    self._pix_bytes += nbytes
+                    while self._pix_bytes > PIXEL_CACHE_BYTES and len(self._pix_cache) > 1:
+                        _, old = self._pix_cache.popitem(last=False)
+                        self._pix_bytes -= sum(a.nbytes for a in old if a is not None)
+        if win is None:
+            return hit
+        y0, y1, x0, x1 = win
+        return tuple(None if a is None else a[y0:y1, x0:x1] for a in hit)
+
+    def read(self, img: ArchiveImage, win: tuple[int, int, int, int] | None = None
+             ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray]:
         """(surface brightness in uJy/arcsec^2, variance in (uJy/arcsec^2)^2 or None, bad-pixel mask).
 
         SPHEREx: IMAGE [MJy/sr] with FLAGS-rejected pixels set to NaN. Generic uJy/pixel images are
         divided by the pixel solid angle so that every image is resampled as surface brightness.
+        ``win`` = (y0, y1, x0, x1) returns only that window (read from disk alone for large files).
         """
-        with _quiet(), fits.open(img.path, memmap=False) as hdul:
-            if img.kind == "spherex":
-                data = np.asarray(hdul["IMAGE"].data, dtype=float)
-                bad = bad_pixel_mask(hdul["FLAGS"].data) | ~np.isfinite(data)
-                var = np.asarray(hdul["VARIANCE"].data, dtype=float) if "VARIANCE" in hdul else None
-            else:
-                data = np.asarray(hdul[img.hdu].data, dtype=float)
-                bad = ~np.isfinite(data)
-                var = None
+        data, bad, var = self._raw(img, win)
+        data = np.asarray(data, dtype=float)
+        var = None if var is None else np.asarray(var, dtype=float)
         if img.unit == "MJy/sr":
             sb = data * MJY_SR_TO_UJY_ARCSEC2
             var = None if var is None else var * MJY_SR_TO_UJY_ARCSEC2 ** 2
@@ -405,35 +579,51 @@ class FitsArchive:
         return sb, var, bad
 
     def resampled(self, img: ArchiveImage, ra: float, dec: float, size_px: int,
-                  scale_arcsec: float | None = None) -> tuple[np.ndarray, np.ndarray | None, WCS]:
+                  scale_arcsec: float | None = None, *, with_var: bool = True,
+                  grid: tuple[WCS, tuple[np.ndarray, np.ndarray]] | None = None
+                  ) -> tuple[np.ndarray, np.ndarray | None, WCS]:
         """Image (uJy per output pixel) and variance on a north-up TAN grid centred on (ra, dec).
-        Unmeasured pixels are NaN."""
+        Unmeasured pixels are NaN. ``with_var=False`` skips the variance (returned as None);
+        ``grid`` = (target_wcs, grid_world) shared by all frames of one stack."""
         scale = scale_arcsec or img.scale_arcsec
-        w = target_wcs(ra, dec, size_px, scale)
-        sb, var, _ = self.read(img)
+        shape = (size_px, size_px)
+        if grid is None:
+            w = target_wcs(ra, dec, size_px, scale)
+            world = None
+        else:
+            w, world = grid
         area = scale * scale
-        out = resample(sb, img.wcs, w, (size_px, size_px)) * area
+        sx, sy = source_coords(img.wcs, w, shape, world)
+        win = source_window(sx, sy, img.shape)
+        if win is None:                       # the grid misses the image entirely
+            nan = np.full(shape, np.nan)
+            return nan, (nan.copy() if with_var and img.kind == "spherex" and img.hdu_var is not None else None), w
+        if img.shape[0] * img.shape[1] <= CACHE_MAX_PIXELS:
+            win = (0, img.shape[0], 0, img.shape[1])     # small (cached) file: whole image, bit-identical
+        sb, var, _ = self.read(img, win)
+        y0, x0 = win[0], win[2]
+        out = resample_at(sb, sx, sy, shape, img.shape, x0, y0) * area
         # Variance: resample the per-pixel variance and rescale for the change of pixel area
         # (white noise, nearest-neighbour approximation: var per output px ~ var_sb * area_in * area_out).
         v = None
-        if var is not None:
+        if with_var and var is not None:
             area_in = img.omega_arcsec2 or img.scale_arcsec ** 2
-            v = resample(var, img.wcs, w, (size_px, size_px)) * area_in * area
+            v = resample_at(var, sx, sy, shape, img.shape, x0, y0) * area_in * area
         return out, v, w
 
     def native_stamp(self, img: ArchiveImage, ra: float, dec: float, half: int) -> tuple[np.ndarray, float, float]:
         """Unresampled (2*half+1)^2 stamp in uJy per native pixel around (ra, dec), NaN where flagged
         or off the frame, and the target position (x, y) inside the stamp. Used for photometry, so
         that the PSF is not broadened by interpolation."""
-        sb, _, _ = self.read(img)
         area = img.omega_arcsec2 or img.scale_arcsec ** 2
         _, x, y = self._contains(img, ra, dec)
         ix, iy = int(round(x)), int(round(y))
         stamp = np.full((2 * half + 1, 2 * half + 1), np.nan)
-        y0, y1 = max(iy - half, 0), min(iy + half + 1, sb.shape[0])
-        x0, x1 = max(ix - half, 0), min(ix + half + 1, sb.shape[1])
+        y0, y1 = max(iy - half, 0), min(iy + half + 1, img.shape[0])
+        x0, x1 = max(ix - half, 0), min(ix + half + 1, img.shape[1])
         if y1 > y0 and x1 > x0:
-            stamp[y0 - (iy - half):y1 - (iy - half), x0 - (ix - half):x1 - (ix - half)] = sb[y0:y1, x0:x1] * area
+            sb, _, _ = self.read(img, (y0, y1, x0, x1))      # only the stamp's pixels
+            stamp[y0 - (iy - half):y1 - (iy - half), x0 - (ix - half):x1 - (ix - half)] = sb * area
         return stamp, x - (ix - half), y - (iy - half)
 
     def cutout(self, img: ArchiveImage, ra: float, dec: float, size_px: int,
