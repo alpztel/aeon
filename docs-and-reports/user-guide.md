@@ -1,69 +1,131 @@
-# AEON — Astrophysical Discovery OS | Kullanıcı Kılavuzu / User Guide (TR | EN)
+# AEON — Kullanıcı Kılavuzu · User Guide
+
+[Türkçe](#türkçe) · [English](#english)
 
 ---
 
-## Bölüm 1 — Türkçe Kullanıcı Kılavuzu (TR)
+## Türkçe
 
-### 1. Genel Bakış
-**AEON (Astrophysical Discovery OS)**, NASA'nın **SPHEREx** misyonunun 0.75–5.0 µm aralığındaki 102 spektral bantlı ve çok dönemli (`2026-Q1` … `2026-Q4`) kızılötesi gökyüzü taramalarını; görüntü farkı, 102-bant spektroskopi, çoklu misyon çapraz eşleştirme (Gaia DR3 + AllWISE + MAST JWST/HST), gürültü altı kaydır-ve-yığ (shift-and-stack) ve REBOUND 3B yörünge entegrasyonu ile birleştiren web tabanlı keşif platformudur.
+### 1. Genel bakış
 
-### 2. Veri Modu Rozetleri (`data_mode`)
-Üst bilgi çubuğundaki durum rozeti sistemin hangi veri kaynağını kullandığını şeffaf biçimde gösterir:
-- **`FITS Arşivi` (`fits_archive`):** Yerel/sunucu FITS arşivindeki gerçek SPHEREx / WISE görüntü kareleri kullanılmaktadır.
-- **`Fiziksel Gökyüzü Modeli` (`physical_model`):** Astropy WCS (`TAN` projeksiyonu), dalga boyuna bağlı PSF, zodyak ışığı arka planı ve 102-bant Planck + moleküler soğurma (`H₂O`, `CH₄`, `CO₂`, `CO`) fiziğiyle çalışan deterministik analiz hattı aktiftir.
-- **`Çevrimdışı Demo Önbelleği` (`offline_cache`):** Sunucu bağlantısı olmadığında `/public/demo-cache/` altındaki önceden hesaplanmış gerçek yanıtlar kesintisiz olarak sunulmaktadır.
+AEON, NASA’nın SPHEREx taramasından gelen gerçek Level-2 görüntülerden bir hedefin 102 bantlık
+yakın-kızılötesi tayfını (0,75–5,0 µm) çıkarır; bu tayfı Galaktik hızla birleştirerek yaş ve kütle tahmin
+eder, cismin geçmiş ve gelecek yörüngesini hesaplar ve her sonucu SIMBAD ile literatürle karşılaştırır.
 
-### 3. Sentetik Test Adayı Etiketleme Politikası (`is_synthetic: true`)
-`PX-2026-09` gibi algılama hattını uçtan uca doğrulamak amacıyla enjekte edilen sentetik adaylar:
-- Katalog aramasında, Gökyüzü Haritasında (M1), Spektrum Panelinde (M3), Kaydır-ve-Yığ Panelinde (M4) ve indirilen `AEON_Discovery_Report.pdf` (M11) raporunda açıkça **"SENTETİK TEST ADAYI — Gerçek bir gökcismi değildir"** rozetiyle işaretlenir.
-- Hiçbir koşulda gerçek astronomik keşif olarak sunulmaz.
+Sistemi yerelde çalıştırmak için kök dizindeki [README](../README.md#quick-start) adımlarını izleyin
+(Docker Compose + `npm run dev`, ardından <http://localhost:3000>).
 
-### 4. Modüller (M1 – M11)
-| Modül | Adı | Temel İşlevler |
+### 2. Ekran düzeni
+
+| Bölge | İçerik |
+|---|---|
+| Üst çubuk | Hedef arama (ad, tanımlayıcı ya da “RA Dec”), veri modu göstergesi, rehberli tur, PDF raporu, kısayollar, komut paleti, TR/EN dil seçimi |
+| Orta | Seçili hedefin SPHEREx görüntüsü (renk haritası seçilebilir) |
+| Alt | Dört tarama dönemi (`2026-Q1` … `2026-Q4`); gerçek SPHEREx verisi olan dönemler işaretlidir |
+| Sol alt | Hedef kartı: sınıf, konum, özdevinim, W2 parlaklığı |
+| Sağ | Dört adımlı araç rayı; seçilen araç sağdaki panelde açılır |
+
+### 3. Dört adım
+
+| Adım | Araç | Ne gösterir |
 |---|---|---|
-| **M1** | **2B Gökyüzü Haritası & Dönem Zaman Çizelgesi** | Aladin Lite (WISE AllSky / 2MASS / DSS2) + 64×64 WCS FITS kesiti, 5 renk haritası (`Inferno`, `Viridis`, `Magma`, `Coolwarm`, `Gri`), `Linear / Log / Asinh` ölçekleme ve `2026-Q1..Q4` dönem seçici. |
-| **M2** | **Görüntü Farkı Modu (`D`)** | İki dönem arasındaki piksel farkı (`E2 - E1`), S/N (`σ`) haritası, perde kaydırıcı (curtain slider), zaman kırpma (blink) ve özdevinim `±` dipol tespiti. |
-| **M3** | **102-Bant Kızılötesi Spektrum & Sonifikasyon** | 0.75–5.0 µm 102 kanal akı (`µJy`) ve `±1σ` hata çubukları, `H₂O / CH₄ / CO₂ / CO` moleküler soğurma şeritleri, dönem sabitleme ve Web Audio API spektral sonifikasyon. |
-| **M4** | **Kaydır-ve-Yığ & Kör Arama (`S`)** | Gürültü altı (`< 3σ`) hareketli cisimleri hız (`"/yıl`), konum açısı (`PA °`) ve heliosentrik uzaklık (`AU`) boyunca hizalayarak `> 10σ` seviyesinde kurtarma; `5×5` hız-açı S/N ısı haritası ve paralaks izi. |
-| **M5** | **3B Güneş Sistemi & REBOUND Yörünge (`3`)** | Three.js sahnesinde Güneş, Jüpiter–Neptün, Kuiper Kuşağı, SPHEREx tarama konisi, `1 / 5 / 10 yıl` gelecek konum tahminleri ve kaydır-ve-yığ astrometrisinden Gauss/en-küçük-kareler yörünge oturtma. |
-| **M6** | **JWST / HST Çoklu Misyon PiP Penceresi** | MAST arşivinde JWST veya HST örtüşmesi bulunduğunda sürüklenebilir pencere-içinde-pencere (PiP) önizlemesi ve doğrudan MAST portal bağlantısı. |
-| **M7** | **Çoklu Misyon Çapraz Eşleştirme & SED** | VizieR Gaia DR3 + AllWISE + MAST eşleştirmesi, `0.4–22 µm` birleşik SED grafiği ve **"Eşleşmeyen Soğuk KÖ Adayı (Gaia'da Yok)"** rozeti. |
-| **M8** | **Astro-LLM Komut Paleti (`Cmd/Ctrl+K`)** | Türkçe ve İngilizce doğal dil komutlarını (`"WISE 0855'e git ve fark modunu aç"`) ayrıştırıp arayüz eylemlerini (`FLY_TO`, `TOGGLE_DIFF`, `RUN_BLIND_SEARCH`, `OPEN_3D_ORBIT`) yürüten yardımcı. |
-| **M9** | **AI Spektral Sınıflandırma & Anomali** | `SpectralCNN1D` 5-sınıf olasılık dağılımı ve `PatchAnomalyViT` yeniden yapılandırma anomali skoru (`[0, 1]`). |
-| **M10** | **GCN Uyarı Bandı & Vatandaş Bilimi Aday Havuzu** | Üstte canlı GCN/VOEvent uyarı şeridi; altta topluluk oylaması (`+1`) ve yeni aday gönderimi (`POST /api/v1/Community/candidates`). |
-| **M11** | **Keşif Raporu PDF Üretici (`P`)** | Tek tuşla koordinat, S/N, 102-bant spektrum, çapraz eşleştirme, AI sınıflandırma ve REBOUND tahminlerini içeren `AEON_Discovery_Report.pdf` indirme. |
+| **1 · Hedef ve hareket** | Örnek hedefler (`G`) | Sınıflara göre gerçek hedefler ve gerçek SPHEREx verisi olan dönemleri |
+| | Hareket tespiti (`D`) | İki dönem arasındaki fark; hareket eden kaynak ± dipol olarak görünür |
+| | Kaydır ve Yığ (`S`) | Tek pozda görünmeyen sönük gezginler; yalnızca Güneş Sistemi adayları ve boş alan konumları için |
+| **2 · Tayf ve kimlik** | 102-Bant Tayf | Ölçülen, aradeğerlenen ve komşu kaynakla karışan bantlar ayrı işaretlenir; H₂O, CH₄, CO₂, CO bantları |
+| | Fiziksel kimlik | Sınıf olasılıkları, sıcaklık, log g, molekül indeksleri; ağ ile fizik uyuşmazsa uyarı |
+| **3 · Yaş ve yörünge** | Yaş ve Yörünge (`3`) | Tayfsal, kinematik ve birleşik yaş; kütle; yıldız ve kahverengi cüceler için Samanyolu yörüngesi ve Güneş’e en yakın geçiş, Güneş Sistemi adayları için REBOUND yörüngesi |
+| **4 · Doğrulama** | Doğrulama Karnesi | AEON sonuçları ile SIMBAD ve literatür yan yana; her satırda karar (tutarlı / kısmen / tutarsız) ve nedeni |
 
-### 5. Klavye Kısayolları
+### 4. Veri modu
+
+- **Gerçek SPHEREx (`fits_archive`):** görüntü ve tayf gerçek SPHEREx karelerinden gelir.
+- **Fiziksel model (`physical_model`):** o konum ve dönem için gerçek veri yoktur (ya da parlak bir yıldız
+  dedektörü doyurmuştur); aynı hat fiziksel bir gökyüzü modelinde çalışır ve bu açıkça yazılır.
+- **Çevrimdışı önbellek (`offline_cache`):** API’ye ulaşılamadığında üç demo hedefi için kaydedilmiş
+  yanıtlar gösterilir.
+
+### 5. Ölçülemeyen değerler ve sentetik nesneler
+
+- Radyal hızı ölçülmemiş bir cisim için hız ve yörünge −30, 0 ve +30 km/s için ayrı ayrı hesaplanır ve
+  aralık (zarf) olarak gösterilir; uydurma bir değer kullanılmaz.
+- Ölçülemeyen bir değer “ölçülemedi” olarak ve nedeniyle birlikte gösterilir.
+- **PX-2026-09 gerçek bir gök cismi değildir.** Algılama hattını uçtan uca sınamak için eklenmiş sentetik
+  bir test nesnesidir ve her ekranda böyle etiketlenir.
+
+### 6. Klavye kısayolları
+
 | Tuş | İşlev |
 |---|---|
-| `D` | Görüntü Farkı Modu panelini aç / kapat |
-| `S` | Kaydır-ve-Yığ (Shift-and-Stack) panelini aç / kapat |
-| `3` | 3B Güneş Sistemi & REBOUND Yörünge panelini aç / kapat |
-| `P` | `AEON_Discovery_Report.pdf` keşif raporunu oluştur ve indir |
-| `Cmd/Ctrl + K` | Astro-LLM doğal dil komut paletini aç |
-| `?` | Klavye kısayolları yardım penceresini aç |
+| `G` | Örnek hedefler |
+| `D` | Hareket tespiti |
+| `S` | Kaydır ve Yığ |
+| `3` | Yaş ve Yörünge |
+| `P` | PDF raporu |
+| `Ctrl/⌘ K` | Komut paleti (ör. “WISE 0855’e git”, “tayfı aç”) |
+| `?` | Kısayolları göster |
+| `←` `→` | Önceki / sonraki dönem |
 
 ---
 
-## Part 2 — English User Guide (EN)
+## English
 
 ### 1. Overview
-**AEON (Astrophysical Discovery OS)** is an interactive scientific workbench for exploring NASA **SPHEREx** multi-epoch (`2026-Q1` … `2026-Q4`), 102-band (`0.75–5.0 µm`) infrared sky cubes alongside Gaia DR3, AllWISE, and MAST (JWST/HST) archives.
 
-### 2. Data Mode Badges (`data_mode`)
-The header badge always indicates the active data provenance:
-- **`FITS Archive` (`fits_archive`):** Pixel cutouts and spectra are extracted directly from real SPHEREx / WISE FITS files on disk.
-- **`Physical Sky Model` (`physical_model`):** Deterministic Astropy WCS (`TAN` projection), wavelength-dependent PSF, zodiacal background, and 102-band Planck + molecular absorption (`H₂O`, `CH₄`, `CO₂`, `CO`) synthesis.
-- **`Offline Demo Cache` (`offline_cache`):** Pre-computed responses from `/public/demo-cache/` used seamlessly when the backend API is unreachable.
+AEON extracts a 102-band near-infrared spectrum (0.75–5.0 µm) of a target from real SPHEREx Level-2
+images, combines it with the object’s Galactic velocity to estimate its age and mass, computes its past
+and future orbit, and checks every result against SIMBAD and the literature.
 
-### 3. Synthetic Candidate Policy (`is_synthetic: true`)
-Any synthetic validation object (such as `PX-2026-09`) carries a prominent violet warning badge across the Sky Map, Spectrum Panel, Shift-and-Stack Panel, and exported `AEON_Discovery_Report.pdf`:
-> **"SYNTHETIC TEST CANDIDATE — Not a real astronomical object"**
+To run it locally, follow the root [README](../README.md#quick-start) (Docker Compose and `npm run dev`,
+then open <http://localhost:3000>).
 
-### 4. Keyboard Shortcuts
-- **`D`** — Toggle Difference Mode (`M2`)
-- **`S`** — Toggle Shift-and-Stack (`M4`)
-- **`3`** — Toggle 3D Solar System & REBOUND Orbit (`M5`)
-- **`P`** — Generate and download `AEON_Discovery_Report.pdf` (`M11`)
-- **`Cmd/Ctrl + K`** — Open Astro-LLM Command Palette (`M8`)
-- **`?`** — Open Keyboard Shortcuts Modal
+### 2. Screen layout
+
+| Area | Content |
+|---|---|
+| Top bar | Target search (name, identifier or “RA Dec”), data-mode indicator, guided tour, PDF report, shortcuts, command palette, EN/TR switch |
+| Centre | SPHEREx image of the selected target (with a choice of colour maps) |
+| Bottom | The four survey epochs (`2026-Q1` … `2026-Q4`); epochs with real SPHEREx data are marked |
+| Bottom left | Target card: class, position, proper motion, W2 brightness |
+| Right | The four-step tool rail; the chosen tool opens in the panel |
+
+### 3. The four steps
+
+| Step | Tool | What it shows |
+|---|---|---|
+| **1 · Target and motion** | Example gallery (`G`) | Real targets by class, with the epochs that hold real SPHEREx data |
+| | Motion detection (`D`) | The difference between two epochs; a moving source appears as a ± dipole |
+| | Shift and Stack (`S`) | Faint movers that no single exposure shows; offered for solar-system candidates and bare field positions |
+| **2 · Spectrum and identity** | 102-band spectrum | Measured, interpolated and blended bands marked separately; H₂O, CH₄, CO₂ and CO bands |
+| | Physical identity | Class probabilities, temperature, log g and band indices; a warning when the network and the physics disagree |
+| **3 · Age and orbit** | Age and Orbit (`3`) | Spectral, kinematic and joint age; mass; the Milky Way orbit and closest approach to the Sun for stars and brown dwarfs, a REBOUND orbit for solar-system candidates |
+| **4 · Validation** | Validation scorecard | AEON next to SIMBAD and the literature, with a verdict (consistent, partly consistent, discrepant) and its cause on every row |
+
+### 4. Data mode
+
+- **Real SPHEREx (`fits_archive`):** the image and spectrum come from real SPHEREx frames.
+- **Physical model (`physical_model`):** there is no real data at this position and epoch (or a bright star
+  saturated the detector); the same pipeline runs on a physical sky model and says so.
+- **Offline cache (`offline_cache`):** when the API cannot be reached, recorded responses for the three
+  demo targets are shown.
+
+### 5. Unmeasured values and synthetic objects
+
+- For an object without a measured radial velocity, velocity and orbit are computed for −30, 0 and
+  +30 km/s and shown as a range (an envelope); no value is invented.
+- A value that cannot be measured is shown as “not measured”, with the reason.
+- **PX-2026-09 is not a real object.** It is a synthetic test object injected to test the detection chain
+  end to end, and it is labelled as such on every screen.
+
+### 6. Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `G` | Example gallery |
+| `D` | Motion detection |
+| `S` | Shift and Stack |
+| `3` | Age and Orbit |
+| `P` | PDF report |
+| `Ctrl/⌘ K` | Command palette (for example “fly to WISE 0855”, “open the spectrum”) |
+| `?` | Show shortcuts |
+| `←` `→` | Previous / next epoch |

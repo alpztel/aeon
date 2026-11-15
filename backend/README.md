@@ -1,18 +1,18 @@
 # AEON core backend (`/backend`)
 
-Owner: Node 1 · branch `agent/claude-leader-backend`. Implements the `core` paths of
-[`../openapi.json`](../openapi.json).
+The core service of AEON: the SPHEREx FITS pipeline, image analyses, orbits and the target catalog. It
+implements the `core` paths of [`../openapi.json`](../openapi.json).
 
 | Path | What it does |
 |------|--------------|
 | `GET /api/v1/health` | Version, engines, `data_mode` (`fits_archive` or `physical_model`) |
 | `GET /api/v1/catalog/search` | Name resolution or cone search in DuckDB (+ optional field sources) |
 | `GET /api/v1/sky/cutout` | Background-subtracted cutout as JSON or FITS (astropy WCS header) |
-| `GET /api/v1/spectrum` | 102-band spectrum: photutils forced photometry on a spectral cube, molecular band depths |
+| `GET /api/v1/spectrum` | 102-band spectrum: photutils forced photometry, molecular band depths; without `epoch`, the epoch with the best real data (`pipeline.epoch_selection`) |
 | `POST /api/v1/analysis/difference` | I(t2) − I(t1), matched-filter S/N map, ± detections (photutils segmentation) |
 | `POST /api/v1/analysis/shift-stack` | Static-sky removal, digital tracking along the predicted apparent track (rate, PA, optional distance for Earth parallax), S/N gain |
 | `POST /api/v1/analysis/blind-search` | distance (uniform in parallax) × 5×5 (rate, PA) grid + local refinement, best stack |
-| `POST /api/v1/orbit/simulate` | REBOUND IAS15: Sun + Jupiter…Neptune + particle, 1/5/10-yr horizons |
+| `POST /api/v1/orbit/simulate` | Solar-system bodies: REBOUND IAS15 (Sun + Jupiter…Neptune + particle), 1/5/10-yr horizons. Stars and brown dwarfs (`galactic` astrometry, or a catalog target with a distance in pc): galpy `MWPotential2014` orbit over ±250 Myr and the closest approach to the Sun within ±50 kyr |
 
 ## Modules (`aeon/`)
 
@@ -25,6 +25,9 @@ Owner: Node 1 · branch `agent/claude-leader-backend`. Implements the `core` pat
   pedestal, depth-calibrated noise, FITS output.
 - `photometry.py`, `analysis.py` – Astropy/Photutils pipeline shared by model and archive data.
 - `orbit.py` – REBOUND integration, JPL planetary elements, state ↔ elements conversion.
+- `galactic.py` – Galactic orbits with galpy (`MWPotential2014`, R0 = 8 kpc, V0 = 220 km/s, solar motion of
+  Schönrich et al. 2010): peri/apocentre, z<sub>max</sub>, eccentricity and the solar encounter (d<sub>min</sub>, t<sub>min</sub>).
+  An unmeasured radial velocity is integrated for −30, 0 and +30 km/s and reported as an envelope.
 - `ephem.py` – apparent geocentric positions: Earth ephemeris (astropy/ERFA), parallax, hypothesis tracks, SPHEREx-like visibility.
 - `orbit_fit.py` – orbit determination from astrometry (least squares, covariance errors).
 - `archive.py` – real FITS mode: reads **SPHEREx Level 2 spectral images** (IMAGE/FLAGS/VARIANCE/WCS-WAVE,
@@ -36,6 +39,12 @@ Owner: Node 1 · branch `agent/claude-leader-backend`. Implements the `core` pat
 ## Science notes and limits
 
 - **PX-2026-09 is synthetic** (`is_synthetic: true`), injected to validate the detection chain.
+- **Stars and brown dwarfs orbit the Galaxy.** `orbit/simulate` picks the regime from the input: a
+  `galactic` block, or a catalog target with a distance in parsec, is integrated with galpy; a body with a
+  distance in AU with REBOUND. Barnard’s Star (Gaia DR3, RV −110.5 km/s) passes 1.16 pc from the Sun at
+  +9.72 kyr.
+- **Blends.** A band whose centroid sits ≥ 0.5 px from the target at S/N ≥ 5 is flagged as blended
+  (`pipeline.blended`, `n_bands_blended`) and left out of downstream fits.
 - **Earth parallax is modelled and tracked.** Catalog and rendered positions are apparent geocentric
   positions (proper motion + parallax from Earth's ERFA ephemeris). At 520 AU the annual parallax
   ellipse has a ~397″ semi-major axis, so a straight-line stack misses PX-2026-09 (S/N ≈ 2). Digital
@@ -68,7 +77,7 @@ Owner: Node 1 · branch `agent/claude-leader-backend`. Implements the `core` pat
 `physical_model` otherwise (per request, per epoch). Download real SPHEREx DR1 spectral images:
 
 ```bash
-export AEON_DATA_DIR=/srv/aeon-data          # Windows: set AEON_DATA_DIR=C:eon-data
+export AEON_DATA_DIR=/srv/aeon-data          # Windows: set AEON_DATA_DIR=C:\aeon-data
 python -m aeon.irsa list --ra 133.75990 --dec -7.24221             # what IRSA has (no download)
 python -m aeon.irsa fetch-demo                                       # wise-0855, rw-aur, px-2026-09 field
 python -m aeon.irsa fetch --ra 76.95642 --dec 30.40142 --size-px 96  # any position
@@ -106,7 +115,7 @@ synthetic — for its field only the real background is downloaded.
 ```bash
 pip install -r requirements.txt
 uvicorn aeon.main:app --reload --port 8000
-pytest -q                    # offline; IRSA round trip: pytest -q --run-network
+pytest -q                    # 228 tests, offline; IRSA round trip: pytest -q --run-network
 pytest -q tests/test_torture.py   # 80 hostile / edge / concurrency cases
 ```
 
