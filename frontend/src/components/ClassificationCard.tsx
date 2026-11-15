@@ -190,8 +190,8 @@ export function ClassificationCard({
               .join(" · ")}
           />
           <p className="aeon-mono text-[11px] text-slate-400">
-            {source}
-            {snr !== null && ` · ${dict.ai.snrMedian} ${snr.toFixed(1)}`}
+            {result.spectrum_data_mode ? "" : source}
+            {snr !== null && `${result.spectrum_data_mode ? "" : " · "}${dict.ai.snrMedian} ${snr.toFixed(1)}`}
           </p>
         </div>
       )}

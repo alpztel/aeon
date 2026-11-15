@@ -86,7 +86,8 @@ test("P04 PX-2026-09 cross-match temperature is the equilibrium temperature", as
   await expect(page.getByRole("heading", { level: 1 })).toContainText(/PX-2026-09/, { timeout: 30_000 });
   const panel = await open(page, "Cross-Match & SED");
   await expect(panel.getByText("SED physics")).toBeVisible({ timeout: 45_000 });
-  await expect(panel.getByText(/equilibrium/)).toBeVisible();
+  await expect(panel.getByText(/equilibrium/).first()).toBeVisible();
+  await expect(panel.getByText(/^1[01]\.\d K$/)).toBeVisible();          // ~11 K at 520 AU
   await expect(panel.getByText(/reflected sunlight/).first()).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/P04-px-crossmatch.png`, fullPage: true });
   const ai = await open(page, "AI Classification");

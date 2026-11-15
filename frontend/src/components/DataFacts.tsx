@@ -39,7 +39,7 @@ export function DataFacts({
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 @xl:grid-cols-3 @4xl:grid-cols-4">
         {list.map((f, i) => (
           <div key={`${f.label}-${i}`} className="min-w-0" title={f.title}>
-            <dt className="text-[10px] uppercase tracking-wider text-slate-400">{f.label}</dt>
+            <dt className="text-[10px] tracking-wide text-slate-400">{f.label}</dt>
             <dd className={`aeon-mono mt-0.5 break-words text-xs ${TONE[f.tone ?? "default"]}`}>{f.value}</dd>
           </div>
         ))}
