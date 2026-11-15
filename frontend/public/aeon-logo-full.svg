@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 180" fill="none">
+  <defs>
+    <radialGradient id="full-glow" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#FF5A1F" stop-opacity="0.2" />
+      <stop offset="55%" stop-color="#9DB4F0" stop-opacity="0.07" />
+      <stop offset="100%" stop-color="#050506" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="full-orbit" x1="26" y1="118" x2="154" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9DB4F0" stop-opacity="0.25" />
+      <stop offset="55%" stop-color="#9DB4F0" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#FF5A1F" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="full-cone" x1="90" y1="34" x2="90" y2="142" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ECE8E3" stop-opacity="1" />
+      <stop offset="100%" stop-color="#ECE8E3" stop-opacity="0.35" />
+    </linearGradient>
+    <linearGradient id="lvf-spectrum" x1="200" y1="0" x2="540" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7C95E6" />
+      <stop offset="28%" stop-color="#9DB4F0" />
+      <stop offset="55%" stop-color="#ECE8E3" />
+      <stop offset="80%" stop-color="#FF7A45" />
+      <stop offset="100%" stop-color="#FF5A1F" />
+    </linearGradient>
+  </defs>
+
+  <!-- Obsidian Canvas Background -->
+  <rect width="680" height="180" rx="20" fill="#050506" />
+  <rect x="1" y="1" width="678" height="178" rx="19" stroke="#ECE8E3" stroke-opacity="0.1" />
+
+  <!-- Left Emblem: Orbital Dipole & SPHEREx Cone -->
+  <g transform="translate(26, 26)">
+    <circle cx="64" cy="64" r="58" fill="url(#full-glow)" />
+    <circle cx="64" cy="64" r="52" stroke="#ECE8E3" stroke-opacity="0.22" stroke-width="1.5" />
+    <circle cx="64" cy="64" r="40" stroke="#9DB4F0" stroke-opacity="0.18" stroke-width="1" stroke-dasharray="3 5" />
+
+    <!-- 4 Survey Epoch Ticks -->
+    <line x1="64" y1="6" x2="64" y2="15" stroke="#ECE8E3" stroke-opacity="0.65" stroke-width="2" stroke-linecap="round" />
+    <line x1="122" y1="64" x2="113" y2="64" stroke="#ECE8E3" stroke-opacity="0.65" stroke-width="2" stroke-linecap="round" />
+    <line x1="64" y1="113" x2="64" y2="122" stroke="#ECE8E3" stroke-opacity="0.65" stroke-width="2" stroke-linecap="round" />
+    <line x1="6" y1="64" x2="15" y2="64" stroke="#ECE8E3" stroke-opacity="0.65" stroke-width="2" stroke-linecap="round" />
+
+    <!-- SPHEREx Conical Scan 'A' Monogram -->
+    <path
+      d="M64 22L35 98M64 22L93 98"
+      stroke="url(#full-cone)"
+      stroke-width="5.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <line x1="45" y1="73" x2="83" y2="73" stroke="#ECE8E3" stroke-opacity="0.85" stroke-width="3.5" stroke-linecap="round" />
+
+    <!-- Inclined 520 AU Planet X Orbit -->
+    <ellipse
+      cx="64"
+      cy="66"
+      rx="54"
+      ry="21"
+      transform="rotate(-24 64 66)"
+      stroke="url(#full-orbit)"
+      stroke-width="3.2"
+    />
+
+    <!-- Negative / Positive Dipole Nodes -->
+    <circle cx="24" cy="84" r="5" fill="#050506" stroke="#9DB4F0" stroke-width="2.75" />
+    <circle cx="104" cy="48" r="8" fill="#FF5A1F" />
+    <circle cx="104" cy="48" r="13" stroke="#FF5A1F" stroke-opacity="0.45" stroke-width="1.5" />
+    <circle cx="64" cy="54" r="3" fill="#ECE8E3" />
+  </g>
+
+  <!-- Vertical Technical Divider -->
+  <line x1="178" y1="38" x2="178" y2="142" stroke="#ECE8E3" stroke-opacity="0.12" stroke-width="1" />
+
+  <!-- Custom Geometric Wordmark: A E O N -->
+  <g fill="none" stroke="#ECE8E3" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- A (with signal orange apex dot) -->
+    <path d="M206 106L228 48L250 106" />
+    <line x1="214" y1="87" x2="242" y2="87" stroke-width="4.5" />
+    <!-- E (modern aerospace open E) -->
+    <path d="M322 50H284V104H322" />
+    <line x1="284" y1="77" x2="314" y2="77" stroke="#9DB4F0" stroke-width="4.5" />
+    <!-- O (astrometric ring with Planet X orbital node) -->
+    <circle cx="382" cy="77" r="28" />
+    <circle cx="402" cy="57" r="5.5" fill="#FF5A1F" stroke="#050506" stroke-width="2" />
+    <!-- N -->
+    <path d="M444 105V49L488 105V49" />
+  </g>
+
+  <!-- 6-Detector SPHEREx LVF Spectral Strip (0.75 - 5.0 um) -->
+  <rect x="204" y="122" width="44" height="3" rx="1.5" fill="#7C95E6" />
+  <rect x="254" y="122" width="44" height="3" rx="1.5" fill="#9DB4F0" />
+  <rect x="304" y="122" width="44" height="3" rx="1.5" fill="#CDD9FB" />
+  <rect x="354" y="122" width="44" height="3" rx="1.5" fill="#ECE8E3" />
+  <rect x="404" y="122" width="44" height="3" rx="1.5" fill="#FF7A45" />
+  <rect x="454" y="122" width="44" height="3" rx="1.5" fill="#FF5A1F" />
+
+  <!-- Technical Subtitle -->
+  <text
+    x="204"
+    y="144"
+    fill="#8E877F"
+    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+    font-size="11.5"
+    letter-spacing="3.6"
+  >
+    ASTROPHYSICAL DISCOVERY OS · 0.75–5.0 µm
+  </text>
+</svg>

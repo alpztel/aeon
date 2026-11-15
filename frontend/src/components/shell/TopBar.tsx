@@ -47,6 +47,13 @@ export function TopBar(props: TopBarProps) {
           >
             <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />
           </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/aeon-mark.svg"
+            alt=""
+            aria-hidden="true"
+            className="h-8 w-8 shrink-0 select-none"
+          />
           <div className="leading-none">
             <span className="block text-[15px] font-semibold tracking-[0.42em] text-foreground">AEON</span>
             <span className="aeon-label mt-1 hidden text-[9px] lg:block">{dict.app.subtitle}</span>

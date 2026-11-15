@@ -68,7 +68,11 @@ export function Onboarding({ onStartTour }: OnboardingProps) {
         aria-labelledby="aeon-welcome-title"
         className="aeon-panel aeon-fade-up w-full max-w-[620px] p-7 shadow-2xl md:p-9"
       >
-        <p className="aeon-label text-signal">{dict.shell.welcomeKicker}</p>
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/aeon-mark.svg" alt="" aria-hidden="true" className="h-9 w-9 shrink-0 select-none" />
+          <p className="aeon-label text-signal">{dict.shell.welcomeKicker}</p>
+        </div>
         <h2 id="aeon-welcome-title" className="aeon-display mt-3 text-[32px] text-foreground md:text-[44px]">
           {dict.shell.welcomeTitle}
         </h2>
