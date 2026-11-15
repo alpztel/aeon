@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use AEON in your work, please cite it using the metadata below."
+type: software
+title: "AEON: from raw SPHEREx frames to the age, mass and orbit of what moves in the infrared sky"
+abstract: >-
+  AEON is an open-source pipeline and web observatory for NASA's SPHEREx all-sky survey,
+  built for the NASA Space Apps Challenge 2026 ("Planet X and SPHEREx"). It reduces real
+  SPHEREx Level-2 spectral images to 102-band near-infrared spectra, combines each spectrum
+  with the object's Galactic kinematics to estimate its age and mass against published
+  evolution models, integrates past and future orbits (galpy for stars and brown dwarfs,
+  REBOUND for solar-system candidates), and validates every result against SIMBAD and the
+  peer-reviewed literature.
+authors:
+  - name: "Team AEON"
+repository-code: "https://github.com/alpztel/aeon"
+url: "https://github.com/alpztel/aeon"
+license: MIT
+version: "1.0.0"
+date-released: "2026-11-15"
+keywords:
+  - SPHEREx
+  - Planet X
+  - brown dwarfs
+  - stellar kinematics
+  - galactic dynamics
+  - astronomy
+  - NASA Space Apps Challenge

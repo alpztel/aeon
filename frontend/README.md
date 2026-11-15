@@ -1,58 +1,75 @@
-# AEON Frontend — Astrophysical Discovery OS (Node 2)
+# AEON frontend
 
-Next.js 16 + TypeScript + Tailwind CSS v4 web interface for **AEON — Astrophysical Discovery OS** (NASA Space Apps Challenge 2026 · Planet X & SPHEREx).
+The web observatory of AEON: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Plotly.js and
+three.js, in English and Turkish. It talks only to the API in [`openapi.json`](../openapi.json).
 
-## Features (M1–M11)
+## The four-step flow
 
-- **M1 — 2D Infrared Sky Map & Timeline (`SkyMapPanel.tsx`):**
-  - 64×64 SPHEREx cutout viewer (`inferno`, `viridis`, `magma`, `grayscale` colormaps) + optional pinned Aladin Lite v3 (`3.5.1`) sky survey view.
-  - Multi-epoch scrubbing across `2026-Q1`, `2026-Q2`, `2026-Q3`, `2026-Q4` with automatic apparent-position tracking (proper motion + Earth reflex parallax).
-  - Bilingual (`TR | EN`) UI and keyboard shortcuts (`D`, `S`, `3`, `P`, `⌘K`/`Ctrl+K`, `?`).
-- **M2 — Image Differencing (`DifferencePanel.tsx`):**
-  - Side-by-side $I(t_1)$, $I(t_2)$, and diverging blue/white/red $I(t_2) - I(t_1)$ difference map with dipole and transient detection overlays.
-- **M3 — 102-Band Near-IR Spectrum & Sonification (`SpectrumPanel.tsx`, `sonify.ts`):**
-  - Interactive Plotly.js $0.75\text{–}5.0\,\mu\text{m}$ spectrum with $\text{H}_2\text{O}$ ($1.4, 1.9, 2.7, 3.05\,\mu\text{m}$), $\text{CH}_4$ ($1.65, 2.2, 3.3\,\mu\text{m}$), $\text{CO}_2$ ($4.26\,\mu\text{m}$), and $\text{CO}$ ($4.67\,\mu\text{m}$) absorption band markers, reference spectrum pinning, and Web Audio API sonification.
-- **M4 — Shift-and-Stack & Blind Parallax Search (`ShiftStackPanel.tsx`):**
-  - 24-frame geocentric parallax-aware Shift-and-Stack (`rate_arcsec_yr`, `pa_deg`, `distance_au`, `uniform` / `spherex` cadence), apparent parallax loop visualizer, and 5×5 coarse + refined velocity/distance grid search.
-- **M5 — 3D Solar System & REBOUND Orbit Forecast (`SolarSystem3DPanel.tsx`):**
-  - Three.js WebGL heliocentric ecliptic visualization with Sun, giant planets (`Jupiter`–`Neptune`), Kuiper Belt (`30–50 AU`), SPHEREx $90^\circ$ scan cone, least-squares astrometric orbit fit summary, and +1 / +5 / +10 yr REBOUND IAS15 forecast table.
-- **M6 & M7 — Multi-Mission Cross-Match & JWST/HST PiP (`CrossmatchSedPanel.tsx`, `JwstPipWindow.tsx`):**
-  - Broadband $0.4\text{–}22\,\mu\text{m}$ SED (Gaia DR3 + SPHEREx + WISE) and MAST archival overlap Picture-in-Picture window when `/api/v1/missions/crossmatch` is connected.
-- **M8 & M9 — Astro-LLM Command Palette & 1D-CNN / ViT Classification (`AstroLlmModal.tsx`, `ClassificationCard.tsx`):**
-  - Natural-language TR/EN command execution (`⌘K` / `Ctrl+K`) and 5-class probability bars + PatchAnomalyViT score gauge.
-- **M10 — GCN Live Notices & Citizen-Science Candidate Pool (`GcnTicker.tsx`, `CandidatePoolPanel.tsx`):**
-  - Live transient notice ticker and community candidate leaderboard with upvote/submission support.
-- **M11 — Jury Demo Tour & One-Click PDF Discovery Report (`DemoTourBar.tsx`, `pdf-report.ts`):**
-  - Guided 3-step jury tour (`WISE 0855−0714` → `RW Aurigae` → `PX-2026-09`) and client-side `jsPDF` discovery report generator.
+The tool rail on the right follows the AEON science chain. Each tool opens in the inspector panel.
 
-## Quick Start
+| Step | Tool | Component |
+|---|---|---|
+| 1 · Target and motion | Example gallery (`G`) | [`ExamplesPanel.tsx`](src/components/ExamplesPanel.tsx): catalog targets grouped by class, with the quarters that hold real SPHEREx data |
+| | Motion detection (`D`) | [`DifferencePanel.tsx`](src/components/DifferencePanel.tsx): two epochs and their difference; a moving source appears as a ± dipole |
+| | Shift and Stack (`S`) | [`ShiftStackPanel.tsx`](src/components/ShiftStackPanel.tsx): parallax-aware digital tracking and blind search; offered for solar-system candidates and bare field positions |
+| 2 · Spectrum and identity | 102-band spectrum | [`SpectrumPanel.tsx`](src/components/SpectrumPanel.tsx): measured, interpolated and blended bands marked separately, molecular bands, pipeline facts |
+| | Physical identity | [`ClassificationCard.tsx`](src/components/ClassificationCard.tsx): 1D-CNN class probabilities, physics diagnostics, the age and mass card and the scorecard |
+| 3 · Age and orbit | Age and Orbit (`3`) | [`GalacticOrbitPanel.tsx`](src/components/GalacticOrbitPanel.tsx) for stars and brown dwarfs (galpy orbit, solar encounter), [`SolarSystem3DPanel.tsx`](src/components/SolarSystem3DPanel.tsx) for solar-system candidates (REBOUND, 3D) |
+| 4 · Validation | Validation scorecard | [`CrossmatchSedPanel.tsx`](src/components/CrossmatchSedPanel.tsx) with [`ValidationScorecard.tsx`](src/components/ValidationScorecard.tsx): AEON next to SIMBAD and the literature, and the Gaia + SPHEREx + WISE SED |
+
+The shell ([`src/components/shell/`](src/components/shell)) holds the top bar and search, the sky view,
+the epoch scrubber, the tool rail and inspector, the target card, onboarding and the guided tour. Also
+included: a command palette ([`AstroLlmModal.tsx`](src/components/AstroLlmModal.tsx), `Ctrl/⌘ K`),
+keyboard shortcuts (`?`) and a client-side PDF report ([`src/lib/pdf-report.ts`](src/lib/pdf-report.ts),
+`P`).
+
+## Honest by design
+
+- A data-mode badge shows whether a view comes from real SPHEREx frames, the physical model or the offline
+  cache; synthetic objects carry a synthetic badge.
+- Values the API does not send are left out, never shown as zero
+  ([`DataFacts.tsx`](src/components/DataFacts.tsx)).
+- Missing radial velocities are shown as envelopes, and the reason for every unmeasured value is shown
+  next to it.
+
+## Getting started
 
 ```bash
 cd frontend
 npm ci
-npm run gen:api     # Regenerates src/lib/api-types.ts from ../openapi.json
-npm run dev         # Starts Next.js on http://localhost:3000
+cp .env.example .env.local     # then set NEXT_PUBLIC_API_BASE
+npm run dev                    # http://localhost:3000
 ```
 
-Configure the backend base URL via `.env.local`:
+`NEXT_PUBLIC_API_BASE` points at the API gateway. With the Docker Compose stack from the root
+[Quick start](../README.md#quick-start) use `http://localhost`. Pointing it straight at the backend
+(`http://localhost:8000`) gives the core tools only, because the ai-engine and multi-mission-api are
+reached through the gateway.
 
-```bash
-NEXT_PUBLIC_API_BASE=http://localhost:8000
-```
+## Scripts
 
-## Offline Demo Cache (`public/demo-cache/`)
+| Command | Does |
+|---|---|
+| `npm run dev` | Development server |
+| `npm run build`, `npm start` | Production build and server |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript, no emit |
+| `npm run gen:api` | Regenerates [`src/lib/api-types.ts`](src/lib/api-types.ts) from `../openapi.json` |
 
-To capture fresh offline cache responses from a running AEON backend (`http://localhost:8000`):
+Optional response blocks of the cross-match (age and mass, Galactic orbit, validation) are typed by hand in
+[`src/lib/api.ts`](src/lib/api.ts).
+
+## Offline demo cache
+
+[`public/demo-cache/`](public/demo-cache) holds recorded API responses for WISE 0855, RW Aurigae and
+PX-2026-09. When the API cannot be reached, these are shown and labelled as offline cache. Refresh them
+from a running backend:
 
 ```bash
 AEON_API_BASE=http://localhost:8000 node scripts/capture-demo-cache.mjs
 ```
 
-## Quality Gates
+## Deploying
 
-```bash
-npm run gen:api
-npm run lint
-npm run typecheck
-npm run build
-```
+The frontend is a standard Next.js app; on Vercel set the project’s root directory to `frontend`. See
+[`docs-and-reports/deploy-vercel.md`](../docs-and-reports/deploy-vercel.md) (Turkish).

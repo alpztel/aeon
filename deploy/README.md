@@ -1,4 +1,9 @@
-# Dağıtım — api.a-eon.engineer (DigitalOcean)
+# Dağıtım — api.a-eon.engineer
+
+> **Durum:** Hackathon boyunca canlı API bir Azure sanal makinesinde çalıştı (Docker Compose + Nginx +
+> Let’s Encrypt); kurulum ve güncelleme adımları [`azure/README.md`](azure/README.md) içindedir. Aşağıdaki
+> DigitalOcean adımları ilk planlanan kurulumu anlatır. Barındırılan demo hackathon sonrasında kapatıldı;
+> yığın yerelde `docker compose -f deploy/docker-compose.yml --profile full up -d --build` ile çalışır.
 
 ## Bileşenler
 | Dosya | Görev |

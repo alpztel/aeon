@@ -1,0 +1,41 @@
+name: Bug report
+description: Something does not work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem. For security issues, please follow
+        [SECURITY.md](https://github.com/alpztel/aeon/blob/main/SECURITY.md) instead of opening an issue.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - backend
+        - ai-engine
+        - multi-mission-api
+        - frontend
+        - deploy
+        - documentation
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Commands, API requests with their parameters, or clicks in the interface.
+      render: shell
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Docker or local run, and the output of `curl http://localhost/api/v1/health`.
+      render: json
