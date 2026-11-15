@@ -231,7 +231,7 @@
       "Fly to PX-2026-09, run blind search and open 3D orbit"
     ],
     "executedActions": "Executed UI Actions",
-    "classifyTitle": "Physics-Guided 1D-CNN Spectral Classifier & ZOGY Anomaly Inspector",
+    "classifyTitle": "1D-CNN Spectral Classifier & PatchAnomalyViT",
     "topClass": "Top Predicted Class",
     "anomalyScore": "ViT Anomaly Score",
     "highAnomaly": "High Discovery Priority",

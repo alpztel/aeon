@@ -31,6 +31,10 @@ function unit(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 }
 
+function finiteNum(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 const ALL_CLASSES: ObjectClass[] = [
   "cold_brown_dwarf",
   "planet_x_candidate",
@@ -43,7 +47,7 @@ export function ClassificationCard({
   coords,
   selectedObject,
 }: ClassificationCardProps) {
-  const { lang, dict } = useI18n();
+  const { dict, lang } = useI18n();
 
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -167,17 +171,6 @@ export function ClassificationCard({
         )}
       </div>
 
-      {loading && !result && (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-black/30 py-8 text-xs text-slate-300">
-          <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
-          <span>
-            {lang === "tr"
-              ? "102-bant spektral sınıflandırma ve kesit anomalisi hesaplanıyor..."
-              : "Computing 102-band spectral classification and cutout anomaly..."}
-          </span>
-        </div>
-      )}
-
       {result && (
       <>
       {source && (
@@ -202,145 +195,124 @@ export function ClassificationCard({
               <div key={cls} className="space-y-1 text-xs">
                 <div className="flex justify-between">
                   <span
-                    className={`aeon-mono text-3xl font-bold ${
-                      anomaly >= 0.85 ? "text-rose-400" : "text-cyan-300"
-                    }`}
+                    className={
+                      isTop ? "font-semibold text-amber-200" : "text-slate-300"
+                    }
                   >
-                    {anomaly.toFixed(2)}
+                    {dict.classes[cls]}
                   </span>
-                  <span className="text-xs text-slate-400">/ 1.00</span>
+                  <span className="aeon-mono text-slate-300">{pct}%</span>
                 </div>
-                <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
                   <div
-                    className={`h-full rounded-full ${
-                      anomaly >= 0.85 ? "bg-rose-500" : "bg-cyan-400"
+                    className={`h-full rounded-full transition-all ${
+                      isTop ? "bg-amber-400" : "bg-cyan-400/60"
                     }`}
-                    style={{ width: `${Math.min(100, Math.round(anomaly * 100))}%` }}
+                    style={{ width: `${pct}%` }}
                   />
                 </div>
-                <p className="mt-2 text-xs text-slate-300">
-                  {anomaly >= 0.85 ? dict.ai.highAnomaly : dict.ai.normalAnomaly}
-                </p>
               </div>
+            );
+          })}
+        </div>
 
-              {result?.model_versions && (
-                <div className="aeon-mono mt-3 border-t border-white/10 pt-2 text-[10px] text-slate-500">
-                  {Object.entries(result.model_versions)
-                    .map(([k, v]) => `${k}: ${v}`)
-                    .join(" · ")}
-                </div>
-              )}
+        {/* PatchAnomalyViT Gauge */}
+        <div className="flex flex-col justify-between rounded-xl border border-white/10 bg-black/40 p-4 @2xl:col-span-4">
+          <div>
+            <span className="text-xs font-medium text-slate-400">
+              {dict.ai.anomalyScore}
+            </span>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span
+                className={`aeon-mono text-3xl font-bold ${
+                  anomaly >= 0.85 ? "text-rose-400" : "text-cyan-300"
+                }`}
+              >
+                {anomaly.toFixed(2)}
+              </span>
+              <span className="text-xs text-slate-400">/ 1.00</span>
             </div>
+            <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className={`h-full rounded-full ${
+                  anomaly >= 0.85 ? "bg-rose-500" : "bg-cyan-400"
+                }`}
+                style={{ width: `${Math.min(100, Math.round(anomaly * 100))}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-slate-300">
+              {anomaly >= 0.85 ? dict.ai.highAnomaly : dict.ai.normalAnomaly}
+            </p>
           </div>
 
-          {/* Physics-Guided Spectral Diagnostics & ZOGY Telemetry */}
-          {(phys || zogy) && (
-            <div className="grid grid-cols-2 gap-2.5 rounded-xl border border-white/10 bg-black/30 p-3 text-xs @xl:grid-cols-4">
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-slate-400">
-                  {lang === "tr" ? "Etkin Sıcaklık (Teff)" : "Effective Temp (Teff)"}
-                </span>
-                <p className="aeon-mono mt-0.5 font-semibold text-amber-200">
-                  {displayTeff}
-                </p>
+          {result?.model_versions && (
+            <div className="aeon-mono mt-3 border-t border-white/10 pt-2 text-[10px] text-slate-500">
+              {Object.entries(result.model_versions)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(" · ")}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Physics-Guided Spectral & ZOGY Telemetry (when returned by ai-engine) */}
+      {(result.physics_diagnostics || result.astroclip_zogy) && (
+        <div className="mt-4 grid grid-cols-2 gap-2.5 border-t border-white/10 pt-3 text-xs @2xl:grid-cols-4">
+          {finiteNum(result.physics_diagnostics?.teff_est_k) !== null && (
+            <div className="rounded-xl border border-white/10 bg-black/35 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400">
+                {lang === "tr" ? "Tahmini T_eff (Sonora)" : "Est. T_eff (Sonora)"}
               </div>
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-slate-400">
-                  {lang === "tr" ? "CH₄ (3.3 µm) / H₂O (2.7 µm)" : "CH₄ (3.3 µm) / H₂O (2.7 µm)"}
-                </span>
-                <p className="aeon-mono mt-0.5 font-semibold text-cyan-200">
-                  {phys?.ch4_3_3um_index !== undefined
-                    ? `${phys.ch4_3_3um_index.toFixed(2)} / ${(phys.h2o_2_7um_index ?? 0).toFixed(2)}`
-                    : "—"}
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-slate-400">
-                  W1 − W2 (AB)
-                </span>
-                <p className="aeon-mono mt-0.5 font-semibold text-violet-200">
-                  {phys?.w1_minus_w2_ab !== undefined
-                    ? `${phys.w1_minus_w2_ab >= 0 ? "+" : ""}${phys.w1_minus_w2_ab.toFixed(2)} mag`
-                    : "—"}
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-slate-400">
-                  {lang === "tr" ? "ZOGY Tepe S/N · Kozmik Veto" : "ZOGY Peak S/N · CR Veto"}
-                </span>
-                <p className="aeon-mono mt-0.5 flex items-center gap-1 font-semibold text-emerald-300">
-                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    {zogy?.zogy_peak_snr !== undefined ? `${zogy.zogy_peak_snr.toFixed(1)}σ` : "—"}
-                    {" · "}
-                    {zogy?.cosmic_ray_veto
-                      ? lang === "tr"
-                        ? "Artefakt"
-                        : "Artifact"
-                      : lang === "tr"
-                        ? "PSF Doğrulandı"
-                        : "PSF Verified"}
-                  </span>
-                </p>
+              <div className="aeon-mono mt-1 text-sm font-semibold text-cyan-200">
+                {finiteNum(result.physics_diagnostics?.teff_est_k)!.toFixed(0)} K
               </div>
             </div>
           )}
-
-          {/* 4-Step SPHEREx Discovery Verification Checklist */}
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              {lang === "tr"
-                ? "SPHEREx Çoklu-Kanıt Keşif Doğrulama Zinciri"
-                : "SPHEREx Multi-Evidence Discovery Verification Chain"}
-            </p>
-            <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-              <div className="flex items-start gap-2 rounded-lg bg-black/30 px-2.5 py-1.5">
-                <CheckCircle2
-                  className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
-                    isColdSubstellar ? "text-emerald-400" : "text-cyan-400"
-                  }`}
-                />
-                <div>
-                  <span className="font-medium text-slate-200">
-                    {lang === "tr" ? "1. Optik Veto (Gaia DR3): " : "1. Optical Veto (Gaia DR3): "}
-                  </span>
-                  <span className="text-slate-400">
-                    {isColdSubstellar
-                      ? lang === "tr"
-                        ? "Görünür ışıkta yıldız eşleşmesi yok (soğuk alt-yıldız / dış güneş sistemi adayı)."
-                        : "No optical stellar counterpart (cold substellar / outer solar system candidate)."
-                      : lang === "tr"
-                        ? "Optik/yakın-IR yıldız veya disk kaynağı ile uyumlu."
-                        : "Consistent with optical/near-IR stellar or disk source."}
-                  </span>
-                </div>
+          {finiteNum(result.physics_diagnostics?.ch4_3_3um_depth) !== null && (
+            <div className="rounded-xl border border-white/10 bg-black/35 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400">
+                CH₄ (3.3 µm) · H₂O (2.7 µm)
               </div>
-
-              <div className="flex items-start gap-2 rounded-lg bg-black/30 px-2.5 py-1.5">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                <div>
-                  <span className="font-medium text-slate-200">
-                    {lang === "tr" ? "2. SPHEREx 102-Bant Tayf: " : "2. SPHEREx 102-Band Spectrum: "}
-                  </span>
-                  <span className="text-slate-400">
-                    {topClass === "cold_brown_dwarf"
-                      ? lang === "tr"
-                        ? "Derin CH₄ (3.3 µm) ve H₂O moleküler soğurma çukurları tespit edildi."
-                        : "Deep CH₄ (3.3 µm) and H₂O molecular absorption troughs detected."
-                      : isPlanetX
-                        ? lang === "tr"
-                          ? "Tek karede gürültü tabanında (S/N < 3); 24-kare Shift-and-Stack ile S/N > 8 kurtarımı."
-                          : "Below single-frame noise floor (S/N < 3); recovered at S/N > 8 via 24-frame Shift-and-Stack."
-                        : lang === "tr"
-                          ? "0.75–5.0 µm süreklilik ve CO / H₂O bant profili ölçüldü."
-                          : "0.75–5.0 µm continuum and CO / H₂O band profile measured."}
-                  </span>
-                </div>
+              <div className="aeon-mono mt-1 text-sm font-semibold text-amber-200">
+                Δ {finiteNum(result.physics_diagnostics?.ch4_3_3um_depth)!.toFixed(2)}
+                {finiteNum(result.physics_diagnostics?.h2o_2_7um_depth) !== null
+                  ? ` / ${finiteNum(result.physics_diagnostics?.h2o_2_7um_depth)!.toFixed(2)}`
+                  : ""}
               </div>
             </div>
-          </div>
+          )}
+          {finiteNum(result.physics_diagnostics?.w1_w2_color_mag) !== null && (
+            <div className="rounded-xl border border-white/10 bg-black/35 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400">
+                {lang === "tr" ? "Sentetik W1 − W2 Rengi" : "Synthetic W1 − W2 Color"}
+              </div>
+              <div className="aeon-mono mt-1 text-sm font-semibold text-violet-200">
+                {finiteNum(result.physics_diagnostics?.w1_w2_color_mag)! >= 0 ? "+" : ""}
+                {finiteNum(result.physics_diagnostics?.w1_w2_color_mag)!.toFixed(2)} mag
+              </div>
+            </div>
+          )}
+          {result.astroclip_zogy && (
+            <div className="rounded-xl border border-white/10 bg-black/35 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400">
+                {lang === "tr" ? "ZOGY PSF & Kozmik Veto" : "ZOGY PSF & CR Veto"}
+              </div>
+              <div className="aeon-mono mt-1 text-sm font-semibold text-emerald-300">
+                {finiteNum(result.astroclip_zogy.zogy_peak_snr) !== null
+                  ? `S/N ${finiteNum(result.astroclip_zogy.zogy_peak_snr)!.toFixed(1)} · `
+                  : ""}
+                {result.astroclip_zogy.cosmic_ray_veto
+                  ? lang === "tr"
+                    ? "Kozmik Işın"
+                    : "CR Veto"
+                  : lang === "tr"
+                    ? "PSF Doğrulandı"
+                    : "PSF Verified"}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
       </>
       )}
     </section>

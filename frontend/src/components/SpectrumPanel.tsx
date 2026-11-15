@@ -306,6 +306,7 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
 
   const isSynthetic =
     selectedObject?.is_synthetic || spectrum?.matched_object?.is_synthetic;
+  const pipe = spectrum?.pipeline;
 
   return (
     <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
@@ -321,6 +322,19 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
               {dict.spectrum.snrMedian}: {spectrum.snr_median.toFixed(1)}
             </span>
           )}
+          {pipe?.data_mode === "fits_archive" ? (
+            <span className="aeon-mono inline-flex items-center gap-1.5 rounded-full border border-cyan-400/35 bg-cyan-500/15 px-2.5 py-0.5 text-[10px] font-medium text-cyan-200">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-300" />
+              {dict.shell.realData}
+              {typeof pipe.n_bands_measured === "number" ? ` · ${pipe.n_bands_measured}/102` : ""}
+              {typeof pipe.n_frames_used === "number" ? ` · ${pipe.n_frames_used} ${dict.shell.frames}` : ""}
+            </span>
+          ) : pipe?.data_mode === "physical_model" ? (
+            <span className="aeon-mono inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium text-slate-300">
+              <span className="inline-block h-1.5 w-1.5 rounded-full border border-white/50" />
+              {dict.shell.modelData}
+            </span>
+          ) : null}
           {isSynthetic && (
             <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-rose-300">
               <AlertTriangle className="h-3 w-3" />
@@ -405,6 +419,18 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
         <div className="mb-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
           {error}
         </div>
+      )}
+
+      {pipe?.archive_fallback_reason && (
+        <p className="aeon-mono mb-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-slate-400">
+          {epoch}: {pipe.archive_fallback_reason}
+        </p>
+      )}
+      {pipe?.data_mode === "fits_archive" && pipe.obs_date_range && (
+        <p className="aeon-mono mb-3 text-[11px] text-slate-400">
+          IRSA SPHEREx L2 · {pipe.obs_date_range[0]?.slice(0, 10)} → {pipe.obs_date_range[1]?.slice(0, 10)}
+          {typeof pipe.n_bands_measured === "number" ? ` · ${pipe.n_bands_measured}/102 measured bands` : ""}
+        </p>
       )}
 
       {/* Plot Container */}

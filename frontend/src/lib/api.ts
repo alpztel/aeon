@@ -6,7 +6,22 @@ export type ObjectClass = components["schemas"]["ObjectClass"];
 export type CatalogObject = components["schemas"]["CatalogObject"];
 export type CatalogResponse = components["schemas"]["CatalogResponse"];
 export type SkyImage = components["schemas"]["Image"];
-export type SpectrumResponse = components["schemas"]["Spectrum"];
+export interface SpectrumPipeline {
+  data_mode?: DataMode;
+  source?: string;
+  method?: string;
+  n_bands_measured?: number;
+  n_bands_total?: number;
+  n_frames?: number;
+  n_frames_used?: number;
+  n_frames_rejected?: number;
+  obs_date_range?: [string, string] | null;
+  archive_fallback_reason?: string;
+  limitations?: string;
+}
+export type SpectrumResponse = components["schemas"]["Spectrum"] & {
+  pipeline?: SpectrumPipeline;
+};
 export type AnalysisRequest = components["schemas"]["AnalysisRequest"];
 export type DifferenceResult = components["schemas"]["DifferenceResult"];
 export type ShiftStackResult = components["schemas"]["ShiftStackResult"];
@@ -19,28 +34,27 @@ export type UiAction = components["schemas"]["UiAction"];
 export type Candidate = components["schemas"]["Candidate"];
 export type AiCommandResponse =
   operations["aiCommand"]["responses"]["200"]["content"]["application/json"];
+export interface PhysicsDiagnostics {
+  teff_est_k?: number;
+  ch4_3_3um_depth?: number;
+  h2o_2_7um_depth?: number;
+  co2_4_26um_depth?: number;
+  w1_w2_color_mag?: number;
+  j_w2_flux_ratio?: number;
+  is_ultracold_ch4_object?: boolean;
+}
+export interface AstroClipZogy {
+  astroclip_Alignment?: number;
+  zogy_peak_snr?: number;
+  zogy_trough_snr?: number;
+  dipole_polarity_score?: number;
+  is_moving_dipole?: boolean;
+  cosmic_ray_veto?: boolean;
+}
 export type AiClassifyResponse =
   operations["aiClassify"]["responses"]["200"]["content"]["application/json"] & {
-    physics_diagnostics?: {
-      teff_k?: number;
-      log_g_cgs?: number;
-      w1_ab_mag?: number;
-      w2_ab_mag?: number;
-      w1_minus_w2_ab?: number;
-      ch4_3_3um_index?: number;
-      h2o_2_7um_index?: number;
-      co_4_67um_index?: number;
-      spectral_recon_rms?: number;
-      best_template_class?: ObjectClass;
-    } | null;
-    astroclip_zogy?: {
-      astroclip_similarity?: number;
-      cross_modal_tension?: number;
-      zogy_peak_snr?: number;
-      dipole_polarity_score?: number;
-      cosmic_ray_veto?: boolean;
-      is_moving_dipole?: boolean;
-    } | null;
+    physics_diagnostics?: PhysicsDiagnostics | null;
+    astroclip_zogy?: AstroClipZogy | null;
   };
 export type CrossmatchResult =
   operations["missionsCrossmatch"]["responses"]["200"]["content"]["application/json"];
@@ -347,35 +361,69 @@ export interface CutoutParams {
   band?: number;
 }
 
+const MAX_MEMO_ENTRIES = 64;
+const cutoutCache = new Map<string, { data: SkyImage; fromCache: boolean }>();
+const cutoutInFlight = new Map<string, Promise<{ data: SkyImage; fromCache: boolean }>>();
+const spectrumCache = new Map<string, { data: SpectrumResponse; fromCache: boolean }>();
+const spectrumInFlight = new Map<string, Promise<{ data: SpectrumResponse; fromCache: boolean }>>();
+
+function rememberEntry<V>(map: Map<string, V>, key: string, value: V): void {
+  if (map.has(key)) map.delete(key);
+  map.set(key, value);
+  if (map.size > MAX_MEMO_ENTRIES) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+}
+
 export async function getSkyCutout(
   params: CutoutParams
 ): Promise<{ data: SkyImage; fromCache: boolean }> {
+  const epoch = params.epoch ?? "2026-Q1";
+  const sizePx = params.size_px ?? 64;
+  const scale = params.pixel_scale_arcsec ?? 6.2;
+  const cacheKey = `${params.ra.toFixed(6)}:${params.dec.toFixed(6)}:${epoch}:${sizePx}:${scale}:${params.band ?? "all"}`;
+
+  const hit = cutoutCache.get(cacheKey);
+  if (hit) return hit;
+
+  const inflight = cutoutInFlight.get(cacheKey);
+  if (inflight) return inflight;
+
   const qs = new URLSearchParams({
     ra: String(params.ra),
     dec: String(params.dec),
-    epoch: params.epoch ?? "2026-Q1",
-    size_px: String(params.size_px ?? 64),
-    pixel_scale_arcsec: String(params.pixel_scale_arcsec ?? 6.2),
+    epoch,
+    size_px: String(sizePx),
+    pixel_scale_arcsec: String(scale),
     format: "json",
   });
   if (params.band !== undefined) {
     qs.set("band", String(params.band));
   }
 
-  try {
-    const data = await fetchJson<SkyImage>(`/api/v1/sky/cutout?${qs.toString()}`);
-    return { data, fromCache: false };
-  } catch (err) {
-    const epoch = params.epoch ?? "2026-Q1";
-    const id = matchDemoId(params.ra, params.dec);
-    if (id) {
-      const cached = await fetchDemoCache<SkyImage>(`cutout-${id}-${epoch}.json`);
-      if (cached) {
-        return { data: cached, fromCache: true };
+  const promise = (async (): Promise<{ data: SkyImage; fromCache: boolean }> => {
+    try {
+      const data = await fetchJson<SkyImage>(`/api/v1/sky/cutout?${qs.toString()}`);
+      const res = { data, fromCache: false };
+      rememberEntry(cutoutCache, cacheKey, res);
+      return res;
+    } catch (err) {
+      const id = matchDemoId(params.ra, params.dec);
+      if (id) {
+        const cached = await fetchDemoCache<SkyImage>(`cutout-${id}-${epoch}.json`);
+        if (cached) {
+          return { data: cached, fromCache: true };
+        }
       }
+      throw err;
+    } finally {
+      cutoutInFlight.delete(cacheKey);
     }
-    throw err;
-  }
+  })();
+
+  cutoutInFlight.set(cacheKey, promise);
+  return promise;
 }
 
 export interface SpectrumParams {
@@ -388,29 +436,46 @@ export interface SpectrumParams {
 export async function getSpectrum(
   params: SpectrumParams
 ): Promise<{ data: SpectrumResponse; fromCache: boolean }> {
+  const epoch = params.epoch ?? "2026-Q1";
+  const cacheKey = `${params.ra.toFixed(6)}:${params.dec.toFixed(6)}:${epoch}:${params.aperture_arcsec ?? "default"}`;
+
+  const hit = spectrumCache.get(cacheKey);
+  if (hit) return hit;
+
+  const inflight = spectrumInFlight.get(cacheKey);
+  if (inflight) return inflight;
+
   const qs = new URLSearchParams({
     ra: String(params.ra),
     dec: String(params.dec),
-    epoch: params.epoch ?? "2026-Q1",
+    epoch,
   });
   if (params.aperture_arcsec !== undefined) {
     qs.set("aperture_arcsec", String(params.aperture_arcsec));
   }
 
-  try {
-    const data = await fetchJson<SpectrumResponse>(`/api/v1/spectrum?${qs.toString()}`);
-    return { data, fromCache: false };
-  } catch (err) {
-    const epoch = params.epoch ?? "2026-Q1";
-    const id = matchDemoId(params.ra, params.dec);
-    if (id) {
-      const cached = await fetchDemoCache<SpectrumResponse>(`spectrum-${id}-${epoch}.json`);
-      if (cached) {
-        return { data: cached, fromCache: true };
+  const promise = (async (): Promise<{ data: SpectrumResponse; fromCache: boolean }> => {
+    try {
+      const data = await fetchJson<SpectrumResponse>(`/api/v1/spectrum?${qs.toString()}`);
+      const res = { data, fromCache: false };
+      rememberEntry(spectrumCache, cacheKey, res);
+      return res;
+    } catch (err) {
+      const id = matchDemoId(params.ra, params.dec);
+      if (id) {
+        const cached = await fetchDemoCache<SpectrumResponse>(`spectrum-${id}-${epoch}.json`);
+        if (cached) {
+          return { data: cached, fromCache: true };
+        }
       }
+      throw err;
+    } finally {
+      spectrumInFlight.delete(cacheKey);
     }
-    throw err;
-  }
+  })();
+
+  spectrumInFlight.set(cacheKey, promise);
+  return promise;
 }
 
 function buildAnalysisBody(
@@ -662,7 +727,6 @@ export async function classifyTarget(params: {
   image?: SkyImage;
   ra?: number;
   dec?: number;
-  epoch?: Epoch;
 }): Promise<{ data: AiClassifyResponse; fromCache: boolean }> {
   // No offline substitute: class probabilities and anomaly scores only come from the ai-engine.
   // The engine needs a spectrum, an image or a sky position; given only (ra, dec) it reads the

@@ -27,6 +27,7 @@ import {
   EPOCHS,
   getHealth,
   getSkyCutout,
+  matchDemoId,
   searchCatalog,
   type AstrometryPoint,
   type CatalogObject,
@@ -63,36 +64,57 @@ export default function HomePage() {
 
   // Real-vs-model coverage of the four epochs for the current target: the same cutout request the
   // stage makes, so the marks match what the visitor will see. Re-fetched only when the target changes.
-  const demoMeta = selectedObject ? DEMO_TARGETS.find((d) => d.id === selectedObject.id) : undefined;
+  const matchedDemoId = selectedObject?.id ?? matchDemoId(refCoords.ra, refCoords.dec);
+  const demoMeta = matchedDemoId ? DEMO_TARGETS.find((d) => d.id === matchedDemoId) : undefined;
   const coverageKey = demoMeta ? demoMeta.id : `${refCoords.ra.toFixed(5)},${refCoords.dec.toFixed(5)}`;
   const [coverage, setCoverage] = useState<{ key: string; map: EpochCoverage }>({ key: "", map: {} });
   useEffect(() => {
     let active = true;
     const meta = demoMeta;
     const base = { ...refCoords };
-    Promise.all(
-      EPOCHS.map((ep) => {
-        const pos = meta?.epochCoords[ep] ?? base;
-        return getSkyCutout({ ra: pos.ra, dec: pos.dec, epoch: ep, size_px: 64, pixel_scale_arcsec: 6.2 })
-          .then(({ data, fromCache }) => [ep, fromCache ? undefined : data.data_mode === "fits_archive" ? "real" : "model"] as const)
-          .catch(() => [ep, undefined] as const);
-      })
-    ).then((pairs) => {
+    const map: EpochCoverage = {};
+
+    const probeEpoch = async (ep: Epoch) => {
+      const pos = meta?.epochCoords[ep] ?? base;
+      try {
+        const { data, fromCache } = await getSkyCutout({
+          ra: pos.ra,
+          dec: pos.dec,
+          epoch: ep,
+          size_px: 64,
+          pixel_scale_arcsec: 6.2,
+        });
+        if (!active || fromCache) return;
+        map[ep] = data.data_mode === "fits_archive" ? "real" : "model";
+        setCoverage({ key: coverageKey, map: { ...map } });
+      } catch {
+        // Ignore individual epoch probe failures
+      }
+    };
+
+    void (async () => {
+      // Probe active epoch first (deduplicated with SkyStage's in-flight request), then stagger the
+      // remaining 3 epochs so we do not saturate the 2-vCPU backend with 5 simultaneous FITS stacks.
+      await probeEpoch(epoch);
       if (!active) return;
-      const map: EpochCoverage = {};
-      for (const [ep, mode] of pairs) if (mode) map[ep] = mode;
-      setCoverage({ key: coverageKey, map });
-    });
+      const rest = EPOCHS.filter((ep) => ep !== epoch);
+      await Promise.all(rest.slice(0, 2).map(probeEpoch));
+      if (!active) return;
+      if (rest[2]) await probeEpoch(rest[2]);
+    })();
+
     return () => {
       active = false;
     };
-    // demoMeta / refCoords are captured through coverageKey on purpose
+    // demoMeta / refCoords / epoch are captured through coverageKey on purpose
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverageKey]);
   const epochCoverage = coverage.key === coverageKey ? coverage.map : {};
   const realEpochs = EPOCHS.filter((ep) => epochCoverage[ep] === "real");
+  const fallbackDiffEpochs: [Epoch, Epoch] =
+    demoMeta?.id === "wise-0855" ? ["2026-Q2", "2026-Q4"] : ["2026-Q1", "2026-Q3"];
   const diffEpochs: [Epoch, Epoch] =
-    realEpochs.length >= 2 ? [realEpochs[0], realEpochs[realEpochs.length - 1]] : ["2026-Q1", "2026-Q3"];
+    realEpochs.length >= 2 ? [realEpochs[0], realEpochs[realEpochs.length - 1]] : fallbackDiffEpochs;
 
   const toggleTool = useCallback((id: ToolId) => setTool((cur) => (cur === id ? null : id)), []);
   const closeTool = useCallback(() => setTool(null), []);

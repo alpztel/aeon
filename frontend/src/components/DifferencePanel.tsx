@@ -114,6 +114,17 @@ export function DifferencePanel({ coords, selectedObject, defaultEpochs }: Diffe
           <h2 className="text-sm font-semibold uppercase tracking-wider text-white">
             {dict.diff.title}
           </h2>
+          {result?.data_mode === "fits_archive" ? (
+            <span className="aeon-mono inline-flex items-center gap-1.5 rounded-full border border-cyan-400/35 bg-cyan-500/15 px-2.5 py-0.5 text-[10px] font-medium text-cyan-200">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-300" />
+              {dict.shell.realData}
+            </span>
+          ) : result?.data_mode === "physical_model" ? (
+            <span className="aeon-mono inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium text-slate-300">
+              <span className="inline-block h-1.5 w-1.5 rounded-full border border-white/50" />
+              {dict.shell.modelData}
+            </span>
+          ) : null}
           {selectedObject?.is_synthetic && (
             <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-rose-300">
               <AlertTriangle className="h-3 w-3" />
@@ -125,51 +136,38 @@ export function DifferencePanel({ coords, selectedObject, defaultEpochs }: Diffe
               {dict.header.dataMode.offline_cache}
             </span>
           )}
-          {result?.data_mode && !fromCache && (
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                result.data_mode === "fits_archive"
-                  ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-300"
-                  : "border-cyan-400/30 bg-cyan-500/10 text-cyan-300"
-              }`}
-            >
-              {dict.header.dataMode[result.data_mode] ?? result.data_mode}
-            </span>
-          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {/* Quick Epoch Pair Presets */}
-          <div className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5 text-[11px]">
-            <button
-              type="button"
-              onClick={() => {
-                setEpoch1("2026-Q1");
-                setEpoch2("2026-Q3");
-              }}
-              className={`rounded-md px-2 py-0.5 transition ${
-                epoch1 === "2026-Q1" && epoch2 === "2026-Q3"
-                  ? "bg-amber-500/20 text-amber-200"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              Q1–Q3
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEpoch1("2026-Q2");
-                setEpoch2("2026-Q4");
-              }}
-              className={`rounded-md px-2 py-0.5 transition ${
-                epoch1 === "2026-Q2" && epoch2 === "2026-Q4"
-                  ? "bg-emerald-500/20 text-emerald-200"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              Q2–Q4 (IRSA)
-            </button>
+          <div className="inline-flex items-center rounded-lg border border-white/10 bg-black/30 p-0.5">
+            {(
+              [
+                ["2026-Q1", "2026-Q3", "Q1–Q3"],
+                ["2026-Q2", "2026-Q4", "Q2–Q4"],
+              ] as const
+            ).map(([e1, e2, label]) => {
+              const activePair = epoch1 === e1 && epoch2 === e2;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    setEpoch1(e1);
+                    setEpoch2(e2);
+                  }}
+                  className={`aeon-mono rounded-md px-2 py-0.5 text-[11px] font-medium transition ${
+                    activePair
+                      ? "bg-amber-500/25 text-amber-200"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
+
           {/* Epoch 1 */}
           <label className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1">
             <span className="text-slate-400">{dict.diff.epoch1}:</span>
