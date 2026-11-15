@@ -170,7 +170,7 @@ cat /data/aeon/runs/$(ls /data/aeon/runs | tail -1)
 systemctl list-timers aeon-ingest.timer
 ```
 
-İlk çalıştırma, hedef ve koleksiyon başına zamana yayılmış en fazla 80 kesit indirir (8 hedef ×
+İlk çalıştırma, hedef ve koleksiyon başına zamana yayılmış en fazla 80 kesit indirir (14 hedef ×
 2 koleksiyon için birkaç GB indirme, diskte birkaç yüz MB). Sonraki çalıştırmalar **yalnızca daha önce
 indirilmemiş kareleri** indirir; var olan dosyalar atlanır. Sınırı değiştirmek için
 `/etc/aeon/ingest.env`'e `AEON_MAX_FILES=200` (veya sınırsız için `0`) satırı ekle.
