@@ -391,6 +391,7 @@
     "orbitStart": "Yörünge başlangıcı",
     "engines": "Motorlar",
     "archiveFrames": "Arşivdeki SPHEREx karesi",
-    "years": "yıl"
+    "years": "yıl",
+    "blendDropped": "{n} kısa dalga noktası çıkarıldı: komşu kaynak karışması (burada Gaia kaynağı yok)"
   }
 }

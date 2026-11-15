@@ -391,6 +391,7 @@
     "orbitStart": "Orbit start",
     "engines": "Engines",
     "archiveFrames": "SPHEREx frames in archive",
-    "years": "yr"
+    "years": "yr",
+    "blendDropped": "{n} short-wavelength points left out: blended neighbour (no Gaia source here)"
   }
 }

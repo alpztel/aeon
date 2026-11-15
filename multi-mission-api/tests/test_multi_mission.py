@@ -132,6 +132,49 @@ def test_crossmatch_sed_uses_only_measured_detected_spherex_bands(client):
     assert note["status"] == "real" and note["n_points"] == 49 and note["observed_quarter"] == "2025-Q4"
 
 
+def _wise0855_like(short_flux):
+    """Real-data spectrum: short_flux uJy below 1.4 um (a blended neighbour when large), the Y dwarf's
+    own rising flux beyond 3 um (agrees with WISE)."""
+    lam = [0.75 + i * 0.0422 for i in range(102)]
+    flux = [short_flux if w < 1.4 else (5.0 if w < 3.0 else 100.0 + 250.0 * (w - 3.0)) for w in lam]
+    err = [max(1.0, f / 10.0) for f in flux]
+    return {"wavelength_um": lam, "flux_ujy": flux, "flux_err_ujy": err, "snr_median": 6.0, "epoch": "2026-Q4",
+            "pipeline": {"data_mode": "fits_archive", "measured": [True] * 102, "n_bands_measured": 102,
+                         "observed_quarter": "2025-Q4"},
+            "matched_object": {"id": "wise-0855", "object_class": "cold_brown_dwarf"}}
+
+
+@respx.mock
+def test_blended_neighbour_is_kept_out_of_a_gaia_dark_sed(client):
+    """WISE 0855 has no Gaia source; ~500 uJy at 0.75-1.3 um is a neighbour, not the Y dwarf."""
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(200, json=_wise0855_like(500.0)))
+    body = client.get("/api/v1/missions/crossmatch", params={"ra": 133.79513, "dec": -7.24514}).json()
+    assert body["gaia"] == []
+    spx = [pt for pt in body["sed"] if pt["survey"] == "SPHEREx"]
+    assert spx and min(pt["wavelength_um"] for pt in spx) >= 2.5
+    note = body["provenance"]["spherex"]
+    assert note["blend_suspected"] is True and note["dropped_short_wavelength_points"] > 0
+    assert note["n_points"] == len(spx)
+    sp = body["sed_physics"]
+    assert sp["spectral_regime"] == "ultracool_or_substellar" and sp["teff_sed_k"] < 600.0
+
+
+@respx.mock
+def test_faint_short_wavelength_flux_is_not_called_a_blend(client):
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(200, json=_wise0855_like(20.0)))
+    body = client.get("/api/v1/missions/crossmatch", params={"ra": 133.79513, "dec": -7.24514}).json()
+    assert "blend_suspected" not in body["provenance"]["spherex"]
+
+
+def test_blend_check_needs_a_gaia_non_detection():
+    from app.crossmatch import _optical_blend_check
+    pts = [{"wavelength_um": w, "flux_ujy": 500.0, "flux_err_ujy": 10.0, "survey": "SPHEREx"} for w in (0.8, 1.0, 2.0, 3.0, 4.0)]
+    assert _optical_blend_check(pts, [{"source_id": 1}], True) == (pts, {})       # Gaia sees a source: trust it
+    assert _optical_blend_check(pts, [], False) == (pts, {})                      # Gaia not asked: cannot tell
+    kept, note = _optical_blend_check(pts, [], True)
+    assert [p["wavelength_um"] for p in kept] == [3.0, 4.0] and note["dropped_short_wavelength_points"] == 3
+
+
 @respx.mock
 def test_crossmatch_asks_the_backend_for_the_best_epoch_with_a_real_timeout(client):
     route = respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(503))
