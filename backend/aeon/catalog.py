@@ -117,6 +117,77 @@ ENTRIES: tuple[CatalogEntry, ...] = (
         description={"en": "Solar twin; a reference main-sequence spectrum.",
                      "tr": "Güneş ikizi; referans anakol tayfı."},
     ),
+    # ---- added 2026-11-15. Astrometry and W2 from Gaia DR3 / CatWISE2020 / AllWISE (NOIRLab Astro Data Lab
+    # copies); each position was matched in two catalogues. W2 is AllWISE w2mpro (Vega) + 3.339 (AB).
+    CatalogEntry(
+        id="wise-1738", name="WISE J173835.52+273258.9", ra=264.6480292, dec=27.549694, ref_epoch=2010.55,
+        object_class="cold_brown_dwarf", mag_ab_w2=17.84,
+        pm_ra_cosdec_arcsec_yr=0.335, pm_dec_arcsec_yr=-0.335,       # CatWISE2020; AllWISE->CatWISE positions agree
+        teff_k=400.0, aliases=("WISE 1738", "WISE 1738+2732", "W1738"),
+        description={
+            "en": "Y0 brown dwarf (~400 K, from its spectral type). W1-W2 = 3.2 mag: almost all of its light "
+                  "comes out at 4-5 um, between the CH4 and CO bands.",
+            "tr": "Y0 tipi kahverengi cüce (tayf tipinden ~400 K). W1-W2 = 3,2 kadir: ışığının neredeyse tamamı "
+                  "CH4 ve CO bantları arasında, 4-5 µm'de çıkar.",
+        },
+    ),
+    CatalogEntry(
+        id="trappist-1", name="TRAPPIST-1", ra=346.6265216, dec=-5.0435283, ref_epoch=2016.0,
+        object_class="main_sequence_star", mag_ab_w2=13.15,
+        pm_ra_cosdec_arcsec_yr=0.930788, pm_dec_arcsec_yr=-0.479038, distance_pc=12.47, teff_k=2566.0,
+        aliases=("2MASS J23062928-0502285", "2MUCD 12171", "Trappist-1"),
+        description={
+            "en": "Ultracool M8 dwarf at 12.5 pc hosting seven Earth-sized planets. Its 1-2 um water bands "
+                  "and red SED sit between the stars and the brown dwarfs of this catalog.",
+            "tr": "12,5 pc uzaklıkta, yedi Dünya boyutunda gezegene ev sahipliği yapan ultra soğuk M8 cücesi. "
+                  "1-2 µm su bantları ve kırmızı SED'i, bu katalogdaki yıldızlarla kahverengi cüceler arasında durur.",
+        },
+    ),
+    CatalogEntry(
+        id="lhs-1140", name="LHS 1140", ra=11.2486779, dec=-15.2741913, ref_epoch=2016.0,
+        object_class="main_sequence_star", mag_ab_w2=11.73,
+        pm_ra_cosdec_arcsec_yr=0.318152, pm_dec_arcsec_yr=-0.596623, distance_pc=14.96, teff_k=3216.0,
+        aliases=("GJ 3053", "LHS 1140 A"),
+        description={
+            "en": "M4.5 dwarf at 15 pc with a temperate super-Earth (LHS 1140 b). Near SPHEREx's bright limit: "
+                  "some frames saturate.",
+            "tr": "15 pc uzaklıkta, ılıman bir süper-Dünyaya (LHS 1140 b) sahip M4.5 cücesi. SPHEREx'in parlaklık "
+                  "sınırına yakın: bazı kareler doyar.",
+        },
+    ),
+    CatalogEntry(
+        id="apm-08279", name="APM 08279+5255", ra=127.9237472, dec=52.7548756, ref_epoch=2010.55,
+        object_class="high_z_galaxy", mag_ab_w2=13.81, redshift=3.911,
+        aliases=("APM 08279", "QSO B0827+5255"),
+        description={
+            "en": "Gravitationally lensed quasar at z = 3.91, one of the most luminous objects known. AEON has no "
+                  "quasar class: it is filed under its closest class, high-z galaxy.",
+            "tr": "z = 3,91'de kütleçekimsel merceklenmiş kuasar; bilinen en parlak cisimlerden biri. AEON'da kuasar "
+                  "sınıfı yok: en yakın sınıf olan yüksek-z galaksi altında listelenir.",
+        },
+    ),
+    CatalogEntry(
+        id="cloverleaf", name="H1413+117 (Cloverleaf)", ra=213.9426573, dec=11.4954177, ref_epoch=2010.55,
+        object_class="high_z_galaxy", mag_ab_w2=15.00, redshift=2.558,
+        aliases=("Cloverleaf", "H 1413+117", "QSO B1413+117"),
+        description={
+            "en": "Quadruply lensed quasar at z = 2.56 (the 'Cloverleaf'); its four images blend into one SPHEREx "
+                  "pixel. Filed under high-z galaxy (no quasar class).",
+            "tr": "z = 2,56'da dört görüntülü merceklenmiş kuasar ('Yonca Yaprağı'); dört görüntüsü tek bir SPHEREx "
+                  "pikselinde birleşir. Yüksek-z galaksi altında listelenir (kuasar sınıfı yok).",
+        },
+    ),
+    CatalogEntry(
+        id="sdss-1148", name="SDSS J114816.64+525150.3", ra=177.0692174, dec=52.8639526, ref_epoch=2010.55,
+        object_class="high_z_galaxy", mag_ab_w2=18.79, redshift=6.419,
+        aliases=("SDSS J1148+5251", "J1148+5251"),
+        description={
+            "en": "Quasar at z = 6.42, less than a billion years after the Big Bang - at W2 = 18.8 AB, close to the "
+                  "faint limit of single SPHEREx frames. Filed under high-z galaxy (no quasar class).",
+            "tr": "z = 6,42'de, Büyük Patlama'dan bir milyar yıldan kısa süre sonraki bir kuasar; W2 = 18,8 AB ile "
+                  "tekil SPHEREx karelerinin sönüklük sınırına yakın. Yüksek-z galaksi altında listelenir.",
+        },
+    ),
 )
 
 ENTRIES_BY_ID = {e.id: e for e in ENTRIES}

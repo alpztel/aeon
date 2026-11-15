@@ -831,13 +831,9 @@ export function imageProvenance(img: SkyImage | null | undefined): ImageProvenan
 export const EXAMPLE_TARGET_IDS: readonly string[] = [
   "wise-0855",
   "wise-1828",
-  "wise-1541",
-  "wise-0350",
   "wise-1738",
-  "2mass-0415",
   "luhman-16",
   "px-2026-09",
-  "2m1207",
   "tw-hya",
   "rw-aur",
   "trappist-1",
