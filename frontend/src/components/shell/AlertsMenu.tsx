@@ -69,6 +69,14 @@ export function AlertsMenu({ onFlyTo }: AlertsMenuProps) {
                     <span className="aeon-label rounded border border-line px-1 text-[9px] text-ice">{al.kind}</span>
                     <span className="truncate text-[13px] text-foreground">{al.title ?? al.id}</span>
                   </div>
+                  {(al.time_utc || typeof al.error_radius_deg === "number") && (
+                    <p className="aeon-mono mt-0.5 text-[10px] text-muted">
+                      {al.time_utc ? `${al.time_utc.replace("T", " ").slice(0, 19)} UTC` : ""}
+                      {typeof al.error_radius_deg === "number" && Number.isFinite(al.error_radius_deg)
+                        ? `${al.time_utc ? " · " : ""}${dict.data.gcnError} ${al.error_radius_deg < 1 ? `${(al.error_radius_deg * 60).toFixed(1)}′` : `${al.error_radius_deg.toFixed(2)}°`}`
+                        : ""}
+                    </p>
+                  )}
                   {al.ra !== undefined && al.dec !== undefined && al.ra !== null && al.dec !== null && (
                     <button
                       type="button"

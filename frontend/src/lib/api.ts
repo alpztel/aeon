@@ -774,3 +774,49 @@ export async function submitOrVoteCandidate(body: {
     throw new ApiError("Candidate operation failed", 400);
   }
 }
+
+// ------------------------------------------------------------------ provenance readers
+// openapi types `Spectrum.pipeline` and `Image.provenance` as open objects; these readers give the
+// fields the backend documents a type, and drop anything malformed instead of trusting it.
+
+export interface SpectrumPipelineInfo {
+  data_mode?: "fits_archive" | "physical_model";
+  source?: string;
+  measured?: boolean[];
+  n_bands_measured?: number;
+  n_frames?: number;
+  n_frames_used?: number;
+  n_frames_rejected?: number;
+  obs_date_range?: [string, string] | null;
+  observed_quarter?: string | null;
+  epoch_folded?: boolean;
+  archive_fallback_reason?: string;
+  aperture_px?: number | null;
+  epoch_selection?: { chosen?: string; candidates?: Record<string, unknown> };
+}
+
+export interface ImageProvenanceInfo {
+  source?: string;
+  n_frames?: number;
+  obs_date_range?: [string, string] | null;
+  observed_quarter?: string | null;
+  epoch_folded?: boolean;
+  wavelength_range_um?: [number, number] | null;
+  coverage?: number;
+  filled_pixels?: number;
+  native_pixel_scale_arcsec?: number;
+}
+
+function asObject(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+export function spectrumPipeline(s: SpectrumResponse | null | undefined): SpectrumPipelineInfo {
+  const p = asObject(s?.pipeline);
+  const measured = Array.isArray(p.measured) && p.measured.every((b) => typeof b === "boolean") ? (p.measured as boolean[]) : undefined;
+  return { ...(p as SpectrumPipelineInfo), measured };
+}
+
+export function imageProvenance(img: SkyImage | null | undefined): ImageProvenanceInfo {
+  return asObject((img as { provenance?: unknown } | null | undefined)?.provenance) as ImageProvenanceInfo;
+}

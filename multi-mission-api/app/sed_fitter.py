@@ -75,8 +75,47 @@ def compute_kete_kbmod_kinematics(
     }
 
 
-def fit_multi_mission_sed(sed_points: list[dict[str, Any]]) -> dict[str, Any]:
-    """Integrate broadband + SPHEREx SED (0.4-22 um) and estimate color temperature & IR excess."""
+BOND_ALBEDO_DEFAULT = 0.3       # ice giants: Neptune 0.29, Uranus 0.30
+
+
+def equilibrium_temperature_k(distance_au: float, bond_albedo: float = BOND_ALBEDO_DEFAULT) -> float:
+    """Radiative equilibrium temperature of a fast rotator at distance_au from the Sun:
+    T = 278.6 K x (1 - A)^(1/4) / sqrt(d_AU) (no internal heat)."""
+    return 278.6 * (1.0 - bond_albedo) ** 0.25 / math.sqrt(distance_au)
+
+
+def fit_multi_mission_sed(sed_points: list[dict[str, Any]], distance_au: float | None = None) -> dict[str, Any]:
+    """Integrate broadband + SPHEREx SED (0.4-22 um) and estimate color temperature & IR excess.
+
+    distance_au (a solar-system body): its 0.4-22 um light is reflected sunlight, whose colour is the
+    Sun's (~5000 K), not the body's. The reported temperature is then the equilibrium temperature
+    (teff_method "equilibrium"); the colour temperature of the points is kept apart as
+    reflected_color_temperature_k."""
+    out = _fit_points(sed_points)
+    out["n_points"] = sum(1 for p in sed_points if _usable(p))
+    if distance_au is not None and math.isfinite(float(distance_au)) and float(distance_au) > 0:
+        d = float(distance_au)
+        out["reflected_color_temperature_k"] = out["teff_sed_k"]
+        out.update(
+            teff_sed_k=round(equilibrium_temperature_k(d), 1),
+            teff_method="equilibrium",
+            bond_albedo_assumed=BOND_ALBEDO_DEFAULT,
+            distance_au=d,
+            spectral_regime="reflected_sunlight",
+            temperature_note=("solar-system body: 0.4-22 um light is reflected sunlight; temperature = radiative "
+                              "equilibrium at this distance (Bond albedo 0.3, no internal heat)"),
+        )
+    else:
+        out["teff_method"] = "wien_color_temperature" if out["teff_sed_k"] is not None else "none"
+    return out
+
+
+def _usable(pt: dict[str, Any]) -> bool:
+    w, f = pt.get("wavelength_um"), pt.get("flux_ujy")
+    return w is not None and f is not None and math.isfinite(w) and math.isfinite(f) and w > 0 and f > 0
+
+
+def _fit_points(sed_points: list[dict[str, Any]]) -> dict[str, Any]:
     valid = []
     for pt in sed_points:
         w = pt.get("wavelength_um")

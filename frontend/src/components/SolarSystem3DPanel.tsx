@@ -400,6 +400,11 @@ export function SolarSystem3DPanel({
                 <span className="aeon-mono rounded border border-white/10 bg-black/40 px-2 py-1 text-cyan-200">
                   {dict.orbit.engine}: {orbit.engine}
                 </span>
+                {typeof orbit.epoch_start === "number" && Number.isFinite(orbit.epoch_start) && (
+                  <span className="aeon-mono rounded border border-white/10 bg-black/40 px-2 py-1 text-slate-300">
+                    {dict.data.orbitStart}: {orbit.epoch_start.toFixed(3)}
+                  </span>
+                )}
                 {orbit.energy_error !== undefined && (
                   <span className="aeon-mono rounded border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">
                     {dict.orbit.energyError}: {orbit.energy_error.toExponential(2)}

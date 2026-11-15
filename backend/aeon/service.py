@@ -20,7 +20,7 @@ from . import __version__, analysis, bands, ephem, orbit, orbit_fit, photometry,
 from .archive import FitsArchive, Frame, target_wcs
 from .archive import grid_world as archive_grid_world
 from .catalog import ENTRIES, ENTRIES_BY_ID, CatalogEntry, get_catalog, position_at
-from .epochs import DEFAULT_EPOCH, SURVEY_END, SURVEY_START, epoch_year
+from .epochs import DEFAULT_EPOCH, EPOCHS, SURVEY_END, SURVEY_START, epoch_year
 
 MID_SURVEY = 0.5 * (SURVEY_START + SURVEY_END)
 
@@ -63,6 +63,7 @@ def archive_signature(root: str | os.PathLike | None) -> tuple[int, int, int]:
 def _invalidate_archive_caches() -> None:
     """Results computed from the previous archive must not be served after a re-index."""
     _spectrum_cached.cache_clear()
+    _spectrum_auto.cache_clear()
     with _TRACKER_LOCK:
         _TRACKERS.clear()
 
@@ -175,6 +176,19 @@ def _psf_sigma_px(band: int | None, scale: float) -> float:
 MIN_ARCHIVE_COVERAGE = 0.5      # fraction of the requested cutout that must hold real pixels
 
 
+def observed_quarter(dates: list[str]) -> str | None:
+    """Calendar year and quarter of the median observation date, e.g. "2025-Q4".
+
+    AEON epochs are the four quarters of 2026 and archive frames are filed by the calendar quarter
+    of their date, whatever the year: a 2025-11 frame serves "2026-Q4". This tells the client which
+    quarter was really observed, so a 2025 frame is never presented as 2026 data."""
+    ds = sorted(d for d in dates if d)
+    if not ds:
+        return None
+    mid = ds[len(ds) // 2]
+    return f"{mid[:4]}-Q{(int(mid[5:7]) - 1) // 3 + 1}"
+
+
 def _frame_info(f: Frame) -> dict:
     img = f.image
     return {"file": img.path.name, "obs_id": img.obs_id, "detector": img.detector, "date_obs": img.date_obs,
@@ -227,6 +241,9 @@ def archive_stack(frames: list[Frame], ra: float, dec: float, size_px: int, scal
         "filled_pixels": n_fill, "coverage": round(cov, 4), "native_pixel_scale_arcsec": round(native, 4),
         "frames": [_frame_info(f) for f in used[:12]],
     }
+    if years:
+        prov["observed_quarter"] = observed_quarter([f.image.date_obs for f in used if f.image.date_obs])
+        prov["epoch_folded"] = prov["observed_quarter"] != epoch
     meta = {"source": "fits_archive", "file": used[0].image.path.name, "psf_sigma_px": fwhm_eff / 2.3548 / scale,
             "pixel_scale_arcsec": scale, "provenance": prov, "decimal_year": prov["obs_decimal_year_mean"]}
     return stack, target_wcs(ra, dec, size_px, scale), meta
@@ -414,6 +431,8 @@ def _archive_spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float,
             "n_bands_total": bands.N_BANDS,
             "frames_per_band": [int(next((r[5] for r in rows if r[4] == k), 0)) for k in range(bands.N_BANDS)],
             "obs_date_range": [dates[0], dates[-1]] if dates else None,
+            "observed_quarter": observed_quarter(dates),
+            "epoch_folded": bool(dates) and observed_quarter(dates) != epoch,
             "aperture_px": round(phot["aperture_px"], 3) if phot else None,
             "annulus_px": [round(v, 3) for v in phot["annulus_px"]] if phot else None,
             "recentered": bool(hit) and _sep_arcsec(ra, dec, ra_c, dec_c) > 0.01,
@@ -425,8 +444,56 @@ def _archive_spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float,
     }, "ok"
 
 
-def spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float) -> dict:
-    return _spectrum_cached(round(float(ra), 7), round(float(dec), 7), epoch, round(float(aperture_arcsec), 3))
+def spectrum(ra: float, dec: float, epoch: str | None, aperture_arcsec: float) -> dict:
+    """Spectrum at (ra, dec) for one epoch; epoch=None picks the epoch with the best real SPHEREx data."""
+    ra, dec, ap = round(float(ra), 7), round(float(dec), 7), round(float(aperture_arcsec), 3)
+    if epoch is None:
+        return _spectrum_auto(ra, dec, ap)
+    return _spectrum_cached(ra, dec, epoch, ap)
+
+
+@lru_cache(maxsize=int(os.environ.get("AEON_SPECTRUM_CACHE", "256")))
+def _spectrum_auto(ra: float, dec: float, aperture_arcsec: float) -> dict:
+    """The epoch whose real SPHEREx spectrum measures the most bands (then the highest median S/N).
+
+    Callers that only know a position (the AI classifier, the multi-mission SED) used to get the
+    2026-Q1 spectrum, which for most targets is the physical model while their real data sit in
+    another quarter. A catalog object near (ra, dec) at any epoch is followed to where it is in each
+    epoch (PX-2026-09 moves ~0.1 deg between quarters). Without real data anywhere the default
+    epoch's spectrum is returned as before. pipeline.epoch_selection lists every candidate."""
+    tol = max(aperture_arcsec, 2 * sky.NATIVE_PIXEL_SCALE)
+    hit = None
+    for ep in EPOCHS:
+        hit = resolve_target(ra, dec, epoch_year(ep), tol_arcsec=tol)
+        if hit:
+            break
+    candidates: dict[str, dict] = {}
+    best = None
+    for ep in EPOCHS:
+        pra, pdec = ephem.apparent_position(hit[0], epoch_year(ep)) if hit else (ra, dec)
+        s = _spectrum_cached(round(float(pra), 7), round(float(pdec), 7), ep, aperture_arcsec)
+        p = s["pipeline"]
+        if p.get("data_mode") == "fits_archive":
+            candidates[ep] = {"data_mode": "fits_archive", "n_bands_measured": p.get("n_bands_measured"),
+                              "snr_median": s.get("snr_median"), "observed_quarter": p.get("observed_quarter")}
+            key = (p.get("n_bands_measured") or 0, s.get("snr_median") or 0.0)
+            if best is None or key > best[0]:
+                best = (key, ep, s)
+        else:
+            candidates[ep] = {"data_mode": "physical_model", "reason": p.get("archive_fallback_reason")}
+    if best is not None:
+        chosen, s = best[1], best[2]
+    else:
+        chosen = DEFAULT_EPOCH
+        pra, pdec = ephem.apparent_position(hit[0], epoch_year(chosen)) if hit else (ra, dec)
+        s = _spectrum_cached(round(float(pra), 7), round(float(pdec), 7), chosen, aperture_arcsec)
+    out = dict(s)                                  # cached objects are shared: copy before annotating
+    out["pipeline"] = {**s["pipeline"], "epoch_selection": {
+        "mode": "auto", "chosen": chosen, "candidates": candidates,
+        "rule": "real SPHEREx epoch with the most measured bands, then the highest median S/N; "
+                "the default epoch's physical model if no epoch has real data",
+    }}
+    return out
 
 
 @lru_cache(maxsize=int(os.environ.get("AEON_SPECTRUM_CACHE", "256")))

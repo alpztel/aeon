@@ -31,9 +31,9 @@ def _init_template_grid() -> list[tuple[str, float, float, np.ndarray]]:
 
     grid_defs = [
         # (class, teff_k, log_g)
-        ("planet_x_candidate", 65.0, 3.2),
-        ("planet_x_candidate", 85.0, 3.3),
-        ("planet_x_candidate", 110.0, 3.4),
+        # Planet X: reflected sunlight x methane reflectance. Its shape does not depend on the body's
+        # temperature, so the template carries none (NaN) and no temperature is reported for it.
+        ("planet_x_candidate", float("nan"), float("nan")),
         ("cold_brown_dwarf", 220.0, 4.2),
         ("cold_brown_dwarf", 250.0, 4.3),
         ("cold_brown_dwarf", 350.0, 4.5),
@@ -83,6 +83,13 @@ def _band_median_positive(flux64: np.ndarray, mask: np.ndarray, floor: float) ->
     return float(max(np.median(pos), floor))
 
 
+REFLECTED_LIGHT_NOTE = (
+    "0.75-5 um light of a distant planet is reflected sunlight: its shape carries the Sun's colour, not the "
+    "body's temperature. Thermal emission peaks near 60-250 um, outside SPHEREx. For a body at d AU the "
+    "equilibrium temperature is ~278.6 K x (1 - A)^(1/4) / sqrt(d), about 11 K at 520 AU (Bond albedo 0.3)."
+)
+
+
 def analyze_spectrum_physics(flux_ujy: list[float] | np.ndarray) -> dict[str, Any]:
     """Compute physical diagnostics, molecular absorption depths, and latent embedding."""
     arr64 = np.asarray(flux_ujy, dtype=np.float64)
@@ -94,19 +101,21 @@ def analyze_spectrum_physics(flux_ujy: list[float] | np.ndarray) -> dict[str, An
     lam = WAVELENGTH_UM.astype(np.float64)
     pos = arr64[arr64 > 0.0]
     if pos.size == 0:
-        # Completely unilluminated / zero or negative spectrum
+        # No positive flux: nothing can be measured. Report nulls, never placeholder physics.
         return {
-            "teff_k": 250.0,
-            "log_g_cgs": 4.5,
-            "w1_ab_mag": 25.0,
-            "w2_ab_mag": 25.0,
-            "w1_minus_w2_ab": 0.0,
-            "ch4_3_3um_index": 0.0,
-            "h2o_2_7um_index": 0.0,
-            "co_4_67um_index": 0.0,
+            "teff_k": None,
+            "log_g_cgs": None,
+            "w1_ab_mag": None,
+            "w2_ab_mag": None,
+            "w1_minus_w2_ab": None,
+            "ch4_3_3um_index": None,
+            "h2o_2_7um_index": None,
+            "co_4_67um_index": None,
             "latent_8d": [0.0] * 8,
-            "spectral_recon_rms": 0.0,
-            "best_template_class": "main_sequence_star",
+            "spectral_recon_rms": None,
+            "best_template_class": None,
+            "teff_method": "none",
+            "temperature_note": "no positive flux in the spectrum",
         }
 
     # Dimensionless pre-scaling by 90th percentile (with max*1e-100 guard against 400-decade split overflow)
@@ -184,9 +193,13 @@ def analyze_spectrum_physics(flux_ujy: list[float] | np.ndarray) -> dict[str, An
     recon = basis.T @ latent
     recon_rms = float(np.sqrt(np.mean((norm_obs - recon) ** 2)))
 
+    reflected = best_cls == "planet_x_candidate"
     return {
-        "teff_k": round(float(best_teff), 1),
-        "log_g_cgs": round(float(best_logg), 2),
+        "teff_k": None if reflected else round(float(best_teff), 1),
+        "log_g_cgs": None if reflected else round(float(best_logg), 2),
+        "teff_method": "not_measurable_reflected_light" if reflected else "template_grid",
+        "temperature_note": (REFLECTED_LIGHT_NOTE if reflected else
+                             "nearest of the Sonora/SPHEREx-like template grid (coarse: a few hundred K steps)"),
         "w1_ab_mag": round(w1_ab, 3),
         "w2_ab_mag": round(w2_ab, 3),
         "w1_minus_w2_ab": round(w1_minus_w2, 3),

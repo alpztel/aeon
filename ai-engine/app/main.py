@@ -144,6 +144,8 @@ _SLOT_WAIT_S = 1.0
 
 def fetch_archive_spectrum(ra: float, dec: float) -> tuple[list[float] | None, float | None, str]:
     """102-band spectrum of a sky position from the core backend: (flux_ujy, snr_median, source).
+    What the backend says about that spectrum (real SPHEREx or physical model, epoch, observed quarter)
+    is in fetch_archive_spectrum_meta.
 
     source is "archive" (spectrum returned), "none" (the backend answered: nothing usable at this position)
     or "unavailable" (the backend could not be asked or did not answer in time). Whatever the backend does,
@@ -183,7 +185,35 @@ def fetch_archive_spectrum(ra: float, dec: float) -> tuple[list[float] | None, f
         return None, None, "none"
     snr = body.get("snr_median")
     snr = float(snr) if isinstance(snr, (int, float)) and not isinstance(snr, bool) and math.isfinite(snr) else None
+    _LAST_META.value = _spectrum_meta(body)
     return [float(v) for v in flux], snr, "archive"
+
+
+_LAST_META = threading.local()
+
+
+def _spectrum_meta(body: dict) -> dict[str, Any]:
+    """Provenance of a backend spectrum: real SPHEREx (fits_archive) or the physical model, and which
+    epoch / observed quarter it comes from. Unknown or malformed fields become None."""
+    pipe = body.get("pipeline") if isinstance(body.get("pipeline"), dict) else {}
+    mode = pipe.get("data_mode")
+    epoch = body.get("epoch")
+    oq = pipe.get("observed_quarter")
+    nb = pipe.get("n_bands_measured")
+    return {
+        "data_mode": mode if mode in ("fits_archive", "physical_model") else None,
+        "epoch": epoch if isinstance(epoch, str) and len(epoch) <= 16 else None,
+        "observed_quarter": oq if isinstance(oq, str) and len(oq) <= 16 else None,
+        "n_bands_measured": nb if isinstance(nb, int) and not isinstance(nb, bool) and 0 <= nb <= N_BANDS else None,
+    }
+
+
+def fetch_archive_spectrum_meta(ra: float, dec: float) -> tuple[list[float] | None, float | None, str, dict[str, Any]]:
+    """fetch_archive_spectrum plus the spectrum's provenance (see _spectrum_meta)."""
+    _LAST_META.value = {}
+    flux, snr, source = fetch_archive_spectrum(ra, dec)
+    meta = _LAST_META.value if source == "archive" else {}
+    return flux, snr, source, meta
 
 
 @app.post("/api/v1/ai/classify", tags=["ai"])
@@ -192,8 +222,9 @@ def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
         flux = req.flux_ujy
         spectrum_source = "request" if flux is not None else "none"
         snr_median: float | None = None
+        meta: dict[str, Any] = {}
         if flux is None and req.ra is not None and req.dec is not None:
-            flux, snr_median, spectrum_source = fetch_archive_spectrum(req.ra, req.dec)
+            flux, snr_median, spectrum_source, meta = fetch_archive_spectrum_meta(req.ra, req.dec)
         reg = get_registry()
         probs, top_class, spec_hint = reg.classify_spectrum(flux)
         img_dict = req.image.model_dump() if req.image is not None else None
@@ -201,6 +232,7 @@ def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
 
         physics_diag = analyze_spectrum_physics(flux) if flux is not None else None
         astroclip_zogy = compute_astroclip_alignment(flux, img_dict)
+        astroclip_zogy["image_provided"] = img_dict is not None      # without an image the ZOGY numbers are zeros
         if astroclip_zogy.get("is_moving_dipole") and not astroclip_zogy.get("cosmic_ray_veto"):
             anomaly_score = round(float(min(1.0, max(anomaly_score, 0.55 + 0.40 * astroclip_zogy["dipole_polarity_score"]))), 4)
 
@@ -217,6 +249,12 @@ def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
             "astroclip_zogy": astroclip_zogy,
             "spectrum_source": spectrum_source,
             "spectrum_snr_median": snr_median,
+            # archive only: was the classified spectrum real SPHEREx data or the backend's physical model,
+            # and from which epoch (the backend picks the epoch with the best real data)
+            "spectrum_data_mode": meta.get("data_mode"),
+            "spectrum_epoch": meta.get("epoch"),
+            "spectrum_observed_quarter": meta.get("observed_quarter"),
+            "spectrum_bands_measured": meta.get("n_bands_measured"),
         }
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

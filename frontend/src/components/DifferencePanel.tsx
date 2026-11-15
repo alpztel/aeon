@@ -3,8 +3,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Layers, Loader2, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { useI18n } from "@/i18n/context";
+import { DataFacts, dateRange, signed } from "@/components/DataFacts";
 import {
   EPOCHS,
+  imageProvenance,
   runDifference,
   type CatalogObject,
   type DifferenceResult,
@@ -104,6 +106,15 @@ export function DifferencePanel({ coords, selectedObject, defaultEpochs }: Diffe
       );
     }
   }, [result, colormap]);
+
+  // Real frames are filed by season: a "2026-Q4" frame may have been observed in 2025, before the
+  // "2026-Q2" one. The observed baseline then has the opposite sign to the nominal one.
+  const prov1 = imageProvenance(result?.image_1);
+  const prov2 = imageProvenance(result?.image_2);
+  const baselineReversed =
+    typeof result?.dt_years === "number" &&
+    typeof result?.dt_years_observed === "number" &&
+    result.dt_years * result.dt_years_observed < 0;
 
   return (
     <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
@@ -285,6 +296,49 @@ export function DifferencePanel({ coords, selectedObject, defaultEpochs }: Diffe
             )}
           </div>
         </div>
+      )}
+
+      {result && (
+        <DataFacts
+          className="mt-3"
+          facts={[
+            result.data_mode
+              ? {
+                  label: dict.data.provTitle,
+                  value: result.data_mode === "fits_archive" ? dict.data.realSpherex : dict.data.physicalModel,
+                  tone: result.data_mode === "fits_archive" ? "real" : "model",
+                }
+              : null,
+            signed(result.dt_years, 2) !== null && {
+              label: dict.data.baselineNominal,
+              value: `${signed(result.dt_years, 2)} ${dict.data.years}`,
+            },
+            signed(result.dt_years_observed, 3) !== null && {
+              label: dict.data.baselineObserved,
+              value: `${signed(result.dt_years_observed, 3)} ${dict.data.years}`,
+              tone: baselineReversed ? "warn" : "real",
+            },
+            prov1.observed_quarter
+              ? {
+                  label: `${dict.data.observedQuarter} · ${result.image_1?.epoch ?? epoch1}`,
+                  value: [prov1.observed_quarter, dateRange(prov1.obs_date_range)].filter(Boolean).join(" · "),
+                  tone: prov1.epoch_folded ? "warn" : "real",
+                }
+              : null,
+            prov2.observed_quarter
+              ? {
+                  label: `${dict.data.observedQuarter} · ${result.image_2?.epoch ?? epoch2}`,
+                  value: [prov2.observed_quarter, dateRange(prov2.obs_date_range)].filter(Boolean).join(" · "),
+                  tone: prov2.epoch_folded ? "warn" : "real",
+                }
+              : null,
+          ]}
+        />
+      )}
+      {baselineReversed && (
+        <p className="mt-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {dict.data.baselineReversed}
+        </p>
       )}
     </section>
   );

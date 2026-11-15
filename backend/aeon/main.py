@@ -200,7 +200,8 @@ def get_cutout(
 def get_spectrum(
     ra: float = Query(ge=0, le=360),
     dec: float = Query(ge=-90, le=90),
-    epoch: Epoch = "2026-Q1",
+    epoch: Epoch | None = Query(None, description="Survey epoch. Omitted: the epoch with the best real SPHEREx "
+                                                   "data at this position (pipeline.epoch_selection)."),
     aperture_arcsec: float = Query(9.3, ge=3, le=60),
 ):
     return _guard(service.spectrum, ra, dec, epoch, aperture_arcsec)

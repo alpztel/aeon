@@ -11,8 +11,9 @@ declare module "plotly.js-dist-min" {
       dash?: string;
     };
     marker?: {
-      color?: string;
-      size?: number;
+      color?: string | string[];
+      size?: number | number[];
+      symbol?: string | string[];
     };
     error_y?: {
       type?: "data";

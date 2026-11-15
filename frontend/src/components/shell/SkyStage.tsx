@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { useI18n } from "@/i18n/context";
-import { getSkyCutout, type Epoch, type SkyImage } from "@/lib/api";
+import { getSkyCutout, imageProvenance, type Epoch, type SkyImage } from "@/lib/api";
 import { COLORMAP_OPTIONS, renderSkyArrayToCanvas, type ColormapName } from "@/lib/colormaps";
 
 const ALADIN_SCRIPT_URL = "https://aladin.cds.unistra.fr/AladinLite/api/v3/3.5.1/aladin.js";
@@ -136,8 +136,13 @@ export function SkyStage({ coords, epoch, fit = "full" }: SkyStageProps) {
 
   const showAladin = renderer === "aladin" && !aladinFailed;
   // Optional, additive field of the backend response (not in the frozen contract's Image schema).
-  const provenance = (cutout as (SkyImage & { provenance?: { n_frames?: number; obs_date_range?: [string, string] } }) | null)
-    ?.provenance;
+  const provenance = imageProvenance(cutout);
+  const lamRange =
+    Array.isArray(provenance.wavelength_range_um) &&
+    provenance.wavelength_range_um.length === 2 &&
+    provenance.wavelength_range_um.every((v) => typeof v === "number" && Number.isFinite(v))
+      ? `${provenance.wavelength_range_um[0].toFixed(2)}–${provenance.wavelength_range_um[1].toFixed(2)} µm`
+      : null;
 
   return (
     <figure className={`relative mx-auto w-[min(86vw,calc(100dvh-300px),620px)] min-w-[200px] transition-[width] duration-300 ${FIT_CLASS[fit]}`}>
@@ -195,8 +200,17 @@ export function SkyStage({ coords, epoch, fit = "full" }: SkyStageProps) {
             <span className="flex items-center gap-1.5 text-foreground">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-ice" />
               {dict.shell.realData}
-              {provenance?.n_frames ? ` · ${provenance.n_frames} ${dict.shell.frames}` : ""}
-              {provenance?.obs_date_range ? ` · ${provenance.obs_date_range[0].slice(0, 10)} → ${provenance.obs_date_range[1].slice(0, 10)}` : ""}
+              {provenance.n_frames ? ` · ${provenance.n_frames} ${dict.shell.frames}` : ""}
+              {provenance.obs_date_range ? ` · ${provenance.obs_date_range[0].slice(0, 10)} → ${provenance.obs_date_range[1].slice(0, 10)}` : ""}
+              {lamRange ? ` · ${lamRange}` : ""}
+              {typeof provenance.coverage === "number" && provenance.coverage < 0.999
+                ? ` · ${dict.data.coverage} ${Math.round(provenance.coverage * 100)}%`
+                : ""}
+              {provenance.epoch_folded && provenance.observed_quarter ? (
+                <span className="text-[var(--aeon-warn)]" title={dict.data.folded.replace("{q}", provenance.observed_quarter).replace("{e}", cutout?.epoch ?? epoch)}>
+                  {` · ${dict.data.observedQuarter} ${provenance.observed_quarter}`}
+                </span>
+              ) : null}
             </span>
           ) : cutout ? (
             <span className="flex items-center gap-1.5 text-foreground/80">
