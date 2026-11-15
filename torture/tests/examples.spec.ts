@@ -56,7 +56,7 @@ test("E03 Turkish + filter + mobile width", async ({ page }) => {
   await rail(page).getByRole("button", { name: /Örnekler/ }).click();
   const panel = page.getByRole("complementary", { name: /Örnekler/ });
   await expect(panel.getByText(/hedef ·/)).toBeVisible({ timeout: 45_000 });
-  await panel.getByRole("button", { name: "Gerçek SPHEREx" }).click();
+  await panel.getByRole("button", { name: "Gerçek SPHEREx", exact: true }).click();
   await page.screenshot({ path: `${SHOTS}/E03-tr-filter.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(1500);
