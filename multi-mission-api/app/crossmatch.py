@@ -77,24 +77,73 @@ def _match_fixture(ra: float, dec: float) -> dict[str, Any] | None:
     return None
 
 
-def _fetch_spherex_spectrum(ra: float, dec: float) -> dict[str, Any] | None:
+# The core backend answers a new position in well under a second; the old 2.5 s limit was shorter
+# than a cold real-data spectrum and silently dropped SPHEREx from the SED.
+CORE_SPECTRUM_TIMEOUT_S = float(os.environ.get("AEON_CORE_SPECTRUM_TIMEOUT_S", "12"))
+SED_MIN_SNR = 3.0            # a SPHEREx band enters the SED only as a detection
+
+
+def _fetch_spherex_spectrum(ra: float, dec: float) -> tuple[dict[str, Any] | None, str]:
+    """(spectrum, status). No epoch is sent: the backend picks the epoch with the best real SPHEREx
+    data (it used to be pinned to 2026-Q1, where most targets only have the physical model).
+    status: "ok" | "unavailable" (no answer / error: the result must not be cached for long)."""
     core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
     try:
-        with httpx.Client(timeout=2.5, verify=not core_url.startswith("http://")) as client:
-            resp = client.get(f"{core_url}/api/v1/spectrum", params={"ra": ra, "dec": dec, "epoch": "2026-Q1"})
+        with httpx.Client(timeout=CORE_SPECTRUM_TIMEOUT_S, verify=not core_url.startswith("http://")) as client:
+            resp = client.get(f"{core_url}/api/v1/spectrum", params={"ra": ra, "dec": dec})
             if resp.status_code == 200:
-                return resp.json()
+                body = resp.json()
+                return (body, "ok") if isinstance(body, dict) else (None, "unavailable")
+            return None, "ok" if resp.status_code < 500 else "unavailable"
     except Exception:
-        pass
-    return None
+        return None, "unavailable"
+
+
+def _spherex_sed_points(spec: dict[str, Any] | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """SED points from a backend spectrum and a provenance note.
+
+    Only real SPHEREx data count (pipeline.data_mode == "fits_archive"): the physical model is a
+    prediction from the catalog class, not a measurement. Of those, only bands the backend measured
+    (pipeline.measured; the rest are interpolated fill) with S/N >= SED_MIN_SNR."""
+    if not spec:
+        return [], {"status": "none"}
+    pipe = spec.get("pipeline") if isinstance(spec.get("pipeline"), dict) else {}
+    note: dict[str, Any] = {"epoch": spec.get("epoch"), "data_mode": pipe.get("data_mode"),
+                            "observed_quarter": pipe.get("observed_quarter"),
+                            "n_bands_measured": pipe.get("n_bands_measured"), "snr_median": spec.get("snr_median")}
+    if pipe.get("data_mode") != "fits_archive":
+        note.update(status="excluded: physical model (no real SPHEREx data at this position)", n_points=0)
+        return [], note
+    wls = spec.get("wavelength_um") or []
+    flx = spec.get("flux_ujy") or []
+    err = spec.get("flux_err_ujy") or []
+    measured = pipe.get("measured")
+    if not isinstance(measured, list) or len(measured) != len(flx):
+        measured = [True] * len(flx)
+    pts = []
+    for idx, (lam, f_val) in enumerate(zip(wls, flx)):
+        try:
+            lam_f, f_f = float(lam), float(f_val)
+            e_f = float(err[idx]) if idx < len(err) else float("nan")
+        except (TypeError, ValueError):
+            continue
+        if not (measured[idx] is True and math.isfinite(lam_f) and math.isfinite(f_f) and math.isfinite(e_f)):
+            continue
+        if lam_f <= 0.0 or e_f <= 0.0 or f_f / e_f < SED_MIN_SNR:
+            continue
+        pts.append({"wavelength_um": round(lam_f, 4), "flux_ujy": round(f_f, 4),
+                    "flux_err_ujy": round(e_f, 4), "survey": "SPHEREx"})
+    note.update(status="real", n_points=len(pts),
+                rule=f"measured bands with S/N >= {SED_MIN_SNR:g} of the real-data epoch")
+    return pts, note
 
 
 def _build_sed(
     gaia_rows: list[dict[str, Any]],
     wise_rows: list[dict[str, Any]],
-    spherex_spec: dict[str, Any] | None,
+    spherex_points: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    sed: list[dict[str, Any]] = []
+    sed: list[dict[str, Any]] = list(spherex_points)
 
     if gaia_rows:
         g0 = gaia_rows[0]
@@ -128,26 +177,6 @@ def _build_sed(
                     }
                 )
 
-    if spherex_spec:
-        wls = spherex_spec.get("wavelength_um") or []
-        flx = spherex_spec.get("flux_ujy") or []
-        err = spherex_spec.get("flux_err_ujy") or []
-        for idx, (lam, f_val) in enumerate(zip(wls, flx)):
-            lam_f = float(lam)
-            f_f = float(f_val)
-            if not (math.isfinite(lam_f) and math.isfinite(f_f)) or lam_f <= 0.0:
-                continue
-            e_raw = float(err[idx]) if idx < len(err) else abs(f_f) * 0.05
-            e_f = max(0.0, e_raw) if math.isfinite(e_raw) else abs(f_f) * 0.05
-            sed.append(
-                {
-                    "wavelength_um": round(lam_f, 4),
-                    "flux_ujy": round(max(0.0, f_f), 4),
-                    "flux_err_ujy": round(e_f, 4),
-                    "survey": "SPHEREx",
-                }
-            )
-
     sed.sort(key=lambda item: item["wavelength_um"])
     return sed
 
@@ -176,7 +205,8 @@ def _query_live_archives(ra: float, dec: float, radius_arcsec: float) -> tuple[l
 def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[str, Any]:
     """Perform Gaia DR3 + WISE + MAST crossmatch with 24h disk cache and archival fixture fallback."""
     cache_key = hashlib.sha256(f"{ra:.5f}_{dec:.5f}_{radius_arcsec:.2f}".encode()).hexdigest()[:16]
-    cache_file = CACHE_DIR / f"xm_{cache_key}.json"
+    # "xm2_": results cached before the SPHEREx fixes (model spectra, 2026-Q1, 2.5 s drops) are ignored
+    cache_file = CACHE_DIR / f"xm2_{cache_key}.json"
 
     if not os.environ.get("PYTEST_CURRENT_TEST") and cache_file.is_file():
         try:
@@ -188,7 +218,10 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
             pass
 
     fixture = _match_fixture(ra, dec)
-    spherex_spec = _fetch_spherex_spectrum(ra, dec)
+    spherex_spec, spherex_status = _fetch_spherex_spectrum(ra, dec)
+    spherex_points, spherex_note = _spherex_sed_points(spherex_spec)
+    if spherex_status != "ok":
+        spherex_note = {"status": "unavailable: the core backend did not answer"}
 
     if fixture is not None:
         gaia_rows = [dict(g) for g in fixture.get("gaia", [])]
@@ -199,15 +232,19 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
         gaia_rows, wise_rows, mast_rows, live_prov = _query_live_archives(ra, dec, radius_arcsec)
         provenance = {"source": "live archive queries", **live_prov}
 
-    sed = _build_sed(gaia_rows, wise_rows, spherex_spec)
+    provenance["spherex"] = spherex_note
+    sed = _build_sed(gaia_rows, wise_rows, spherex_points)
 
-    has_ir = bool(wise_rows) or bool(spherex_spec and (spherex_spec.get("matched_object") or spherex_spec.get("snr_median", 0) >= 3.0))
+    has_ir = bool(wise_rows) or bool(spherex_points)
     unmatched_ir = bool(has_ir and len(gaia_rows) == 0)
 
     parallax_mas = None
     if gaia_rows and gaia_rows[0].get("parallax_mas") is not None:
         parallax_mas = float(gaia_rows[0]["parallax_mas"])
-    dist_au = 520.0 if (fixture and fixture.get("id") == "px-2026-09") else None
+    matched = (spherex_spec or {}).get("matched_object") or {}
+    dist_au = matched.get("distance_au") if isinstance(matched.get("distance_au"), (int, float)) else None
+    if dist_au is None and fixture and fixture.get("id") == "px-2026-09":
+        dist_au = 520.0
 
     result: dict[str, Any] = {
         "gaia": gaia_rows,
@@ -216,11 +253,11 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
         "unmatched_ir_candidate": unmatched_ir,
         "mast_overlap": mast_rows,
         "provenance": provenance,
-        "sed_physics": fit_multi_mission_sed(sed),
+        "sed_physics": fit_multi_mission_sed(sed, distance_au=dist_au),
         "kinematics": compute_kete_kbmod_kinematics(ra, dec, parallax_mas=parallax_mas, distance_au=dist_au),
     }
 
-    if not os.environ.get("PYTEST_CURRENT_TEST"):
+    if not os.environ.get("PYTEST_CURRENT_TEST") and spherex_status == "ok":   # never keep a degraded answer
         try:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
             to_save = dict(result, _ts=time.time())

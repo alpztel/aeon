@@ -26,6 +26,9 @@ def test_crossmatch_wise_0855_unmatched_ir_and_sed(client):
                 "flux_err_ujy": [0.8] * 102,
                 "snr_median": 15.6,
                 "matched_object": {"id": "wise-0855", "object_class": "cold_brown_dwarf"},
+                "epoch": "2026-Q2",
+                "pipeline": {"data_mode": "fits_archive", "measured": [True] * 102, "n_bands_measured": 102,
+                             "observed_quarter": "2026-Q2"},
             },
         )
     )
@@ -83,10 +86,61 @@ def test_crossmatch_synthetic_px_2026_09(client):
 def test_crossmatch_synthetic_px_with_core_detection(client):
     respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(200, json={
         "wavelength_um": [0.75 + i * 0.04 for i in range(102)], "flux_ujy": [5.0] * 102,
-        "flux_err_ujy": [1.0] * 102, "snr_median": 4.0,
-        "matched_object": {"id": "px-2026-09", "is_synthetic": True}}))
+        "flux_err_ujy": [1.0] * 102, "snr_median": 4.0, "epoch": "2026-Q1",
+        "pipeline": {"data_mode": "fits_archive", "measured": [True] * 102, "n_bands_measured": 102},
+        "matched_object": {"id": "px-2026-09", "is_synthetic": True, "distance_au": 520.0}}))
     body = client.get("/api/v1/missions/crossmatch", params={"ra": 51.295473, "dec": 14.8325559}).json()
     assert body["unmatched_ir_candidate"] is True
+    # a solar-system body: equilibrium temperature at 520 AU, never the reflected-light colour temperature
+    sp = body["sed_physics"]
+    assert sp["teff_method"] == "equilibrium" and sp["spectral_regime"] == "reflected_sunlight"
+    assert 10.0 < sp["teff_sed_k"] < 13.0
+    assert sp["reflected_color_temperature_k"] is None or sp["reflected_color_temperature_k"] > 1000.0
+
+
+@respx.mock
+def test_crossmatch_never_puts_the_physical_model_into_the_sed(client):
+    """The backend's physical model is a prediction from the catalog class, not a SPHEREx measurement."""
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(200, json={
+        "wavelength_um": [0.75 + i * 0.04 for i in range(102)], "flux_ujy": [50.0] * 102,
+        "flux_err_ujy": [1.0] * 102, "snr_median": 50.0, "epoch": "2026-Q1",
+        "pipeline": {"data_mode": "physical_model", "archive_fallback_reason": "no SPHEREx frame covers this position"},
+        "matched_object": {"id": "wise-0855"}}))
+    body = client.get("/api/v1/missions/crossmatch", params={"ra": 133.79513, "dec": -7.24514}).json()
+    assert "SPHEREx" not in {pt["survey"] for pt in body["sed"]}
+    assert body["provenance"]["spherex"]["status"].startswith("excluded")
+
+
+@respx.mock
+def test_crossmatch_sed_uses_only_measured_detected_spherex_bands(client):
+    flux = [10.0] * 102
+    err = [1.0] * 102
+    measured = [True] * 102
+    for i in range(0, 102, 2):
+        measured[i] = False                  # interpolated fill: not a measurement
+    flux[1], flux[3] = 2.0, -4.0             # S/N 2 and negative: not detections
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(200, json={
+        "wavelength_um": [0.75 + i * 0.04 for i in range(102)], "flux_ujy": flux, "flux_err_ujy": err,
+        "snr_median": 10.0, "epoch": "2026-Q4",
+        "pipeline": {"data_mode": "fits_archive", "measured": measured, "n_bands_measured": 51,
+                     "observed_quarter": "2025-Q4"},
+        "matched_object": {"id": "wise-0855"}}))
+    body = client.get("/api/v1/missions/crossmatch", params={"ra": 133.79513, "dec": -7.24514}).json()
+    spx = [pt for pt in body["sed"] if pt["survey"] == "SPHEREx"]
+    assert len(spx) == 51 - 2
+    note = body["provenance"]["spherex"]
+    assert note["status"] == "real" and note["n_points"] == 49 and note["observed_quarter"] == "2025-Q4"
+
+
+@respx.mock
+def test_crossmatch_asks_the_backend_for_the_best_epoch_with_a_real_timeout(client):
+    route = respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(503))
+    body = client.get("/api/v1/missions/crossmatch", params={"ra": 133.79513, "dec": -7.24514}).json()
+    sent = dict(route.calls.last.request.url.params)
+    assert "epoch" not in sent                       # the backend chooses the epoch with real data
+    from app import crossmatch
+    assert crossmatch.CORE_SPECTRUM_TIMEOUT_S >= 10.0
+    assert body["provenance"]["spherex"]["status"].startswith("unavailable")
 
 
 def test_gcn_alerts_no_source_returns_empty(client, monkeypatch):

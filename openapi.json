@@ -263,6 +263,7 @@
           {
             "name": "epoch",
             "in": "query",
+            "description": "Survey epoch. Omitted: the epoch with the best real SPHEREx data at this position (the most measured bands, then the highest median S/N; a catalog object is followed to where it is in each epoch); the choice and every candidate are in pipeline.epoch_selection.",
             "schema": {
               "$ref": "#/components/schemas/Epoch"
             }
@@ -537,6 +538,161 @@
                         "null"
                       ],
                       "description": "Median per-band S/N of the archive spectrum (null otherwise)"
+                    },
+                    "spectrum_data_mode": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "fits_archive",
+                        "physical_model",
+                        null
+                      ],
+                      "description": "archive only: fits_archive = real SPHEREx data; physical_model = the backend's model of the catalog object (no real data at this position)"
+                    },
+                    "spectrum_epoch": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "archive only: epoch of the classified spectrum (the backend picks the epoch with the best real data)"
+                    },
+                    "spectrum_observed_quarter": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "archive only: calendar quarter really observed, e.g. 2025-Q4 (2025 frames are filed under the 2026 quarter of the same season)"
+                    },
+                    "spectrum_bands_measured": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "description": "archive only: AEON bands measured by real SPHEREx frames (of 102)"
+                    },
+                    "physics_diagnostics": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "description": "Physics of the classified spectrum (null without a spectrum)",
+                      "properties": {
+                        "teff_k": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "description": "Nearest template temperature; null when not measurable (teff_method)"
+                        },
+                        "log_g_cgs": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "w1_ab_mag": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "w2_ab_mag": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "w1_minus_w2_ab": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "ch4_3_3um_index": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "description": "log10(continuum / flux) at 3.3 um; > 0 = absorption"
+                        },
+                        "h2o_2_7um_index": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "co_4_67um_index": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "latent_8d": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "spectral_recon_rms": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "best_template_class": {
+                          "oneOf": [
+                            {
+                              "$ref": "#/components/schemas/ObjectClass"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "teff_method": {
+                          "type": "string",
+                          "enum": [
+                            "template_grid",
+                            "not_measurable_reflected_light",
+                            "none"
+                          ]
+                        },
+                        "temperature_note": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "astroclip_zogy": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "image_provided": {
+                          "type": "boolean",
+                          "description": "false: no image was sent; the ZOGY numbers are zeros, not a measurement"
+                        },
+                        "astroclip_similarity": {
+                          "type": "number"
+                        },
+                        "cross_modal_tension": {
+                          "type": "number"
+                        },
+                        "zogy_peak_snr": {
+                          "type": "number"
+                        },
+                        "dipole_polarity_score": {
+                          "type": "number"
+                        },
+                        "cosmic_ray_veto": {
+                          "type": "boolean"
+                        },
+                        "is_moving_dipole": {
+                          "type": "boolean"
+                        }
+                      }
                     }
                   }
                 }
@@ -628,6 +784,98 @@
                     },
                     "unmatched_ir_candidate": {
                       "type": "boolean"
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "spherex": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "description": "How the SPHEREx part of the SED was built: status real | excluded: physical model | unavailable | none; epoch, observed_quarter, n_points"
+                        }
+                      }
+                    },
+                    "sed_physics": {
+                      "type": "object",
+                      "properties": {
+                        "teff_sed_k": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "description": "Colour temperature (teff_method wien_color_temperature) or, for a solar-system body, the equilibrium temperature (equilibrium)"
+                        },
+                        "teff_method": {
+                          "type": "string",
+                          "enum": [
+                            "wien_color_temperature",
+                            "equilibrium",
+                            "none"
+                          ]
+                        },
+                        "reflected_color_temperature_k": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "description": "Solar-system body: colour temperature of its reflected sunlight (the Sun's colour, not the body's temperature)"
+                        },
+                        "bond_albedo_assumed": {
+                          "type": "number"
+                        },
+                        "distance_au": {
+                          "type": "number"
+                        },
+                        "bolometric_flux_wm2": {
+                          "type": "number"
+                        },
+                        "ir_to_optical_ratio": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "spectral_regime": {
+                          "type": "string",
+                          "enum": [
+                            "unmeasured",
+                            "photospheric",
+                            "infrared_excess_disk",
+                            "ultracool_or_substellar",
+                            "reflected_sunlight"
+                          ]
+                        },
+                        "n_points": {
+                          "type": "integer"
+                        },
+                        "temperature_note": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "kinematics": {
+                      "type": "object",
+                      "properties": {
+                        "ecliptic_lon_deg": {
+                          "type": "number"
+                        },
+                        "ecliptic_lat_deg": {
+                          "type": "number"
+                        },
+                        "parallax_ellipse_aspect": {
+                          "type": "number"
+                        },
+                        "annual_parallax_arcsec": {
+                          "type": "number"
+                        },
+                        "kbmod_expected_snr_gain": {
+                          "type": "number"
+                        }
+                      }
                     },
                     "mast_overlap": {
                       "type": "array",
