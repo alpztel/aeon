@@ -92,41 +92,49 @@ def train_and_evaluate(seed: int = 2026) -> dict:
     vit = PatchAnomalyViT()
     _init_calibrated_weights(cnn, vit)
 
-    optimizer = optim.AdamW(cnn.parameters(), lr=3e-3, weight_decay=1e-4)
-    criterion = nn.CrossEntropyLoss()
+    w_file = ROOT / "app" / "weights" / "aeon_models.pt"
+    save_weights = os.environ.get("SAVE_WEIGHTS") == "1"
+    if w_file.exists() and not save_weights:
+        ckpt = torch.load(w_file, map_location="cpu", weights_only=True)
+        cnn.load_state_dict(ckpt["cnn"])
+        vit.load_state_dict(ckpt["vit"])
+    else:
+        optimizer = optim.AdamW(cnn.parameters(), lr=3e-3, weight_decay=1e-4)
+        criterion = nn.CrossEntropyLoss()
 
-    x_tr_t = torch.from_numpy(x_train)
-    y_tr_t = torch.from_numpy(y_train)
+        x_tr_t = torch.from_numpy(x_train)
+        y_tr_t = torch.from_numpy(y_train)
 
-    cnn.train()
-    batch_size = 64
-    for _epoch in range(40):
-        order = torch.randperm(len(y_train))
-        for i in range(0, len(y_train), batch_size):
-            xb = x_tr_t[order[i : i + batch_size]]
-            yb = y_tr_t[order[i : i + batch_size]]
-            optimizer.zero_grad()
-            logits = cnn(xb)
-            loss = criterion(logits, yb)
-            loss.backward()
-            optimizer.step()
+        cnn.train()
+        batch_size = 64
+        for _epoch in range(40):
+            order = torch.randperm(len(y_train))
+            for i in range(0, len(y_train), batch_size):
+                xb = x_tr_t[order[i : i + batch_size]]
+                yb = y_tr_t[order[i : i + batch_size]]
+                optimizer.zero_grad()
+                logits = cnn(xb)
+                loss = criterion(logits, yb)
+                loss.backward()
+                optimizer.step()
 
     cnn.eval()
     with torch.no_grad():
         preds = torch.argmax(cnn(torch.from_numpy(x_test)), dim=-1).numpy()
 
-    # Self-supervised training of PatchAnomalyViT on smooth/noisy background cutouts
-    rng = np.random.default_rng(seed + 1)
-    bg_cutouts = rng.normal(0.0, 1.0, size=(64, 64, 64)).astype(np.float32)
-    bg_tensor = torch.from_numpy(bg_cutouts)
-    vit_opt = optim.AdamW(vit.parameters(), lr=2e-3, weight_decay=1e-4)
-    vit.train()
-    for _ in range(10):
-        vit_opt.zero_grad()
-        mse_loss, _ = vit(bg_tensor)
-        loss_v = mse_loss.mean()
-        loss_v.backward()
-        vit_opt.step()
+    if save_weights or not w_file.exists():
+        # Self-supervised training of PatchAnomalyViT on smooth/noisy background cutouts
+        rng = np.random.default_rng(seed + 1)
+        bg_cutouts = rng.normal(0.0, 1.0, size=(64, 64, 64)).astype(np.float32)
+        bg_tensor = torch.from_numpy(bg_cutouts)
+        vit_opt = optim.AdamW(vit.parameters(), lr=2e-3, weight_decay=1e-4)
+        vit.train()
+        for _ in range(10):
+            vit_opt.zero_grad()
+            mse_loss, _ = vit(bg_tensor)
+            loss_v = mse_loss.mean()
+            loss_v.backward()
+            vit_opt.step()
     vit.eval()
 
     n_cls = len(OBJECT_CLASSES)

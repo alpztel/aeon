@@ -16,6 +16,7 @@ import pytest
 import respx
 
 from app.active_learning import ActiveAnomalyDiscoveryEngine
+from app.gcn import circular_to_alert
 from app.sed_fitter import compute_kete_kbmod_kinematics, fit_multi_mission_sed, icrs_to_ecliptic_deg
 from tests.conftest import assert_path_response_schema
 
@@ -113,3 +114,42 @@ def test_optimization_benchmark_multi_mission_latency(client):
         assert r.status_code == 200
     avg_ms = ((time.perf_counter() - t0) * 1000.0) / n_runs
     assert avg_ms < 15.0, f"Crossmatch + SED physics latency too slow: {avg_ms:.2f} ms"
+
+
+@respx.mock
+def test_crossmatch_derived_gaia_bp_rp_and_wise_ab_magnitudes(client):
+    """Regression test for live-site Bug #6:
+    `CrossmatchSedPanel.tsx` displays `gaia[0].bp_rp`, `wise[0].w1_ab`, and `wise[0].w2_ab`.
+    Verify `/api/v1/missions/crossmatch` populates those derived fields accurately.
+    """
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(503))
+    r = client.get("/api/v1/missions/crossmatch", params={"ra": 76.95642, "dec": 30.40142, "radius_arcsec": 10})
+    assert r.status_code == 200
+    body = r.json()
+    assert_path_response_schema(body, "/api/v1/missions/crossmatch", "get", "200")
+    assert len(body["gaia"]) >= 1
+    assert "bp_rp" in body["gaia"][0]
+    expected_bp_rp = round(body["gaia"][0]["phot_bp_mean_mag"] - body["gaia"][0]["phot_rp_mean_mag"], 4)
+    assert abs(body["gaia"][0]["bp_rp"] - expected_bp_rp) < 1e-4
+
+    assert len(body["wise"]) >= 1
+    assert "w1_ab" in body["wise"][0] and "w2_ab" in body["wise"][0]
+    assert abs(body["wise"][0]["w1_ab"] - (body["wise"][0]["w1mpro"] + 2.699)) < 1e-2
+    assert abs(body["wise"][0]["w2_ab"] - (body["wise"][0]["w2mpro"] + 3.339)) < 1e-2
+
+
+def test_gcn_circular_body_coordinate_extraction():
+    """Verify `circular_to_alert` extracts ICRS (ra, dec) when a GCN circular JSON includes `body`."""
+    alert = circular_to_alert(
+        {
+            "circularId": 39812,
+            "subject": "JWST/NIRCam Follow-up of Outer System Candidate",
+            "createdOn": 1773919200000,
+            "body": "Observations were centered at RA = 51.2014 deg, Dec = +14.8012 deg (J2000).",
+        }
+    )
+    assert alert is not None
+    assert alert["id"] == "GCN-39812"
+    assert abs(alert["ra"] - 51.2014) < 1e-4
+    assert abs(alert["dec"] - 14.8012) < 1e-4
+

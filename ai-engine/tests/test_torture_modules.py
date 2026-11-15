@@ -8,8 +8,10 @@ from __future__ import annotations
 import math
 import time
 
+from httpx import Response
 import numpy as np
 import pytest
+import respx
 
 from app.astroclip_zogy import compute_astroclip_alignment, compute_zogy_metrics
 from app.models import preprocess_flux, synthesize_spectrum
@@ -107,3 +109,39 @@ def test_optimization_benchmark_ai_engine_latency(client):
         assert r.status_code == 200
     avg_ms = ((time.perf_counter() - t0) * 1000.0) / n_runs
     assert avg_ms < 25.0, f"Average /api/v1/ai/classify latency too slow: {avg_ms:.2f} ms"
+
+
+@respx.mock
+def test_px_2026_09_comoving_classification_from_low_snr_single_epoch(client):
+    """Regression test for live-site Bug #2:
+    When `/api/v1/spectrum` returns a low-SNR single-epoch fixed-aperture cutout (`snr_median = 0.42`)
+    for fast-moving `PX-2026-09` (which moves 90-270 arcsec across a 91-day quarter),
+    `/api/v1/ai/classify` must evaluate the co-moving (shift-stacked) `planet_x_candidate` spectrum
+    and classify `top_class == "planet_x_candidate"` with high confidence and high anomaly score.
+    """
+    noisy_background = [0.15 * ((-1) ** i) for i in range(102)]
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(
+        return_value=Response(
+            200,
+            json={
+                "ra": 51.295473,
+                "dec": 14.8325559,
+                "epoch": "2026-Q1",
+                "flux_ujy": noisy_background,
+                "snr_median": 0.42,
+                "matched_object": {
+                    "id": "px-2026-09",
+                    "object_class": "planet_x_candidate",
+                    "mag_ab_w2": 22.0,
+                },
+            },
+        )
+    )
+    resp = client.post("/api/v1/ai/classify", json={"ra": 51.295473, "dec": 14.8325559})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert_path_response_schema(body, "/api/v1/ai/classify", "post", "200")
+    assert body["top_class"] == "planet_x_candidate"
+    assert body["probabilities"]["planet_x_candidate"] >= 0.85
+    assert body["anomaly_score"] >= 0.85
+

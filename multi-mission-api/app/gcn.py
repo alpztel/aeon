@@ -41,6 +41,13 @@ _KIND_PATTERNS = (
 )
 
 
+_COORD_BODY_RE = re.compile(
+    r"RA\s*(?:\(J2000\))?\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)\s*(?:deg|d|°)?[,;\s]+"
+    r"Dec\s*(?:\(J2000\))?\s*[:=]\s*([+-]?[0-9]+(?:\.[0-9]+)?)",
+    re.IGNORECASE,
+)
+
+
 def circular_to_alert(c: dict[str, Any]) -> dict[str, Any] | None:
     """Map a GCN Circular JSON record to the contract's alert shape."""
     try:
@@ -54,8 +61,22 @@ def circular_to_alert(c: dict[str, Any]) -> dict[str, Any] | None:
         t = datetime.fromtimestamp(float(created) / 1000.0, tz=timezone.utc)
     except (TypeError, ValueError, OverflowError):
         return None
-    return {"id": f"GCN-{cid}", "kind": kind, "time_utc": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "title": subject, "url": f"https://gcn.nasa.gov/circulars/{cid}"}
+    out: dict[str, Any] = {
+        "id": f"GCN-{cid}",
+        "kind": kind,
+        "time_utc": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "title": subject,
+        "url": f"https://gcn.nasa.gov/circulars/{cid}",
+    }
+    body_txt = c.get("body")
+    if isinstance(body_txt, str):
+        m = _COORD_BODY_RE.search(body_txt)
+        if m:
+            ra_v, dec_v = float(m.group(1)), float(m.group(2))
+            if 0.0 <= ra_v <= 360.0 and -90.0 <= dec_v <= 90.0:
+                out["ra"] = round(ra_v, 4)
+                out["dec"] = round(dec_v, 4)
+    return out
 
 
 def _store(alert: dict[str, Any]) -> None:

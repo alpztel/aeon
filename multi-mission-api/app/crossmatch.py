@@ -199,6 +199,24 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
         gaia_rows, wise_rows, mast_rows, live_prov = _query_live_archives(ra, dec, radius_arcsec)
         provenance = {"source": "live archive queries", **live_prov}
 
+    for g in gaia_rows:
+        bp = g.get("phot_bp_mean_mag")
+        rp = g.get("phot_rp_mean_mag")
+        if g.get("bp_rp") is None and isinstance(bp, (int, float)) and isinstance(rp, (int, float)):
+            if math.isfinite(float(bp)) and math.isfinite(float(rp)):
+                g["bp_rp"] = round(float(bp) - float(rp), 4)
+        g_mag = g.get("phot_g_mean_mag")
+        if isinstance(g_mag, (int, float)) and math.isfinite(float(g_mag)):
+            g["phot_g_mean_mag"] = round(float(g_mag), 4)
+
+    for w in wise_rows:
+        w1 = w.get("w1mpro")
+        w2 = w.get("w2mpro")
+        if w.get("w1_ab") is None and isinstance(w1, (int, float)) and math.isfinite(float(w1)):
+            w["w1_ab"] = round(float(w1) + 2.699, 3)
+        if w.get("w2_ab") is None and isinstance(w2, (int, float)) and math.isfinite(float(w2)):
+            w["w2_ab"] = round(float(w2) + 3.339, 3)
+
     sed = _build_sed(gaia_rows, wise_rows, spherex_spec)
 
     has_ir = bool(wise_rows) or bool(spherex_spec and (spherex_spec.get("matched_object") or spherex_spec.get("snr_median", 0) >= 3.0))
