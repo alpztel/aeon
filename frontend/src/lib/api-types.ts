@@ -827,6 +827,38 @@ export interface operations {
                         spectrum_source?: "request" | "archive" | "none" | "unavailable";
                         /** @description Median per-band S/N of the archive spectrum (null otherwise) */
                         spectrum_snr_median?: number | null;
+                        /** @description archive only: fits_archive = real SPHEREx data; physical_model = the backend's model of the catalog object */
+                        spectrum_data_mode?: "fits_archive" | "physical_model" | null;
+                        /** @description archive only: epoch of the classified spectrum (chosen by the backend) */
+                        spectrum_epoch?: string | null;
+                        /** @description archive only: calendar quarter really observed, e.g. 2025-Q4 */
+                        spectrum_observed_quarter?: string | null;
+                        spectrum_bands_measured?: number | null;
+                        physics_diagnostics?: {
+                            teff_k?: number | null;
+                            log_g_cgs?: number | null;
+                            w1_ab_mag?: number | null;
+                            w2_ab_mag?: number | null;
+                            w1_minus_w2_ab?: number | null;
+                            ch4_3_3um_index?: number | null;
+                            h2o_2_7um_index?: number | null;
+                            co_4_67um_index?: number | null;
+                            latent_8d?: number[];
+                            spectral_recon_rms?: number | null;
+                            best_template_class?: components["schemas"]["ObjectClass"] | null;
+                            /** @enum {string} */
+                            teff_method?: "template_grid" | "not_measurable_reflected_light" | "none";
+                            temperature_note?: string;
+                        } | null;
+                        astroclip_zogy?: {
+                            image_provided?: boolean;
+                            astroclip_similarity?: number;
+                            cross_modal_tension?: number;
+                            zogy_peak_snr?: number;
+                            dipole_polarity_score?: number;
+                            cosmic_ray_veto?: boolean;
+                            is_moving_dipole?: boolean;
+                        } | null;
                     };
                 };
             };
@@ -865,6 +897,35 @@ export interface operations {
                             survey?: string;
                         }[];
                         unmatched_ir_candidate?: boolean;
+                        provenance?: {
+                            source?: string;
+                            spherex?: {
+                                [key: string]: unknown;
+                            };
+                        } & {
+                            [key: string]: unknown;
+                        };
+                        sed_physics?: {
+                            teff_sed_k?: number | null;
+                            /** @enum {string} */
+                            teff_method?: "wien_color_temperature" | "equilibrium" | "none";
+                            reflected_color_temperature_k?: number | null;
+                            bond_albedo_assumed?: number;
+                            distance_au?: number;
+                            bolometric_flux_wm2?: number;
+                            ir_to_optical_ratio?: number | null;
+                            /** @enum {string} */
+                            spectral_regime?: "unmeasured" | "photospheric" | "infrared_excess_disk" | "ultracool_or_substellar" | "reflected_sunlight";
+                            n_points?: number;
+                            temperature_note?: string;
+                        };
+                        kinematics?: {
+                            ecliptic_lon_deg?: number;
+                            ecliptic_lat_deg?: number;
+                            parallax_ellipse_aspect?: number;
+                            annual_parallax_arcsec?: number;
+                            kbmod_expected_snr_gain?: number;
+                        };
                         mast_overlap?: {
                             /** @enum {string} */
                             mission?: "JWST" | "HST";

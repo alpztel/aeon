@@ -3,7 +3,7 @@
 import React from "react";
 import { FileDown, HelpCircle, Loader2, Play, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n/context";
-import type { CatalogObject, DataMode, Epoch } from "@/lib/api";
+import type { CatalogObject, DataMode, Epoch, HealthResponse } from "@/lib/api";
 import { AlertsMenu } from "./AlertsMenu";
 import { SearchBox } from "./SearchBox";
 
@@ -11,6 +11,8 @@ type Coords = { ra: number; dec: number };
 
 interface TopBarProps {
   dataMode: DataMode | "checking";
+  /** /api/v1/health answer: archive size and engine versions, shown on hover of the data-mode pill. */
+  health?: HealthResponse | null;
   epoch: Epoch;
   selectedObject: CatalogObject | null;
   onSelectObject: (obj: CatalogObject | null, coords: Coords, refCoords?: Coords) => void;
@@ -32,6 +34,18 @@ const MODE_DOT: Record<DataMode | "checking", string> = {
 export function TopBar(props: TopBarProps) {
   const { lang, setLang, dict } = useI18n();
   const { dataMode } = props;
+  const engines = Object.entries(props.health?.engines ?? {}).filter(([, v]) => typeof v === "string" && v !== "");
+  const frames = props.health?.engines?.archive_spherex_frames;
+  const healthTitle = [
+    dict.header.dataMode[dataMode],
+    frames ? `${dict.data.archiveFrames}: ${frames}` : null,
+    props.health?.version && props.health.version !== "offline" ? `API ${props.health.version}` : null,
+    engines.length
+      ? `${dict.data.engines}: ${engines.filter(([k]) => !k.startsWith("archive_")).map(([k, v]) => `${k} ${v}`).join(", ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-40 bg-gradient-to-b from-black/70 via-black/30 to-transparent">
@@ -57,10 +71,11 @@ export function TopBar(props: TopBarProps) {
         <div className="order-2 ml-auto flex shrink-0 items-center gap-0.5 md:order-3">
           <span
             className="mr-1.5 hidden items-center gap-1.5 text-[11px] text-muted lg:inline-flex"
-            title={dict.header.dataMode[dataMode]}
+            title={healthTitle}
           >
             <span className={`h-1.5 w-1.5 rounded-full ${MODE_DOT[dataMode]}`} />
             {dict.header.dataMode[dataMode]}
+            {frames && dataMode === "fits_archive" ? <span className="aeon-mono text-muted/80">· {frames}</span> : null}
           </span>
           <AlertsMenu onFlyTo={props.onFlyTo} />
           <button

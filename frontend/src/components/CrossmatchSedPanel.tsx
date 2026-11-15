@@ -9,6 +9,7 @@ import {
   Satellite,
 } from "lucide-react";
 import { useI18n } from "@/i18n/context";
+import { DataFacts, fill, num, sci, signed } from "@/components/DataFacts";
 import {
   getCrossmatch,
   type CatalogObject,
@@ -151,6 +152,30 @@ export function CrossmatchSedPanel({
     };
   }, []);
 
+  const sedPhysics = data?.sed_physics ?? null;
+  const kin = data?.kinematics ?? null;
+  // How the SPHEREx part of the SED was built (real detected bands, or why it was left out)
+  const spx = data?.provenance?.spherex ?? null;
+  const spxStatusRaw = spx?.status;
+  const spxStatus = typeof spxStatusRaw === "string" ? spxStatusRaw : "";
+  const spxPoints = spx?.n_points;
+  const spxEpoch = typeof spx?.epoch === "string" ? String(spx.epoch) : "";
+  const spxObserved = typeof spx?.observed_quarter === "string" ? String(spx.observed_quarter) : "";
+  const spherexNote = !spx
+    ? null
+    : spxStatus === "real"
+      ? fill(dict.data.spherexReal, {
+          n: typeof spxPoints === "number" ? spxPoints : 0,
+          e: [spxEpoch, spxObserved && spxObserved !== spxEpoch ? `${dict.data.observedQuarter} ${spxObserved}` : ""]
+            .filter(Boolean)
+            .join(" · "),
+        })
+      : spxStatus.startsWith("excluded")
+        ? dict.data.spherexExcluded
+        : spxStatus.startsWith("unavailable")
+          ? dict.data.spherexUnavailable
+          : dict.data.spherexNone;
+
   return (
     <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
       {/* Header */}
@@ -266,6 +291,102 @@ export function CrossmatchSedPanel({
           </div>
         </div>
       </div>
+
+      {sedPhysics && (
+        <DataFacts
+          className="mt-4"
+          title={dict.data.sedPhysicsTitle}
+          facts={[
+            {
+              label: dict.data.temperature,
+              value: num(sedPhysics.teff_sed_k, sedPhysics.teff_method === "equilibrium" ? 1 : 0) !== null
+                ? `${num(sedPhysics.teff_sed_k, sedPhysics.teff_method === "equilibrium" ? 1 : 0)} K`
+                : dict.data.methodNone,
+              title: sedPhysics.temperature_note,
+              tone: sedPhysics.teff_method === "equilibrium" ? "warn" : "default",
+            },
+            {
+              label: dict.data.method,
+              value:
+                sedPhysics.teff_method === "equilibrium"
+                  ? fill(dict.data.methodEquilibrium, { a: sedPhysics.bond_albedo_assumed ?? 0.3 })
+                  : sedPhysics.teff_method === "wien_color_temperature"
+                    ? dict.data.methodWien
+                    : dict.data.methodNone,
+            },
+            num(sedPhysics.reflected_color_temperature_k, 0) !== null && {
+              label: dict.data.reflectedColour,
+              value: `${num(sedPhysics.reflected_color_temperature_k, 0)} K`,
+            },
+            sedPhysics.spectral_regime
+              ? { label: dict.data.regime, value: dict.data.regimes[sedPhysics.spectral_regime] ?? sedPhysics.spectral_regime }
+              : null,
+            num(sedPhysics.ir_to_optical_ratio, 2) !== null && {
+              label: dict.data.irRatio,
+              value: num(sedPhysics.ir_to_optical_ratio, 2),
+            },
+            sci(sedPhysics.bolometric_flux_wm2) !== null &&
+              (sedPhysics.bolometric_flux_wm2 ?? 0) > 0 && {
+                label: dict.data.fbol,
+                value: `${sci(sedPhysics.bolometric_flux_wm2)} W m⁻²`,
+              },
+            typeof sedPhysics.n_points === "number" && { label: dict.data.sedPoints, value: String(sedPhysics.n_points) },
+          ]}
+        />
+      )}
+      {sedPhysics?.teff_method === "equilibrium" && sedPhysics.temperature_note && (
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{sedPhysics.temperature_note}</p>
+      )}
+
+      {kin && (
+        <DataFacts
+          className="mt-3"
+          title={dict.data.kinTitle}
+          facts={[
+            num(kin.ecliptic_lon_deg, 3) !== null && { label: dict.data.eclLon, value: `${num(kin.ecliptic_lon_deg, 3)}°` },
+            signed(kin.ecliptic_lat_deg, 3) !== null && { label: dict.data.eclLat, value: `${signed(kin.ecliptic_lat_deg, 3)}°` },
+            num(kin.annual_parallax_arcsec, 3) !== null && {
+              label: dict.data.parallax,
+              value: `${num(kin.annual_parallax_arcsec, 3)}″`,
+            },
+            num(kin.parallax_ellipse_aspect, 3) !== null && {
+              label: dict.data.ellipse,
+              value: num(kin.parallax_ellipse_aspect, 3),
+            },
+            num(kin.kbmod_expected_snr_gain, 2) !== null && {
+              label: dict.data.kbmod,
+              value: `×${num(kin.kbmod_expected_snr_gain, 2)}`,
+            },
+          ]}
+        />
+      )}
+
+      {data && (
+        <DataFacts
+          className="mt-3"
+          title={dict.data.provTitle}
+          facts={[
+            data.provenance?.source
+              ? {
+                  label: "Gaia · WISE · MAST",
+                  value: data.provenance.source.startsWith("archive snapshot")
+                    ? dict.data.snapshot
+                    : data.provenance.source.startsWith("live")
+                      ? dict.data.live
+                      : data.provenance.source,
+                  title: data.provenance.source,
+                }
+              : null,
+            spherexNote
+              ? {
+                  label: dict.data.spherexInSed,
+                  value: spherexNote,
+                  tone: String(data.provenance?.spherex?.status ?? "") === "real" ? "real" : "model",
+                }
+              : null,
+          ]}
+        />
+      )}
     </section>
   );
 }

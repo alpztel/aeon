@@ -266,6 +266,20 @@ export function ShiftStackPanel({
   const snrSingle = stackResult?.snr_single_frame ?? 0;
   const snrStacked = stackResult?.snr_stacked ?? 0;
   const snrGain = stackResult?.snr_gain ?? (snrSingle > 0 ? snrStacked / snrSingle : 0);
+  // Time base of the stack: frames, their span and the epoch the stacked image is registered at.
+  const frameTimes = (stackResult?.frame_times ?? []).filter((t) => Number.isFinite(t));
+  const stackTimeBase = stackResult
+    ? [
+        typeof stackResult.n_frames === "number" ? `${stackResult.n_frames} ${dict.data.stackFrames}` : null,
+        frameTimes.length >= 2
+          ? `${Math.min(...frameTimes).toFixed(3)} → ${Math.max(...frameTimes).toFixed(3)}`
+          : null,
+        typeof stackResult.t_ref === "number" ? `${dict.data.tRef} ${stackResult.t_ref.toFixed(3)}` : null,
+        stackResult.motion_frame ?? null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
 
   // Compute isotropic SVG polyline points for the apparent geocentric parallax track (preserving ΔRA·cos(Dec) scale)
   const trackPoints = (() => {
@@ -519,6 +533,7 @@ export function ShiftStackPanel({
         {/* S/N Gain + Parallax Loop Preview */}
         <div className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 @4xl:col-span-4">
           <div className="space-y-3">
+            {stackTimeBase && <p className="aeon-mono text-[11px] text-slate-400">{stackTimeBase}</p>}
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-400">{dict.stack.snrGain}</span>
               <span className="aeon-mono text-lg font-bold text-emerald-300">
@@ -582,6 +597,11 @@ export function ShiftStackPanel({
                     : ""}{" "}
                   (S/N {blindResult.best.snr_stacked.toFixed(2)})
                 </p>
+                {typeof blindResult.n_hypotheses === "number" && (
+                  <p className="aeon-mono mt-1 text-[11px] text-amber-200/70">
+                    {blindResult.n_hypotheses.toLocaleString()} {dict.data.hypotheses}
+                  </p>
+                )}
               </div>
             )}
           </div>

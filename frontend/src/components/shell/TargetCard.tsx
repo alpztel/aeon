@@ -60,6 +60,9 @@ export function TargetCard({ selectedObject, coords, compact }: TargetCardProps)
         {pm && <Datum label={dict.shell.pmShort} value={pm} />}
         {distance && <Datum label={dict.sky.distance} value={distance} />}
         {obj?.teff_k ? <Datum label={dict.sky.teff} value={`${obj.teff_k} K`} /> : null}
+        {typeof obj?.mag_ab_w2 === "number" && Number.isFinite(obj.mag_ab_w2) ? (
+          <Datum label={dict.data.w2} value={`${obj.mag_ab_w2.toFixed(1)} mag`} />
+        ) : null}
       </dl>
 
       {!compact && obj?.description && (

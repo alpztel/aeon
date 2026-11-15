@@ -27,11 +27,13 @@ import {
   EPOCHS,
   getHealth,
   getSkyCutout,
+  imageProvenance,
   searchCatalog,
   type AstrometryPoint,
   type CatalogObject,
   type CrossmatchResult,
   type DataMode,
+  type HealthResponse,
   type Epoch,
   type UiAction,
 } from "@/lib/api";
@@ -45,6 +47,7 @@ const TOUR_TOOLS: ToolId[] = ["diff", "spectrum", "stack"];
 export default function HomePage() {
   const { lang, setLang } = useI18n();
   const [dataMode, setDataMode] = useState<DataMode | "checking">("checking");
+  const [health, setHealth] = useState<HealthResponse | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [tool, setTool] = useState<ToolId | null>(null);
@@ -65,7 +68,11 @@ export default function HomePage() {
   // stage makes, so the marks match what the visitor will see. Re-fetched only when the target changes.
   const demoMeta = selectedObject ? DEMO_TARGETS.find((d) => d.id === selectedObject.id) : undefined;
   const coverageKey = demoMeta ? demoMeta.id : `${refCoords.ra.toFixed(5)},${refCoords.dec.toFixed(5)}`;
-  const [coverage, setCoverage] = useState<{ key: string; map: EpochCoverage }>({ key: "", map: {} });
+  const [coverage, setCoverage] = useState<{ key: string; map: EpochCoverage; obsStart: Partial<Record<Epoch, string>> }>({
+    key: "",
+    map: {},
+    obsStart: {},
+  });
   useEffect(() => {
     let active = true;
     const meta = demoMeta;
@@ -74,14 +81,22 @@ export default function HomePage() {
       EPOCHS.map((ep) => {
         const pos = meta?.epochCoords[ep] ?? base;
         return getSkyCutout({ ra: pos.ra, dec: pos.dec, epoch: ep, size_px: 64, pixel_scale_arcsec: 6.2 })
-          .then(({ data, fromCache }) => [ep, fromCache ? undefined : data.data_mode === "fits_archive" ? "real" : "model"] as const)
-          .catch(() => [ep, undefined] as const);
+          .then(({ data, fromCache }) => {
+            const mode = fromCache ? undefined : data.data_mode === "fits_archive" ? ("real" as const) : ("model" as const);
+            const start = mode === "real" ? imageProvenance(data).obs_date_range?.[0] : undefined;
+            return [ep, mode, typeof start === "string" ? start : undefined] as const;
+          })
+          .catch(() => [ep, undefined, undefined] as const);
       })
-    ).then((pairs) => {
+    ).then((rows) => {
       if (!active) return;
       const map: EpochCoverage = {};
-      for (const [ep, mode] of pairs) if (mode) map[ep] = mode;
-      setCoverage({ key: coverageKey, map });
+      const obsStart: Partial<Record<Epoch, string>> = {};
+      for (const [ep, mode, start] of rows) {
+        if (mode) map[ep] = mode;
+        if (start) obsStart[ep] = start;
+      }
+      setCoverage({ key: coverageKey, map, obsStart });
     });
     return () => {
       active = false;
@@ -90,7 +105,14 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverageKey]);
   const epochCoverage = coverage.key === coverageKey ? coverage.map : {};
-  const realEpochs = EPOCHS.filter((ep) => epochCoverage[ep] === "real");
+  const obsStart = coverage.key === coverageKey ? coverage.obsStart : {};
+  // Real frames are filed by season, whatever the year (a 2025-11 frame serves "2026-Q4"): order the
+  // real epochs by when they were really observed, so the default difference runs forward in time.
+  const realEpochs = EPOCHS.filter((ep) => epochCoverage[ep] === "real").sort((a, b) => {
+    const ta = obsStart[a];
+    const tb = obsStart[b];
+    return ta && tb ? ta.localeCompare(tb) : EPOCHS.indexOf(a) - EPOCHS.indexOf(b);
+  });
   const diffEpochs: [Epoch, Epoch] =
     realEpochs.length >= 2 ? [realEpochs[0], realEpochs[realEpochs.length - 1]] : ["2026-Q1", "2026-Q3"];
 
@@ -177,8 +199,10 @@ export default function HomePage() {
 
   useEffect(() => {
     let active = true;
-    getHealth().then(({ mode }) => {
-      if (active) setDataMode(mode);
+    getHealth().then(({ mode, health: h }) => {
+      if (!active) return;
+      setDataMode(mode);
+      setHealth(mode === "offline_cache" ? null : h);
     });
     Promise.all([searchCatalog({ q: "wise-0855", epoch: DEMO_TARGETS[0].epoch }), searchCatalog({ q: "wise-0855" })])
       .then(([epRes, refRes]) => {
@@ -361,6 +385,7 @@ export default function HomePage() {
 
       <TopBar
         dataMode={dataMode}
+        health={health}
         epoch={epoch}
         selectedObject={selectedObject}
         onSelectObject={selectObject}

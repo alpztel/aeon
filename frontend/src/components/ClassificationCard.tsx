@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle, Cpu, RotateCw, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n/context";
+import { DataFacts, DataModeBadge, num, signed } from "@/components/DataFacts";
 import {
   ApiError,
   classifyTarget,
@@ -91,6 +92,9 @@ export function ClassificationCard({
   const aiState =
     current === null ? "loading" : noSpectrum ? "no-spectrum" : spectrumDown ? "spectrum-unavailable" : current.kind;
 
+  const physics = result?.physics_diagnostics ?? null;
+  const zogy = result?.astroclip_zogy ?? null;
+
   const anomaly = unit(result?.anomaly_score);
   const topClass = result?.top_class && ALL_CLASSES.includes(result.top_class) ? result.top_class : undefined;
 
@@ -170,9 +174,30 @@ export function ClassificationCard({
       {result && (
       <>
       {source && (
-        <p className="aeon-mono mb-3 text-[11px] text-slate-400">
-          {source}
-          {snr !== null && ` · ${dict.ai.snrMedian} ${snr.toFixed(1)}`}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <DataModeBadge
+            mode={result.spectrum_data_mode}
+            realLabel={dict.data.realSpherex}
+            modelLabel={dict.data.physicalModel}
+            detail={[
+              result.spectrum_epoch,
+              result.spectrum_observed_quarter && result.spectrum_observed_quarter !== result.spectrum_epoch
+                ? `${dict.data.observedQuarter} ${result.spectrum_observed_quarter}`
+                : null,
+              typeof result.spectrum_bands_measured === "number" ? `${result.spectrum_bands_measured}/102` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          />
+          <p className="aeon-mono text-[11px] text-slate-400">
+            {source}
+            {snr !== null && ` · ${dict.ai.snrMedian} ${snr.toFixed(1)}`}
+          </p>
+        </div>
+      )}
+      {result.spectrum_data_mode === "physical_model" && (
+        <p className="mb-3 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs text-slate-300">
+          {dict.data.classifiedModel}
         </p>
       )}
       {snr !== null && snr < LOW_SNR && (
@@ -250,6 +275,61 @@ export function ClassificationCard({
           )}
         </div>
       </div>
+
+      {physics && (
+        <DataFacts
+          className="mt-4"
+          title={dict.data.physicsTitle}
+          facts={[
+            {
+              label: dict.data.teff,
+              value: num(physics.teff_k, 0) !== null ? `${num(physics.teff_k, 0)} K` : dict.data.notMeasurable,
+              title: physics.temperature_note,
+              tone: physics.teff_method === "template_grid" ? "default" : "warn",
+            },
+            num(physics.log_g_cgs) !== null && { label: dict.data.logg, value: num(physics.log_g_cgs) },
+            signed(physics.w1_minus_w2_ab) !== null && { label: dict.data.w1w2, value: `${signed(physics.w1_minus_w2_ab)} mag` },
+            num(physics.w2_ab_mag) !== null && { label: dict.data.w2, value: `${num(physics.w2_ab_mag)} mag` },
+            signed(physics.ch4_3_3um_index, 3) !== null && { label: dict.data.ch4, value: signed(physics.ch4_3_3um_index, 3) },
+            signed(physics.h2o_2_7um_index, 3) !== null && { label: dict.data.h2o, value: signed(physics.h2o_2_7um_index, 3) },
+            signed(physics.co_4_67um_index, 3) !== null && { label: dict.data.co, value: signed(physics.co_4_67um_index, 3) },
+            physics.best_template_class &&
+              ALL_CLASSES.includes(physics.best_template_class) && {
+                label: dict.data.bestTemplate,
+                value: dict.classes[physics.best_template_class],
+              },
+            num(physics.spectral_recon_rms, 3) !== null && { label: dict.data.reconRms, value: num(physics.spectral_recon_rms, 3) },
+          ]}
+        />
+      )}
+      {physics?.teff_method === "not_measurable_reflected_light" && physics.temperature_note && (
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{physics.temperature_note}</p>
+      )}
+
+      {zogy &&
+        (zogy.image_provided === false ? (
+          <p className="mt-3 text-[11px] text-slate-500">{dict.data.noImage}</p>
+        ) : (
+          <DataFacts
+            className="mt-3"
+            title={dict.data.zogyTitle}
+            facts={[
+              num(zogy.zogy_peak_snr, 1) !== null && { label: dict.data.zogyPeak, value: num(zogy.zogy_peak_snr, 1) },
+              num(zogy.dipole_polarity_score, 2) !== null && { label: dict.data.dipole, value: num(zogy.dipole_polarity_score, 2) },
+              typeof zogy.is_moving_dipole === "boolean" && {
+                label: dict.data.movingDipole,
+                value: zogy.is_moving_dipole ? dict.data.yes : dict.data.no,
+                tone: zogy.is_moving_dipole ? "warn" : "default",
+              },
+              typeof zogy.cosmic_ray_veto === "boolean" && {
+                label: dict.data.crVeto,
+                value: zogy.cosmic_ray_veto ? dict.data.yes : dict.data.no,
+              },
+              num(zogy.astroclip_similarity, 3) !== null && { label: dict.data.similarity, value: num(zogy.astroclip_similarity, 3) },
+              num(zogy.cross_modal_tension, 3) !== null && { label: dict.data.tension, value: num(zogy.cross_modal_tension, 3) },
+            ]}
+          />
+        ))}
       </>
       )}
     </section>

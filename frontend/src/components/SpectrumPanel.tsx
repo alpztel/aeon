@@ -10,8 +10,10 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useI18n } from "@/i18n/context";
+import { DataFacts, DataModeBadge, dateRange, fill, num } from "@/components/DataFacts";
 import {
   getSpectrum,
+  spectrumPipeline,
   type CatalogObject,
   type Epoch,
   type SpectrumResponse,
@@ -106,6 +108,10 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
       const yVals = logScale
         ? spectrum.flux_ujy.map((v) => Math.max(v, 0.05))
         : spectrum.flux_ujy;
+      // Real data: bands no SPHEREx frame measured are interpolated fill (open grey markers).
+      const pipe = spectrumPipeline(spectrum);
+      const measured =
+        pipe.data_mode === "fits_archive" && pipe.measured?.length === spectrum.flux_ujy.length ? pipe.measured : null;
 
       const traces: import("plotly.js-dist-min").PlotData[] = [
         {
@@ -115,7 +121,13 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
           mode: "lines+markers",
           name: `${dict.spectrum.currentCurve} (${epoch})`,
           line: { color: "#9db4f0", width: 2 },
-          marker: { color: "#9db4f0", size: 4 },
+          marker: measured
+            ? {
+                color: measured.map((m) => (m ? "#9db4f0" : "rgba(255,255,255,0.35)")),
+                symbol: measured.map((m) => (m ? "circle" : "circle-open")),
+                size: measured.map((m) => (m ? 5 : 6)),
+              }
+            : { color: "#9db4f0", size: 4 },
           error_y: {
             type: "data",
             array: spectrum.flux_err_ujy,
@@ -306,6 +318,7 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
 
   const isSynthetic =
     selectedObject?.is_synthetic || spectrum?.matched_object?.is_synthetic;
+  const pipe = spectrumPipeline(spectrum);
 
   return (
     <section className="aeon-panel rounded-2xl p-4 @xl:p-5">
@@ -321,6 +334,12 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
               {dict.spectrum.snrMedian}: {spectrum.snr_median.toFixed(1)}
             </span>
           )}
+          <DataModeBadge
+            mode={pipe.data_mode}
+            realLabel={dict.data.realSpherex}
+            modelLabel={dict.data.physicalModel}
+            detail={typeof pipe.n_bands_measured === "number" ? `${pipe.n_bands_measured}/102` : null}
+          />
           {isSynthetic && (
             <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-rose-300">
               <AlertTriangle className="h-3 w-3" />
@@ -407,6 +426,20 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
         </div>
       )}
 
+      {pipe.epoch_folded && pipe.observed_quarter && (
+        <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {fill(dict.data.folded, { q: pipe.observed_quarter, e: spectrum?.epoch ?? epoch })}
+        </p>
+      )}
+      {pipe.data_mode === "physical_model" && (
+        <p className="mb-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+          {dict.data.modelNoData}
+          {pipe.archive_fallback_reason ? (
+            <span className="aeon-mono mt-1 block text-[11px] text-slate-500">{pipe.archive_fallback_reason}</span>
+          ) : null}
+        </p>
+      )}
+
       {/* Plot Container */}
       <div className="relative h-[320px] w-full overflow-hidden rounded-xl border border-white/10 bg-black/40">
         <div ref={plotRef} className="h-full w-full" />
@@ -419,6 +452,38 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
           </div>
         )}
       </div>
+
+      {pipe.data_mode === "fits_archive" && (
+        <DataFacts
+          className="mt-3"
+          facts={[
+            { label: dict.data.epoch, value: spectrum?.epoch ?? epoch },
+            pipe.observed_quarter
+              ? { label: dict.data.observedQuarter, value: pipe.observed_quarter, tone: pipe.epoch_folded ? "warn" : "real" }
+              : null,
+            typeof pipe.n_bands_measured === "number" && {
+              label: dict.data.bandsMeasured,
+              value: `${pipe.n_bands_measured} / 102`,
+              tone: "real",
+            },
+            typeof pipe.n_frames_used === "number" && {
+              label: dict.data.framesUsed,
+              value: `${pipe.n_frames_used}${typeof pipe.n_frames === "number" ? ` / ${pipe.n_frames}` : ""}${
+                typeof pipe.n_frames_rejected === "number" && pipe.n_frames_rejected > 0
+                  ? ` (${pipe.n_frames_rejected} ${dict.data.rejected})`
+                  : ""
+              }`,
+            },
+            dateRange(pipe.obs_date_range) ? { label: dict.data.obsDates, value: dateRange(pipe.obs_date_range) } : null,
+            num(pipe.aperture_px, 2) !== null && { label: dict.data.aperture, value: `${num(pipe.aperture_px, 2)} px` },
+          ]}
+        />
+      )}
+      {pipe.data_mode === "fits_archive" && pipe.measured && pipe.measured.some((m) => !m) && (
+        <p className="mt-2 text-[11px] text-slate-500">
+          ● {dict.data.measured} · ○ {dict.data.interpolated}
+        </p>
+      )}
 
       {/* Absorption Feature Badges */}
       {spectrum?.absorption_features && spectrum.absorption_features.length > 0 && (
