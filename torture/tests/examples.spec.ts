@@ -44,9 +44,9 @@ test("E02 picking a card flies to that target", async ({ page }) => {
   const errors = trackErrors(page);
   await page.keyboard.press("g");
   const panel = page.getByRole("complementary", { name: /Examples/ });
-  await panel.locator("li button", { hasText: "WISE J182831" }).click({ timeout: 45_000 });
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(/WISE J1828/, { timeout: 30_000 });
-  await expect(panel.locator("li button[aria-current=true]")).toContainText(/WISE J1828/);
+  await panel.locator("li button", { hasText: "J182831" }).click({ timeout: 45_000 });
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(/J182831/, { timeout: 30_000 });
+  await expect(panel.locator("li button[aria-current=true]")).toContainText(/J182831/);
   await page.screenshot({ path: `${SHOTS}/E02-picked.png`, fullPage: true });
   expect(errors).toEqual([]);
 });
