@@ -398,6 +398,8 @@ export interface components {
             dt_years?: number;
             /** @enum {string} */
             data_mode?: "fits_archive" | "physical_model";
+            /** @description True baseline between the mean observation dates of the two archive images (may differ from dt_years, which uses nominal quarter centres). */
+            dt_years_observed?: number;
         };
         ShiftStackResult: {
             /** @constant */
