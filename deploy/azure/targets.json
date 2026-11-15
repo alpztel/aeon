@@ -8,6 +8,12 @@
     { "catalog_id": "wise-1828" },
     { "catalog_id": "barnard" },
     { "catalog_id": "tw-hya" },
-    { "catalog_id": "18-sco" }
+    { "catalog_id": "18-sco" },
+    { "catalog_id": "wise-1738" },
+    { "catalog_id": "trappist-1" },
+    { "catalog_id": "lhs-1140" },
+    { "catalog_id": "apm-08279", "gaia": false },
+    { "catalog_id": "cloverleaf", "gaia": false },
+    { "catalog_id": "sdss-1148", "gaia": false }
   ]
 }
