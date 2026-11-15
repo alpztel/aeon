@@ -12,6 +12,7 @@
     "fieldPosition": "Field position",
     "tools": "Analysis tools",
     "toolNames": {
+      "examples": "Examples",
       "diff": "Image Difference",
       "spectrum": "102-Band Spectrum",
       "classify": "AI Classification",
@@ -21,6 +22,7 @@
       "candidates": "Candidate Pool"
     },
     "toolHints": {
+      "examples": "Real targets by class, with the SPHEREx data the archive holds for each.",
       "diff": "Moving sources show up as ± dipoles between two epochs.",
       "spectrum": "0.75–5.0 µm photometry with molecular absorption bands.",
       "classify": "1D-CNN class probabilities and ViT anomaly score.",
@@ -296,6 +298,7 @@
     "title": "Keyboard Shortcuts",
     "close": "Close",
     "items": {
+      "g": "Open the example gallery",
       "d": "Toggle Image Differencing (M2)",
       "s": "Open Shift-and-Stack (M4)",
       "3": "Open 3D Solar System (M5)",
@@ -392,6 +395,27 @@
     "engines": "Engines",
     "archiveFrames": "SPHEREx frames in archive",
     "years": "yr",
-    "blendDropped": "{n} short-wavelength points left out: blended neighbour (no Gaia source here)"
+    "blendDropped": "{n} short-wavelength points left out: blended neighbour (no Gaia source here)",
+    "blendedBands": "Blended bands",
+    "blendedHint": "Bands whose aperture light is centred on a neighbouring source, not on the target (median offset shown).",
+    "blendedLegend": "blended with a neighbour",
+    "classifiedBlended": "{b} bands are dominated by a neighbouring source inside the aperture: the class and physics use the target's own {u} bands, the rest filled from the best-fitting template.",
+    "physicsDisagrees": "The neural classifier disagrees with the physics template fitted to the same bands ({t}). It was trained on synthetic spectra: read its class with caution."
+  },
+  "examples": {
+    "loading": "Loading the catalog…",
+    "summary": "{n} targets · {r} with a real SPHEREx spectrum",
+    "filterAll": "All",
+    "filterReal": "Real SPHEREx",
+    "empty": "The catalog service did not answer.",
+    "checking": "checking the archive…",
+    "unknown": "archive status unknown",
+    "realIn": "real spectrum in {q}",
+    "bands": "{n} bands",
+    "saturated": "no real spectrum: too bright, frames saturated",
+    "sparse": "no real spectrum: too few unflagged bands",
+    "noCoverage": "no SPHEREx frame here yet",
+    "quarters": "Quarters with real SPHEREx data",
+    "footnote": "Filled quarters hold a real SPHEREx spectrum (IRSA Level 2 frames ingested weekly); hollow quarters show the physical model. SPHEREx saturates on sources brighter than W2 ≈ 11 AB. Positions, proper motions and W2 come from CatWISE2020 / AllWISE / Gaia DR3."
   }
 }

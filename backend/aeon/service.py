@@ -335,6 +335,11 @@ def cutout(ra: float, dec: float, epoch: str, size_px: int, scale: float, band: 
 
 MIN_REAL_SPECTRUM_BANDS = 34     # a real spectrum needs >= 1/3 of the 102 AEON bands
 SPECTRUM_STAMP_PX = 25
+# Blend test: a band whose bright (S/N >= BLEND_MIN_SNR) frames have their aperture light centred
+# >= BLEND_OFFSET_PX native pixels (~3") away from the target measures a neighbour, not the target.
+# For S/N >= 5 the centroid of a point source on the target scatters by ~0.1 px.
+BLEND_MIN_SNR = 5.0
+BLEND_OFFSET_PX = 0.5
 
 
 def _archive_spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float, hit) -> tuple[dict | None, str]:
@@ -364,7 +369,8 @@ def _archive_spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float,
             rejected += 1           # flagged pixel in the aperture, or annulus off the frame
             continue
         phot = res
-        meas.append((f.band, f.wavelength_um, f.bandwidth_um, fl, er, f))
+        off = photometry.centroid_offset_px(stamp, x, y, res["aperture_px"], res["annulus_px"]) if fl / er >= BLEND_MIN_SNR else float("nan")
+        meas.append((f.band, f.wavelength_um, f.bandwidth_um, fl, er, f, off))
     by_band: dict[int, list] = {}
     for m in meas:
         if m[0] is not None:
@@ -379,6 +385,14 @@ def _archive_spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float,
         rows.append((float(np.mean([m[1] for m in ms])), float(np.mean([m[2] for m in ms])), fl,
                      float(1.0 / math.sqrt(wts.sum())), b, len(ms)))
     rows.sort()
+    # Blend flag per band: median centroid offset of its bright frames (NaN offsets = faint frames).
+    blended = np.zeros(bands.N_BANDS, dtype=bool)
+    blend_offsets = []
+    for b, ms in by_band.items():
+        offs = [m[6] for m in ms if np.isfinite(m[6])]
+        if offs and float(np.median(offs)) >= BLEND_OFFSET_PX:
+            blended[b] = True
+            blend_offsets.append(float(np.median(offs)))
     lam_m = np.array([r[0] for r in rows])
     flux_m = np.array([r[2] for r in rows])
     err_m = np.array([r[3] for r in rows])
@@ -427,6 +441,13 @@ def _archive_spectrum(ra: float, dec: float, epoch: str, aperture_arcsec: float,
             "unmeasured_fill": ("log-wavelength interpolation between nearest measured bands (nearest value "
                                 "outside the measured range), error = 2 x hypot(interpolated error, neighbour "
                                 "difference); NOT a measurement"),
+            "blended": [bool(v) for v in blended],
+            "n_bands_blended": int(blended.sum()),
+            "blend_offset_arcsec": (round(float(np.median(blend_offsets)) * float(np.median([f.image.scale_arcsec for f in used])), 2)
+                                    if blend_offsets else None),
+            "blend_rule": (f"band flagged when its frames with S/N >= {BLEND_MIN_SNR:g} have the aperture light centred "
+                           f">= {BLEND_OFFSET_PX:g} native px from the target (median): a neighbour inside the aperture. "
+                           "Flux is reported as measured; consumers should not treat flagged bands as the target's."),
             "n_frames": len(frames), "n_frames_used": len(meas), "n_frames_rejected": rejected,
             "n_bands_total": bands.N_BANDS,
             "frames_per_band": [int(next((r[5] for r in rows if r[4] == k), 0)) for k in range(bands.N_BANDS)],

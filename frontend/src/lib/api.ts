@@ -793,6 +793,9 @@ export interface SpectrumPipelineInfo {
   archive_fallback_reason?: string;
   aperture_px?: number | null;
   epoch_selection?: { chosen?: string; candidates?: Record<string, unknown> };
+  blended?: boolean[];
+  n_bands_blended?: number;
+  blend_offset_arcsec?: number | null;
 }
 
 export interface ImageProvenanceInfo {
@@ -814,9 +817,41 @@ function asObject(v: unknown): Record<string, unknown> {
 export function spectrumPipeline(s: SpectrumResponse | null | undefined): SpectrumPipelineInfo {
   const p = asObject(s?.pipeline);
   const measured = Array.isArray(p.measured) && p.measured.every((b) => typeof b === "boolean") ? (p.measured as boolean[]) : undefined;
-  return { ...(p as SpectrumPipelineInfo), measured };
+  const blended = Array.isArray(p.blended) && p.blended.every((b) => typeof b === "boolean") ? (p.blended as boolean[]) : undefined;
+  return { ...(p as SpectrumPipelineInfo), measured, blended };
 }
 
 export function imageProvenance(img: SkyImage | null | undefined): ImageProvenanceInfo {
   return asObject((img as { provenance?: unknown } | null | undefined)?.provenance) as ImageProvenanceInfo;
+}
+
+// ------------------------------------------------------------------ example gallery
+/** Catalog ids shown in the example gallery (grouped by class there). Ids the backend does not
+ * know (older deployment) are simply not shown. */
+export const EXAMPLE_TARGET_IDS: readonly string[] = [
+  "wise-0855",
+  "wise-1828",
+  "wise-1541",
+  "wise-0350",
+  "wise-1738",
+  "2mass-0415",
+  "luhman-16",
+  "px-2026-09",
+  "2m1207",
+  "tw-hya",
+  "rw-aur",
+  "trappist-1",
+  "lhs-1140",
+  "barnard",
+  "18-sco",
+  "apm-08279",
+  "cloverleaf",
+  "sdss-1148",
+];
+
+/** Spectrum without an epoch: the backend picks the quarter with the best real SPHEREx data and
+ * lists every quarter it compared in pipeline.epoch_selection. */
+export async function getBestEpochSpectrum(ra: number, dec: number): Promise<SpectrumResponse> {
+  const qs = new URLSearchParams({ ra: String(ra), dec: String(dec) });
+  return fetchJson<SpectrumResponse>(`/api/v1/spectrum?${qs.toString()}`);
 }

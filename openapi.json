@@ -572,6 +572,31 @@
                       ],
                       "description": "archive only: AEON bands measured by real SPHEREx frames (of 102)"
                     },
+                    "spectrum_bands_blended": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "description": "archive only: measured bands whose aperture light is centred on a neighbour (backend pipeline.blended)"
+                    },
+                    "spectrum_bands_used": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "description": "Bands classified as the target's own (measured, not blended) when some were not; null = the spectrum was used as served"
+                    },
+                    "classification_input": {
+                      "type": "string",
+                      "description": "measured, or how many usable bands were kept and which template filled the others"
+                    },
+                    "physics_agrees": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Whether the 1D-CNN class equals the physics template fitted to the same bands (the CNN is trained on synthetic spectra)"
+                    },
                     "physics_diagnostics": {
                       "type": [
                         "object",

@@ -836,6 +836,10 @@ export interface operations {
                         /** @description archive only: calendar quarter really observed, e.g. 2025-Q4 */
                         spectrum_observed_quarter?: string | null;
                         spectrum_bands_measured?: number | null;
+                        spectrum_bands_blended?: number | null;
+                        spectrum_bands_used?: number | null;
+                        classification_input?: string;
+                        physics_agrees?: boolean | null;
                         physics_diagnostics?: {
                             teff_k?: number | null;
                             log_g_cgs?: number | null;

@@ -23,6 +23,8 @@ from .models import WAVELENGTH_UM, preprocess_flux, synthesize_spectrum
 
 # Precompute a physical template grid spanning 70 K (ice giant) to 6500 K (solar/F-star)
 _TEMPLATE_GRID_SPECS: list[tuple[str, float, float, np.ndarray]] = []
+_TEMPLATE_RAW: list[tuple[str, float, float, np.ndarray]] = []      # same grid, un-normalised flux
+MIN_FIT_BANDS = 12
 
 
 def _init_template_grid() -> list[tuple[str, float, float, np.ndarray]]:
@@ -53,6 +55,7 @@ def _init_template_grid() -> list[tuple[str, float, float, np.ndarray]]:
         raw = synthesize_spectrum(cls_name, mag_ab_w2=15.0, teff_k=teff, redshift=2.0 if cls_name == "high_z_galaxy" else None)
         norm_vec = preprocess_flux(raw)
         _TEMPLATE_GRID_SPECS.append((cls_name, teff, log_g, norm_vec))
+        _TEMPLATE_RAW.append((cls_name, teff, log_g, np.asarray(raw, dtype=np.float64)))
 
     return _TEMPLATE_GRID_SPECS
 
@@ -83,6 +86,69 @@ def _band_median_positive(flux64: np.ndarray, mask: np.ndarray, floor: float) ->
     return float(max(np.median(pos), floor))
 
 
+def masked_template_fit(flux: np.ndarray, mask: np.ndarray, upper_limits: np.ndarray | None = None) -> dict[str, Any] | None:
+    """Nearest grid template using only the bands in mask (the target's own measured bands).
+
+    Log-flux distance with a free scale: the template is fitted in shape, then scaled to the data.
+    upper_limits (bools): bands whose flux is target + a blended neighbour, i.e. an upper limit on
+    the target; a scaled template brighter than such a band is penalised (one-sided, in dex).
+    Returns class, T_eff, log g and the scaled template flux (to fill the other bands), or None if
+    fewer than MIN_FIT_BANDS usable positive bands."""
+    arr = np.asarray(flux, dtype=np.float64)
+    ul = (np.asarray(upper_limits, dtype=bool) & np.isfinite(arr) & (arr > 0.0)) if upper_limits is not None else None
+    m = np.asarray(mask, dtype=bool) & np.isfinite(arr) & (arr > 0.0)
+    if int(m.sum()) < MIN_FIT_BANDS:
+        return None
+    _init_template_grid()
+    floor = 1e-4
+    ref = float(np.percentile(arr[m], 90))
+    lo = np.log10(np.maximum(arr[m] / ref, floor))
+    best = None
+    for cls_name, teff, log_g, raw in _TEMPLATE_RAW:
+        rm = raw[m]
+        pos = rm[rm > 0.0]
+        if pos.size == 0:
+            continue
+        tref = float(np.percentile(pos, 90))
+        lt = np.log10(np.maximum(rm / tref, floor))
+        d = lo - lt
+        off = float(np.mean(d))
+        dist = float(np.mean((d - off) ** 2))
+        scaled = raw * (ref / tref) * 10.0 ** off
+        if ul is not None and ul.any():
+            excess = np.log10(np.maximum(scaled[ul], 1e-30) / arr[ul])
+            dist += float(np.mean(np.clip(excess, 0.0, None) ** 2))
+        if best is None or dist < best[0]:
+            best = (dist, cls_name, teff, log_g, scaled)
+    if best is None:
+        return None
+    return {"class": best[1], "teff": best[2], "log_g": best[3], "template_flux": best[4],
+            "rms_dex": round(math.sqrt(best[0]), 4), "n_bands": int(m.sum())}
+
+
+def fill_unusable_bands(flux: list[float] | np.ndarray, mask: list[bool] | np.ndarray,
+                        upper_limits: list[bool] | np.ndarray | None = None) -> tuple[np.ndarray, dict[str, Any] | None]:
+    """Spectrum with the bands outside mask replaced by the best template fitted to the bands inside it
+    (and kept below the upper-limit bands); unchanged if the fit is not possible."""
+    arr = np.asarray(flux, dtype=np.float64).copy()
+    m = np.asarray(mask, dtype=bool)
+    fit = masked_template_fit(arr, m, upper_limits)
+    if fit is not None:
+        arr[~m] = fit["template_flux"][~m]
+    return arr, fit
+
+
+# Wavelength windows each diagnostic reads (um); it is reported only if most of its bands are usable.
+_DIAG_WINDOWS = {
+    "w1_ab_mag": [(3.10, 3.60)],
+    "w2_ab_mag": [(4.25, 4.90)],
+    "w1_minus_w2_ab": [(3.10, 3.60), (4.25, 4.90)],
+    "ch4_3_3um_index": [(3.10, 3.60), (3.20, 3.48)],
+    "h2o_2_7um_index": [(2.05, 2.30), (2.55, 2.85), (3.85, 4.25)],
+    "co_4_67um_index": [(3.85, 4.25), (4.55, 4.80)],
+}
+
+
 REFLECTED_LIGHT_NOTE = (
     "0.75-5 um light of a distant planet is reflected sunlight: its shape carries the Sun's colour, not the "
     "body's temperature. Thermal emission peaks near 60-250 um, outside SPHEREx. For a body at d AU the "
@@ -90,8 +156,41 @@ REFLECTED_LIGHT_NOTE = (
 )
 
 
-def analyze_spectrum_physics(flux_ujy: list[float] | np.ndarray) -> dict[str, Any]:
-    """Compute physical diagnostics, molecular absorption depths, and latent embedding."""
+def analyze_spectrum_physics(flux_ujy: list[float] | np.ndarray, mask: list[bool] | np.ndarray | None = None,
+                             upper_limits: list[bool] | np.ndarray | None = None) -> dict[str, Any]:
+    """Compute physical diagnostics, molecular absorption depths, and latent embedding.
+
+    mask (102 bools): the target's own bands (measured by real frames, not blended with a
+    neighbour). The template fit then uses only those bands, the others are filled from the fitted
+    template, and diagnostics whose wavelength windows are mostly outside the mask are null."""
+    if mask is not None:
+        m = np.asarray(mask, dtype=bool)
+        if m.shape != (102,):
+            raise ValueError(f"mask must have 102 entries, got {m.shape}")
+        if not m.all():
+            filled, fit = fill_unusable_bands(flux_ujy, m, upper_limits)
+            if fit is not None:
+                out = analyze_spectrum_physics(filled)
+                reflected = fit["class"] == "planet_x_candidate"
+                out.update(
+                    best_template_class=fit["class"],
+                    teff_k=None if reflected else round(float(fit["teff"]), 1),
+                    log_g_cgs=None if reflected else round(float(fit["log_g"]), 2),
+                    teff_method="not_measurable_reflected_light" if reflected else "template_grid",
+                    temperature_note=(REFLECTED_LIGHT_NOTE if reflected else
+                                      f"nearest template fitted to the {fit['n_bands']} usable bands (measured, not blended); "
+                                      f"rms {fit['rms_dex']} dex"),
+                    bands_used=fit["n_bands"],
+                )
+                lam = WAVELENGTH_UM.astype(np.float64)
+                for key, wins in _DIAG_WINDOWS.items():
+                    # null when any window it reads is mostly outside the usable bands
+                    for lo, hi in wins:
+                        sel = (lam >= lo) & (lam <= hi)
+                        if sel.any() and m[sel].mean() < 0.5:
+                            out[key] = None
+                            break
+                return out
     arr64 = np.asarray(flux_ujy, dtype=np.float64)
     if arr64.shape != (102,):
         raise ValueError(f"Expected 102 spectral bands, got {arr64.shape}")

@@ -26,7 +26,7 @@ from . import __version__
 from .astroclip_zogy import compute_astroclip_alignment
 from .models import get_registry
 from .parser import http_client, mark_upstream_down, run_command_dispatcher, upstream_available
-from .physics_sed import analyze_spectrum_physics
+from .physics_sed import analyze_spectrum_physics, fill_unusable_bands
 
 Lang = Literal["tr", "en"]
 
@@ -200,7 +200,20 @@ def _spectrum_meta(body: dict) -> dict[str, Any]:
     epoch = body.get("epoch")
     oq = pipe.get("observed_quarter")
     nb = pipe.get("n_bands_measured")
+    measured = pipe.get("measured")
+    blended = pipe.get("blended")
+    usable = None
+    upper = None
+    if isinstance(measured, list) and len(measured) == N_BANDS and all(isinstance(v, bool) for v in measured):
+        usable = list(measured)
+        if isinstance(blended, list) and len(blended) == N_BANDS and all(isinstance(v, bool) for v in blended):
+            usable = [a and not b for a, b in zip(measured, blended)]
+            upper = [a and b for a, b in zip(measured, blended)]     # target + neighbour >= target
+    nbl = pipe.get("n_bands_blended")
     return {
+        "usable_mask": usable,
+        "upper_limit_mask": upper,
+        "n_bands_blended": nbl if isinstance(nbl, int) and not isinstance(nbl, bool) and 0 <= nbl <= N_BANDS else None,
         "data_mode": mode if mode in ("fits_archive", "physical_model") else None,
         "epoch": epoch if isinstance(epoch, str) and len(epoch) <= 16 else None,
         "observed_quarter": oq if isinstance(oq, str) and len(oq) <= 16 else None,
@@ -226,11 +239,22 @@ def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
         if flux is None and req.ra is not None and req.dec is not None:
             flux, snr_median, spectrum_source, meta = fetch_archive_spectrum_meta(req.ra, req.dec)
         reg = get_registry()
-        probs, top_class, spec_hint = reg.classify_spectrum(flux)
+        # Real SPHEREx data: classify on the target's own bands. Bands no frame measured, or where a
+        # neighbour inside the aperture dominates, are filled from the template fitted to the rest.
+        usable = meta.get("usable_mask")
+        cnn_flux = flux
+        fill_fit = None
+        if flux is not None and usable is not None and not all(usable):
+            filled, fill_fit = fill_unusable_bands(flux, usable, meta.get("upper_limit_mask"))
+            if fill_fit is not None:
+                cnn_flux = [float(v) for v in filled]
+        probs, top_class, spec_hint = reg.classify_spectrum(cnn_flux)
         img_dict = req.image.model_dump() if req.image is not None else None
         anomaly_score = reg.score_image_anomaly(img_dict, spec_hint=spec_hint)
 
-        physics_diag = analyze_spectrum_physics(flux) if flux is not None else None
+        physics_diag = (analyze_spectrum_physics(flux, mask=usable if fill_fit is not None else None,
+                                                 upper_limits=meta.get("upper_limit_mask") if fill_fit is not None else None)
+                        if flux is not None else None)
         astroclip_zogy = compute_astroclip_alignment(flux, img_dict)
         astroclip_zogy["image_provided"] = img_dict is not None      # without an image the ZOGY numbers are zeros
         if astroclip_zogy.get("is_moving_dipole") and not astroclip_zogy.get("cosmic_ray_veto"):
@@ -255,6 +279,15 @@ def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
             "spectrum_epoch": meta.get("epoch"),
             "spectrum_observed_quarter": meta.get("observed_quarter"),
             "spectrum_bands_measured": meta.get("n_bands_measured"),
+            "spectrum_bands_blended": meta.get("n_bands_blended"),
+            "spectrum_bands_used": fill_fit["n_bands"] if fill_fit is not None else None,
+            "classification_input": ("measured" if fill_fit is None else
+                                     f"{fill_fit['n_bands']} usable bands + template fill ({fill_fit['class']}) for the other "
+                                     f"{N_BANDS - fill_fit['n_bands']}"),
+            # The 1D-CNN was trained on synthetic spectra; on real data it can be confidently wrong. When its
+            # class differs from the physics template fitted to the same bands, say so.
+            "physics_agrees": (None if not physics_diag or not physics_diag.get("best_template_class")
+                               else physics_diag["best_template_class"] == top_class),
         }
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

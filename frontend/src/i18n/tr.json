@@ -12,6 +12,7 @@
     "fieldPosition": "Alan konumu",
     "tools": "Analiz araçları",
     "toolNames": {
+      "examples": "Örnekler",
       "diff": "Görüntü Farkı",
       "spectrum": "102-Bant Tayf",
       "classify": "Yapay Zekâ Sınıflandırma",
@@ -21,6 +22,7 @@
       "candidates": "Aday Havuzu"
     },
     "toolHints": {
+      "examples": "Sınıflara göre gerçek hedefler ve arşivdeki SPHEREx verileri.",
       "diff": "Hareket eden kaynaklar iki dönem arasında ± dipol olarak belirir.",
       "spectrum": "Moleküler soğurma bantlarıyla 0.75–5.0 µm fotometri.",
       "classify": "1D-CNN sınıf olasılıkları ve ViT anomali skoru.",
@@ -296,6 +298,7 @@
     "title": "Klavye Kısayolları",
     "close": "Kapat",
     "items": {
+      "g": "Örnek galerisini aç",
       "d": "Görüntü Farkı Modunu Aç/Kapat (M2)",
       "s": "Shift-and-Stack Panelini Aç (M4)",
       "3": "3B Güneş Sistemini Aç (M5)",
@@ -392,6 +395,27 @@
     "engines": "Motorlar",
     "archiveFrames": "Arşivdeki SPHEREx karesi",
     "years": "yıl",
-    "blendDropped": "{n} kısa dalga noktası çıkarıldı: komşu kaynak karışması (burada Gaia kaynağı yok)"
+    "blendDropped": "{n} kısa dalga noktası çıkarıldı: komşu kaynak karışması (burada Gaia kaynağı yok)",
+    "blendedBands": "Karışan bant",
+    "blendedHint": "Açıklıktaki ışığın merkezi hedefte değil, komşu bir kaynakta olan bantlar (ortanca uzaklık gösterilir).",
+    "blendedLegend": "komşu kaynakla karışık",
+    "classifiedBlended": "{b} bantta açıklığa giren komşu bir kaynak baskın: sınıf ve fizik, hedefin kendi {u} bandıyla hesaplandı; kalan bantlar en uygun şablonla dolduruldu.",
+    "physicsDisagrees": "Sinir ağı sınıflandırıcısı aynı bantlara uydurulan fizik şablonuyla çelişiyor ({t}). Sentetik tayflarla eğitildi: sınıfını dikkatle okuyun."
+  },
+  "examples": {
+    "loading": "Katalog yükleniyor…",
+    "summary": "{n} hedef · {r} hedefte gerçek SPHEREx tayfı",
+    "filterAll": "Tümü",
+    "filterReal": "Gerçek SPHEREx",
+    "empty": "Katalog servisi yanıt vermedi.",
+    "checking": "arşiv kontrol ediliyor…",
+    "unknown": "arşiv durumu bilinmiyor",
+    "realIn": "{q} döneminde gerçek tayf",
+    "bands": "{n} bant",
+    "saturated": "gerçek tayf yok: çok parlak, kareler doymuş",
+    "sparse": "gerçek tayf yok: işaretsiz bant sayısı yetersiz",
+    "noCoverage": "burada henüz SPHEREx karesi yok",
+    "quarters": "Gerçek SPHEREx verisi olan çeyrekler",
+    "footnote": "Dolu çeyreklerde gerçek SPHEREx tayfı var (her hafta çekilen IRSA Level 2 kareleri); boş çeyrekler fiziksel modeli gösterir. SPHEREx, W2 ≈ 11 AB'den parlak kaynaklarda doyar. Konum, özdevinim ve W2 değerleri CatWISE2020 / AllWISE / Gaia DR3'ten."
   }
 }

@@ -87,6 +87,29 @@ def forced_point(img: np.ndarray, x: float, y: float, aperture_px: float, psf_si
             "aperture_px": r, "annulus_px": (r_in, r_out)}
 
 
+def centroid_offset_px(img: np.ndarray, x: float, y: float, aperture_px: float,
+                       annulus_px: tuple[float, float]) -> float:
+    """Distance (px) between the target position and the light-weighted centroid of the
+    background-subtracted flux within aperture_px + 0.5 px of it (NaN if nothing to weigh).
+
+    A source sitting on the target gives ~0; a neighbour inside the aperture pulls the centroid
+    towards itself. Negative pixels are ignored, which biases noise towards 0 (conservative)."""
+    yy, xx = np.mgrid[0:img.shape[0], 0:img.shape[1]]
+    rr = np.hypot(xx - x, yy - y)
+    ann = img[(rr >= annulus_px[0]) & (rr <= annulus_px[1]) & np.isfinite(img)]
+    if ann.size < 8:
+        return float("nan")
+    bkg = float(np.median(ann))
+    win = (rr <= aperture_px + 0.5) & np.isfinite(img)
+    w = np.clip(img[win] - bkg, 0.0, None)
+    tot = float(w.sum())
+    if not tot > 0.0:
+        return float("nan")
+    cx = float((w * xx[win]).sum()) / tot
+    cy = float((w * yy[win]).sum()) / tot
+    return math.hypot(cx - x, cy - y)
+
+
 def absorption_features(flux: np.ndarray, err: np.ndarray, lam: np.ndarray | None = None) -> list[dict]:
     """Band depth of each molecular feature relative to a log-linear continuum interpolated from
     flanking bands (2.5-4 sigma of the feature width away). Detected if depth > 3 sigma and > 5%.

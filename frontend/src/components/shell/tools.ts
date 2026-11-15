@@ -1,6 +1,6 @@
-import { Activity, Brain, Layers, Orbit, Radar, Satellite, Users, type LucideIcon } from "lucide-react";
+import { Activity, Brain, Layers, LayoutGrid, Orbit, Radar, Satellite, Users, type LucideIcon } from "lucide-react";
 
-export type ToolId = "diff" | "spectrum" | "classify" | "crossmatch" | "stack" | "orbit" | "candidates";
+export type ToolId = "examples" | "diff" | "spectrum" | "classify" | "crossmatch" | "stack" | "orbit" | "candidates";
 
 export interface ToolDef {
   id: ToolId;
@@ -9,8 +9,9 @@ export interface ToolDef {
   key?: string;
 }
 
-/** Order follows the discovery workflow: see it move → read it → identify it → recover → forecast → share. */
+/** Order follows the discovery workflow: pick a target → see it move → read it → identify it → recover → forecast → share. */
 export const TOOLS: ToolDef[] = [
+  { id: "examples", icon: LayoutGrid, key: "G" },
   { id: "diff", icon: Layers, key: "D" },
   { id: "spectrum", icon: Activity },
   { id: "classify", icon: Brain },

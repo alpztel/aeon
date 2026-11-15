@@ -25,6 +25,7 @@ def make_spherex_file(path: Path, ra: float, dec: float, *, n: int = 48, date: s
                       detector: int = 3, wave_um: float = 2.3647, wave_slope_um_per_px: float = -0.0005,
                       bandwidth_um: float = 0.0586, rot_deg: float = 162.5, background_mjysr: float = 0.15,
                       source: tuple[float, float, float] | None = None, psf_fwhm_arcsec: float = 7.45,
+                      extra_sources: list[tuple[float, float, float]] | None = None,
                       flags: dict[tuple[int, int], int] | None = None, noise_mjysr: float = 0.0,
                       seed: int = 0, extra_hdus: bool = True) -> Path:
     """Write a SPHEREx-like MEF.
@@ -41,7 +42,7 @@ def make_spherex_file(path: Path, ra: float, dec: float, *, n: int = 48, date: s
     pc = np.array([[-s * math.cos(th), s * math.sin(th)], [s * math.sin(th), s * math.cos(th)]])
 
     img = np.full((n, n), background_mjysr, dtype=np.float64)
-    if source is not None:
+    for src in [s for s in [source, *(extra_sources or [])] if s is not None]:
         from astropy.wcs import WCS
 
         w = WCS(naxis=2)
@@ -50,11 +51,11 @@ def make_spherex_file(path: Path, ra: float, dec: float, *, n: int = 48, date: s
         w.wcs.crpix = [cx + 1, cy + 1]
         w.wcs.pc = pc
         w.wcs.cdelt = [1.0, 1.0]
-        sx, sy = w.all_world2pix([[source[0], source[1]]], 0)[0]
+        sx, sy = w.all_world2pix([[src[0], src[1]]], 0)[0]
         sig = psf_fwhm_arcsec / 2.3548 / SCALE
         yy, xx = np.mgrid[0:n, 0:n]
         g = np.exp(-((xx - sx) ** 2 + (yy - sy) ** 2) / (2 * sig * sig)) / (2 * math.pi * sig * sig)
-        img += source[2] * g * MJYSR_PER_UJY_PX
+        img += src[2] * g * MJYSR_PER_UJY_PX
     if noise_mjysr:
         img += rng.normal(0.0, noise_mjysr, img.shape)
 

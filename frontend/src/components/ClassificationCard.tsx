@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle, Cpu, RotateCw, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n/context";
-import { DataFacts, DataModeBadge, num, signed } from "@/components/DataFacts";
+import { DataFacts, DataModeBadge, fill, num, signed } from "@/components/DataFacts";
 import {
   ApiError,
   classifyTarget,
@@ -194,6 +194,19 @@ export function ClassificationCard({
             {snr !== null && `${result.spectrum_data_mode ? "" : " · "}${dict.ai.snrMedian} ${snr.toFixed(1)}`}
           </p>
         </div>
+      )}
+      {typeof result.spectrum_bands_blended === "number" && result.spectrum_bands_blended > 0 && (
+        <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {fill(dict.data.classifiedBlended, {
+            b: result.spectrum_bands_blended,
+            u: typeof result.spectrum_bands_used === "number" ? result.spectrum_bands_used : "—",
+          })}
+        </p>
+      )}
+      {result.physics_agrees === false && physics?.best_template_class && ALL_CLASSES.includes(physics.best_template_class) && (
+        <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {fill(dict.data.physicsDisagrees, { t: dict.classes[physics.best_template_class] })}
+        </p>
       )}
       {result.spectrum_data_mode === "physical_model" && (
         <p className="mb-3 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs text-slate-300">
