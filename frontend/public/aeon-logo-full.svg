@@ -1,107 +1,91 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 180" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" fill="none">
   <defs>
-    <radialGradient id="full-glow" cx="50%" cy="50%" r="55%">
-      <stop offset="0%" stop-color="#FF5A1F" stop-opacity="0.2" />
-      <stop offset="55%" stop-color="#9DB4F0" stop-opacity="0.07" />
-      <stop offset="100%" stop-color="#050506" stop-opacity="0" />
-    </radialGradient>
-    <linearGradient id="full-orbit" x1="26" y1="118" x2="154" y2="62" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#9DB4F0" stop-opacity="0.25" />
-      <stop offset="55%" stop-color="#9DB4F0" stop-opacity="0.95" />
+    <linearGradient id="aeon-orbit-stroke" x1="112" y1="128" x2="518" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ECE8E3" stop-opacity="0.95" />
+      <stop offset="42%" stop-color="#9DB4F0" stop-opacity="1" />
+      <stop offset="82%" stop-color="#ECE8E3" stop-opacity="1" />
       <stop offset="100%" stop-color="#FF5A1F" stop-opacity="1" />
     </linearGradient>
-    <linearGradient id="full-cone" x1="90" y1="34" x2="90" y2="142" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ECE8E3" stop-opacity="1" />
-      <stop offset="100%" stop-color="#ECE8E3" stop-opacity="0.35" />
-    </linearGradient>
-    <linearGradient id="lvf-spectrum" x1="200" y1="0" x2="540" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#7C95E6" />
-      <stop offset="28%" stop-color="#9DB4F0" />
-      <stop offset="55%" stop-color="#ECE8E3" />
-      <stop offset="80%" stop-color="#FF7A45" />
-      <stop offset="100%" stop-color="#FF5A1F" />
-    </linearGradient>
+    <radialGradient id="px-node-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FF5A1F" stop-opacity="0.95" />
+      <stop offset="45%" stop-color="#FF5A1F" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#FF5A1F" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="astrometric-ticks" width="12" height="10" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="5" stroke="#ECE8E3" stroke-opacity="0.22" stroke-width="1" />
+      <line x1="6" y1="0" x2="6" y2="3" stroke="#ECE8E3" stroke-opacity="0.14" stroke-width="1" />
+    </pattern>
   </defs>
 
-  <!-- Obsidian Canvas Background -->
-  <rect width="680" height="180" rx="20" fill="#050506" />
-  <rect x="1" y="1" width="678" height="178" rx="19" stroke="#ECE8E3" stroke-opacity="0.1" />
+  <!-- Deep Obsidian Space Canvas -->
+  <rect width="720" height="220" rx="18" fill="#050506" />
+  <rect x="1" y="1" width="718" height="218" rx="17" stroke="#ECE8E3" stroke-opacity="0.1" />
 
-  <!-- Left Emblem: Orbital Dipole & SPHEREx Cone -->
-  <g transform="translate(26, 26)">
-    <circle cx="64" cy="64" r="58" fill="url(#full-glow)" />
-    <circle cx="64" cy="64" r="52" stroke="#ECE8E3" stroke-opacity="0.22" stroke-width="1.5" />
-    <circle cx="64" cy="64" r="40" stroke="#9DB4F0" stroke-opacity="0.18" stroke-width="1" stroke-dasharray="3 5" />
+  <!-- ================= CONCEPT 2 CUSTOM GEOMETRIC WORDMARK: A E O N ================= -->
+  <!-- Letter A -->
+  <path
+    d="M92 136L136 48H154L198 136H179L145 65L111 136H92Z"
+    fill="#ECE8E3"
+  />
 
-    <!-- 4 Survey Epoch Ticks -->
-    <line x1="64" y1="6" x2="64" y2="15" stroke="#ECE8E3" stroke-opacity="0.65" stroke-width="2" stroke-linecap="round" />
-    <line x1="122" y1="64" x2="113" y2="64" stroke="#ECE8E3" stroke-opacity="0.65" stroke-width="2" stroke-linecap="round" />
-    <line x1="64" y1="113" x2="64" y2="122" stroke="#ECE8E3" stroke-opacity="0.65" stroke-width="2" stroke-linecap="round" />
-    <line x1="6" y1="64" x2="15" y2="64" stroke="#ECE8E3" stroke-opacity="0.65" stroke-width="2" stroke-linecap="round" />
+  <!-- Letter E -->
+  <path
+    d="M236 48H318V63H254V85H308V100H254V121H318V136H236V48Z"
+    fill="#ECE8E3"
+  />
 
-    <!-- SPHEREx Conical Scan 'A' Monogram -->
-    <path
-      d="M64 22L35 98M64 22L93 98"
-      stroke="url(#full-cone)"
-      stroke-width="5.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <line x1="45" y1="73" x2="83" y2="73" stroke="#ECE8E3" stroke-opacity="0.85" stroke-width="3.5" stroke-linecap="round" />
+  <!-- Letter O -->
+  <circle
+    cx="412"
+    cy="92"
+    r="37"
+    stroke="#ECE8E3"
+    stroke-width="16"
+  />
 
-    <!-- Inclined 520 AU Planet X Orbit -->
-    <ellipse
-      cx="64"
-      cy="66"
-      rx="54"
-      ry="21"
-      transform="rotate(-24 64 66)"
-      stroke="url(#full-orbit)"
-      stroke-width="3.2"
-    />
+  <!-- Inclined Elliptical Orbit Ring around O + Sweeping Trajectory from A through E -->
+  <path
+    d="M110 124C168 96 238 89 310 91"
+    stroke="url(#aeon-orbit-stroke)"
+    stroke-width="6.5"
+    stroke-linecap="round"
+  />
+  <ellipse
+    cx="412"
+    cy="92"
+    rx="68"
+    ry="22"
+    transform="rotate(-36 412 92)"
+    stroke="url(#aeon-orbit-stroke)"
+    stroke-width="6"
+  />
 
-    <!-- Negative / Positive Dipole Nodes -->
-    <circle cx="24" cy="84" r="5" fill="#050506" stroke="#9DB4F0" stroke-width="2.75" />
-    <circle cx="104" cy="48" r="8" fill="#FF5A1F" />
-    <circle cx="104" cy="48" r="13" stroke="#FF5A1F" stroke-opacity="0.45" stroke-width="1.5" />
-    <circle cx="64" cy="54" r="3" fill="#ECE8E3" />
-  </g>
+  <!-- Planet X Perihelion Discovery Node on the Upper-Right Orbital Apex -->
+  <circle cx="461" cy="56" r="15" fill="url(#px-node-glow)" />
+  <circle cx="461" cy="56" r="5.5" fill="#FF5A1F" />
 
-  <!-- Vertical Technical Divider -->
-  <line x1="178" y1="38" x2="178" y2="142" stroke="#ECE8E3" stroke-opacity="0.12" stroke-width="1" />
+  <!-- Letter N -->
+  <path
+    d="M518 136V48H535L596 112V48H613V136H596L535 72V136H518Z"
+    fill="#ECE8E3"
+  />
 
-  <!-- Custom Geometric Wordmark: A E O N -->
-  <g fill="none" stroke="#ECE8E3" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
-    <!-- A (with signal orange apex dot) -->
-    <path d="M206 106L228 48L250 106" />
-    <line x1="214" y1="87" x2="242" y2="87" stroke-width="4.5" />
-    <!-- E (modern aerospace open E) -->
-    <path d="M322 50H284V104H322" />
-    <line x1="284" y1="77" x2="314" y2="77" stroke="#9DB4F0" stroke-width="4.5" />
-    <!-- O (astrometric ring with Planet X orbital node) -->
-    <circle cx="382" cy="77" r="28" />
-    <circle cx="402" cy="57" r="5.5" fill="#FF5A1F" stroke="#050506" stroke-width="2" />
-    <!-- N -->
-    <path d="M444 105V49L488 105V49" />
-  </g>
-
-  <!-- 6-Detector SPHEREx LVF Spectral Strip (0.75 - 5.0 um) -->
-  <rect x="204" y="122" width="44" height="3" rx="1.5" fill="#7C95E6" />
-  <rect x="254" y="122" width="44" height="3" rx="1.5" fill="#9DB4F0" />
-  <rect x="304" y="122" width="44" height="3" rx="1.5" fill="#CDD9FB" />
-  <rect x="354" y="122" width="44" height="3" rx="1.5" fill="#ECE8E3" />
-  <rect x="404" y="122" width="44" height="3" rx="1.5" fill="#FF7A45" />
-  <rect x="454" y="122" width="44" height="3" rx="1.5" fill="#FF5A1F" />
+  <!-- ================= PRECISION ASTROMETRIC GRADUATED RULE ================= -->
+  <line x1="92" y1="158" x2="613" y2="158" stroke="#ECE8E3" stroke-opacity="0.28" stroke-width="1" />
+  <rect x="92" y="158" width="521" height="8" fill="url(#astrometric-ticks)" />
 
   <!-- Technical Subtitle -->
   <text
-    x="204"
-    y="144"
-    fill="#8E877F"
-    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-    font-size="11.5"
-    letter-spacing="3.6"
+    x="352"
+    y="186"
+    text-anchor="middle"
+    fill="#ECE8E3"
+    fill-opacity="0.88"
+    font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    font-size="13.5"
+    font-weight="500"
+    letter-spacing="4.2"
   >
-    ASTROPHYSICAL DISCOVERY OS · 0.75–5.0 µm
+    ASTROPHYSICAL DISCOVERY OS · SPHEREx &amp; PLANET X
   </text>
 </svg>

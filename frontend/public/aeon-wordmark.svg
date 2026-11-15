@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" fill="none">
+  <defs>
+    <linearGradient id="wordmark-orbit" x1="28" y1="96" x2="434" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ECE8E3" stop-opacity="0.95" />
+      <stop offset="42%" stop-color="#9DB4F0" stop-opacity="1" />
+      <stop offset="82%" stop-color="#ECE8E3" stop-opacity="1" />
+      <stop offset="100%" stop-color="#FF5A1F" stop-opacity="1" />
+    </linearGradient>
+    <radialGradient id="wordmark-px-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FF5A1F" stop-opacity="0.95" />
+      <stop offset="45%" stop-color="#FF5A1F" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#FF5A1F" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- A -->
+  <path d="M12 104L56 16H74L118 104H99L65 33L31 104H12Z" fill="#ECE8E3" />
+  <!-- E -->
+  <path d="M156 16H238V31H174V53H228V68H174V89H238V104H156V16Z" fill="#ECE8E3" />
+  <!-- O -->
+  <circle cx="332" cy="60" r="37" stroke="#ECE8E3" stroke-width="16" />
+  <!-- Sweeping Trajectory from A through E + Inclined Elliptical Orbit around O -->
+  <path
+    d="M30 92C88 64 158 57 230 59"
+    stroke="url(#wordmark-orbit)"
+    stroke-width="6.5"
+    stroke-linecap="round"
+  />
+  <ellipse
+    cx="332"
+    cy="60"
+    rx="68"
+    ry="22"
+    transform="rotate(-36 332 60)"
+    stroke="url(#wordmark-orbit)"
+    stroke-width="6"
+  />
+  <!-- Planet X Perihelion Discovery Node -->
+  <circle cx="381" cy="24" r="14" fill="url(#wordmark-px-glow)" />
+  <circle cx="381" cy="24" r="5.5" fill="#FF5A1F" />
+  <!-- N -->
+  <path d="M438 104V16H455L516 80V16H533V104H516L455 40V104H438Z" fill="#ECE8E3" />
+</svg>
