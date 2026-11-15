@@ -166,6 +166,18 @@ def test_faint_short_wavelength_flux_is_not_called_a_blend(client):
     assert "blend_suspected" not in body["provenance"]["spherex"]
 
 
+@respx.mock
+def test_bands_the_backend_flags_as_blended_stay_out_of_the_sed(client):
+    body_ = _wise0855_like(20.0)
+    body_["pipeline"]["blended"] = [w < 3.3 for w in body_["wavelength_um"]]
+    body_["pipeline"]["n_bands_blended"] = sum(body_["pipeline"]["blended"])
+    respx.get("http://localhost:8000/api/v1/spectrum").mock(return_value=Response(200, json=body_))
+    body = client.get("/api/v1/missions/crossmatch", params={"ra": 133.79513, "dec": -7.24514}).json()
+    spx = [pt for pt in body["sed"] if pt["survey"] == "SPHEREx"]
+    assert spx and min(pt["wavelength_um"] for pt in spx) >= 3.3
+    assert body["provenance"]["spherex"]["n_bands_blended"] == body_["pipeline"]["n_bands_blended"]
+
+
 def test_blend_check_needs_a_gaia_non_detection():
     from app.crossmatch import _optical_blend_check
     pts = [{"wavelength_um": w, "flux_ujy": 500.0, "flux_err_ujy": 10.0, "survey": "SPHEREx"} for w in (0.8, 1.0, 2.0, 3.0, 4.0)]

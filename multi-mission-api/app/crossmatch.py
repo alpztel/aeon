@@ -152,6 +152,10 @@ def _spherex_sed_points(spec: dict[str, Any] | None) -> tuple[list[dict[str, Any
     measured = pipe.get("measured")
     if not isinstance(measured, list) or len(measured) != len(flx):
         measured = [True] * len(flx)
+    # Bands the backend found centred on a neighbour inside the aperture are not the target's light.
+    blended = pipe.get("blended")
+    if isinstance(blended, list) and len(blended) == len(flx):
+        measured = [m is True and b is not True for m, b in zip(measured, blended)]
     pts = []
     for idx, (lam, f_val) in enumerate(zip(wls, flx)):
         try:
@@ -166,7 +170,9 @@ def _spherex_sed_points(spec: dict[str, Any] | None) -> tuple[list[dict[str, Any
         pts.append({"wavelength_um": round(lam_f, 4), "flux_ujy": round(f_f, 4),
                     "flux_err_ujy": round(e_f, 4), "survey": "SPHEREx"})
     note.update(status="real", n_points=len(pts),
-                rule=f"measured bands with S/N >= {SED_MIN_SNR:g} of the real-data epoch")
+                rule=f"measured, unblended bands with S/N >= {SED_MIN_SNR:g} of the real-data epoch")
+    if isinstance(pipe.get("n_bands_blended"), int):
+        note["n_bands_blended"] = pipe["n_bands_blended"]
     return pts, note
 
 

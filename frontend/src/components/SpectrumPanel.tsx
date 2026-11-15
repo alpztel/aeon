@@ -112,6 +112,8 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
       const pipe = spectrumPipeline(spectrum);
       const measured =
         pipe.data_mode === "fits_archive" && pipe.measured?.length === spectrum.flux_ujy.length ? pipe.measured : null;
+      // Measured but centred on a neighbour inside the aperture: not the target's light (amber diamonds).
+      const blendedBands = measured && pipe.blended?.length === measured.length ? pipe.blended : null;
 
       const traces: import("plotly.js-dist-min").PlotData[] = [
         {
@@ -123,9 +125,9 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
           line: { color: "#9db4f0", width: 2 },
           marker: measured
             ? {
-                color: measured.map((m) => (m ? "#9db4f0" : "rgba(255,255,255,0.35)")),
-                symbol: measured.map((m) => (m ? "circle" : "circle-open")),
-                size: measured.map((m) => (m ? 5 : 6)),
+                color: measured.map((m, i) => (blendedBands?.[i] ? "#f5a524" : m ? "#9db4f0" : "rgba(255,255,255,0.35)")),
+                symbol: measured.map((m, i) => (blendedBands?.[i] ? "diamond-open" : m ? "circle" : "circle-open")),
+                size: measured.map((m, i) => (blendedBands?.[i] ? 7 : m ? 5 : 6)),
               }
             : { color: "#9db4f0", size: 4 },
           error_y: {
@@ -476,14 +478,24 @@ export function SpectrumPanel({ coords, epoch, selectedObject }: SpectrumPanelPr
             },
             dateRange(pipe.obs_date_range) ? { label: dict.data.obsDates, value: dateRange(pipe.obs_date_range) } : null,
             num(pipe.aperture_px, 2) !== null && { label: dict.data.aperture, value: `${num(pipe.aperture_px, 2)} px` },
+            typeof pipe.n_bands_blended === "number" && pipe.n_bands_blended > 0
+              ? {
+                  label: dict.data.blendedBands,
+                  value: `${pipe.n_bands_blended}${num(pipe.blend_offset_arcsec, 1) !== null ? ` · ${num(pipe.blend_offset_arcsec, 1)}″` : ""}`,
+                  tone: "warn",
+                  title: dict.data.blendedHint,
+                }
+              : null,
           ]}
         />
       )}
-      {pipe.data_mode === "fits_archive" && pipe.measured && pipe.measured.some((m) => !m) && (
-        <p className="mt-2 text-[11px] text-slate-500">
-          ● {dict.data.measured} · ○ {dict.data.interpolated}
-        </p>
-      )}
+      {pipe.data_mode === "fits_archive" &&
+        ((pipe.measured && pipe.measured.some((m) => !m)) || (pipe.n_bands_blended ?? 0) > 0) && (
+          <p className="mt-2 text-[11px] text-slate-500">
+            ● {dict.data.measured} · ○ {dict.data.interpolated}
+            {(pipe.n_bands_blended ?? 0) > 0 ? ` · ◇ ${dict.data.blendedLegend}` : ""}
+          </p>
+        )}
 
       {/* Absorption Feature Badges */}
       {spectrum?.absorption_features && spectrum.absorption_features.length > 0 && (
