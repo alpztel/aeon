@@ -54,7 +54,8 @@ def _num(v: str | None) -> float | None:
 
 def gaia_cone(ra: float, dec: float, radius_arcsec: float, top: int = 5, timeout: float = TIMEOUT_S) -> tuple[list[dict[str, Any]], str]:
     q = (
-        f"SELECT TOP {int(top)} source_id, ra, dec, parallax, pmra, pmdec, phot_g_mean_mag, phot_bp_mean_mag, "
+        f"SELECT TOP {int(top)} source_id, ra, dec, parallax, parallax_error, pmra, pmdec, radial_velocity, "
+        f"radial_velocity_error, phot_g_mean_mag, phot_bp_mean_mag, "
         f"phot_rp_mean_mag, DISTANCE(POINT(ra, dec), POINT({ra:.7f}, {dec:.7f})) * 3600 AS sep_arcsec "
         f"FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT(ra, dec), CIRCLE({ra:.7f}, {dec:.7f}, {radius_arcsec / 3600.0:.8f})) "
         f"ORDER BY sep_arcsec"
@@ -66,7 +67,10 @@ def gaia_cone(ra: float, dec: float, radius_arcsec: float, top: int = 5, timeout
             "source_id": r["source_id"], "ra": _num(r["ra"]), "dec": _num(r["dec"]),
             "phot_g_mean_mag": _num(r["phot_g_mean_mag"]), "phot_bp_mean_mag": _num(r["phot_bp_mean_mag"]),
             "phot_rp_mean_mag": _num(r["phot_rp_mean_mag"]), "parallax_mas": _num(r["parallax"]),
+            "parallax_error_mas": _num(r.get("parallax_error")),
             "pmra_mas_yr": _num(r["pmra"]), "pmdec_mas_yr": _num(r["pmdec"]),
+            "radial_velocity_km_s": _num(r.get("radial_velocity")),
+            "radial_velocity_error_km_s": _num(r.get("radial_velocity_error")),
             "sep_arcsec": _num(r["sep_arcsec"]), "catalog": "Gaia DR3 (J2016.0)",
         })
     return out, q

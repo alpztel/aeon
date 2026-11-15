@@ -27,6 +27,7 @@ from typing import Any
 
 import httpx
 
+from . import age_mass, kinematics, validation
 from .sed_fitter import compute_kete_kbmod_kinematics, fit_multi_mission_sed
 
 FIXTURES_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "crossmatch_fixtures.json"
@@ -240,16 +241,73 @@ def _query_live_archives(ra: float, dec: float, radius_arcsec: float) -> tuple[l
     return results["gaia"][:1], results["wise"][:1], results["mast"], prov
 
 
+CORE_ORBIT_TIMEOUT_S = float(os.environ.get("AEON_CORE_ORBIT_TIMEOUT_S", "20"))
+DEGRADED_TTL_SEC = 1800.0      # a result missing SIMBAD or the orbit integrator is retried after 30 min
+
+
+def _aeon_astrometry(ra: float, dec: float, gaia_rows: list[dict[str, Any]], matched: dict[str, Any]) -> dict[str, Any] | None:
+    """The astrometry AEON's own chain has for the source, with the origin of every value.
+
+    Gaia DR3 (parallax, proper motion, radial velocity when Gaia measured one) if the cross-match
+    found the source with a parallax; otherwise the catalog entry the spectrum was matched to.
+    No radial velocity is ever filled in."""
+    g = gaia_rows[0] if gaia_rows else {}
+    plx, pmra, pmdec = g.get("parallax_mas"), g.get("pmra_mas_yr"), g.get("pmdec_mas_yr")
+    if isinstance(plx, (int, float)) and plx > 0 and pmra is not None and pmdec is not None:
+        d = 1000.0 / float(plx)
+        err = g.get("parallax_error_mas")
+        rv = g.get("radial_velocity_km_s")
+        return {
+            "ra": float(g.get("ra") if g.get("ra") is not None else ra), "dec": float(g.get("dec") if g.get("dec") is not None else dec),
+            "distance_pc": d, "distance_err_pc": d * float(err) / float(plx) if isinstance(err, (int, float)) else None,
+            "distance_source": f"Gaia DR3 parallax (source {g.get('source_id')})",
+            "pm_ra_cosdec_mas_yr": float(pmra), "pm_dec_mas_yr": float(pmdec), "pm_source": "Gaia DR3",
+            "radial_velocity_km_s": float(rv) if isinstance(rv, (int, float)) else None,
+            "rv_source": "Gaia DR3 radial_velocity" if isinstance(rv, (int, float)) else None,
+        }
+    d_pc = matched.get("distance_pc")
+    pmr, pmd = matched.get("pm_ra_cosdec_arcsec_yr"), matched.get("pm_dec_arcsec_yr")
+    if isinstance(d_pc, (int, float)) and d_pc > 0 and isinstance(pmr, (int, float)) and isinstance(pmd, (int, float)):
+        src = f"AEON catalog entry {matched.get('id')}"
+        return {"ra": ra, "dec": dec, "distance_pc": float(d_pc), "distance_err_pc": None, "distance_source": src,
+                "pm_ra_cosdec_mas_yr": float(pmr) * 1000.0, "pm_dec_mas_yr": float(pmd) * 1000.0, "pm_source": src,
+                "radial_velocity_km_s": None, "rv_source": None}
+    return None
+
+
+def _core_galactic_orbit(astro: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Galactic orbit and solar encounter from the core backend (galpy); None if it cannot answer."""
+    need = ("ra", "dec", "distance_pc", "pm_ra_cosdec_mas_yr", "pm_dec_mas_yr")
+    if not astro or any(not isinstance(astro.get(k), (int, float)) for k in need):
+        return None
+    core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
+    body = {"galactic": {k: astro[k] for k in need} | {"radial_velocity_km_s": astro.get("radial_velocity_km_s")}}
+    try:
+        with httpx.Client(timeout=CORE_ORBIT_TIMEOUT_S, verify=not core_url.startswith("http://")) as client:
+            resp = client.post(f"{core_url}/api/v1/orbit/simulate", json=body)
+            if resp.status_code != 200:
+                return None
+            gal = resp.json().get("galactic")
+    except Exception:
+        return None
+    if not isinstance(gal, dict) or not isinstance(gal.get("summary"), dict):
+        return None
+    out = {k: gal.get(k) for k in ("engine", "potential", "rv_status", "rv_note", "span_myr", "encounter_window_kyr", "summary")}
+    out["encounters"] = [{k: e.get(k) for k in ("rv_km_s", "status", "t_min_kyr", "d_min_pc")} for e in gal.get("encounters") or []]
+    out["orbits"] = [{k: o.get(k) for k in ("rv_km_s", "r_peri_kpc", "r_apo_kpc", "z_max_kpc", "eccentricity")} for o in gal.get("orbits") or []]
+    return out
+
+
 def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[str, Any]:
     """Perform Gaia DR3 + WISE + MAST crossmatch with 24h disk cache and archival fixture fallback."""
     cache_key = hashlib.sha256(f"{ra:.5f}_{dec:.5f}_{radius_arcsec:.2f}".encode()).hexdigest()[:16]
-    # "xm2_": results cached before the SPHEREx fixes (model spectra, 2026-Q1, 2.5 s drops) are ignored
-    cache_file = CACHE_DIR / f"xm2_{cache_key}.json"
+    # "xm3_": results cached before the age / orbit / validation blocks existed are ignored
+    cache_file = CACHE_DIR / f"xm3_{cache_key}.json"
 
     if not os.environ.get("PYTEST_CURRENT_TEST") and cache_file.is_file():
         try:
             cached = json.loads(cache_file.read_text(encoding="utf-8"))
-            if time.time() - float(cached.get("_ts", 0)) < CACHE_TTL_SEC:
+            if time.time() - float(cached.get("_ts", 0)) < float(cached.pop("_ttl", CACHE_TTL_SEC)):
                 cached.pop("_ts", None)
                 return cached
         except Exception:
@@ -288,6 +346,44 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
     if dist_au is None and fixture and fixture.get("id") == "px-2026-09":
         dist_au = 520.0
 
+    sed_physics = fit_multi_mission_sed(sed, distance_au=dist_au)
+    kin = compute_kete_kbmod_kinematics(ra, dec, parallax_mas=parallax_mas, distance_au=dist_au)
+
+    # Stage 2-4: space velocity, age and mass, Galactic orbit, validation against SIMBAD / literature.
+    target_id = matched.get("id") or (fixture or {}).get("id")
+    object_class = matched.get("object_class")
+    solar_system = dist_au is not None or object_class == "planet_x_candidate"
+    astro = None if solar_system else _aeon_astrometry(ra, dec, gaia_rows, matched)
+    if solar_system:
+        galactic = {"status": "not_applicable", "reason": "solar-system body: it orbits the Sun, not the Galactic centre"}
+    else:
+        galactic = kinematics.space_velocity(astro)
+    kin["galactic"] = galactic
+    ages = age_mass.estimate(sed=sed, sed_physics=sed_physics, gaia_rows=gaia_rows, wise_rows=wise_rows,
+                             spherex_points=spherex_points, astrometry=astro or {}, galactic=galactic,
+                             object_class=object_class, distance_au=dist_au if solar_system else None)
+    extragalactic = object_class == "high_z_galaxy"
+    core_up = spherex_status == "ok"          # a core backend that did not answer the spectrum is not asked again
+    orbit = _core_galactic_orbit(astro) if core_up and not (solar_system or extragalactic) else None
+    if solar_system:
+        galactic_orbit: dict[str, Any] = {"status": "not_applicable", "regime": "solar_system",
+                                          "reason": "solar-system body: use the heliocentric REBOUND orbit (/api/v1/orbit/simulate)"}
+        checks: dict[str, Any] = {"status": "not_applicable", "reason": "solar-system candidate: no stellar reference to compare with"}
+    elif extragalactic:
+        galactic_orbit = {"status": "not_applicable", "reason": "extragalactic source: no orbit in the Milky Way"}
+        checks = {"status": "not_applicable", "reason": "extragalactic source: the stellar age / orbit chain does not apply"}
+    else:
+        if orbit is not None:
+            galactic_orbit = {"status": "ok", "regime": "galactic", **orbit}
+        elif galactic.get("status") == "ok":
+            galactic_orbit = {"status": "unavailable", "regime": "galactic", "reason": "the orbit integrator (core backend) did not answer"}
+        else:
+            galactic_orbit = {"status": "unmeasured", "regime": "galactic", "reason": galactic.get("reason")}
+        checks = validation.build(target_id=target_id, name=matched.get("name") or (fixture or {}).get("name"), ra=ra, dec=dec,
+                                  aeon_astrometry=astro, aeon_galactic=galactic, age_mass=ages, aeon_orbit=orbit,
+                                  spherex_note=spherex_note,
+                                  orbit_fn=_core_galactic_orbit if core_up else (lambda _a: None))
+
     result: dict[str, Any] = {
         "gaia": gaia_rows,
         "wise": wise_rows,
@@ -295,14 +391,18 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
         "unmatched_ir_candidate": unmatched_ir,
         "mast_overlap": mast_rows,
         "provenance": provenance,
-        "sed_physics": fit_multi_mission_sed(sed, distance_au=dist_au),
-        "kinematics": compute_kete_kbmod_kinematics(ra, dec, parallax_mas=parallax_mas, distance_au=dist_au),
+        "sed_physics": sed_physics,
+        "kinematics": kin,
+        "age_mass": ages,
+        "galactic_orbit": galactic_orbit,
+        "validation": checks,
     }
 
     if not os.environ.get("PYTEST_CURRENT_TEST") and spherex_status == "ok":   # never keep a degraded answer
+        degraded = galactic_orbit.get("status") == "unavailable" or (checks.get("simbad") or {}).get("status") == "unavailable"
         try:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            to_save = dict(result, _ts=time.time())
+            to_save = dict(result, _ts=time.time(), _ttl=DEGRADED_TTL_SEC if degraded else CACHE_TTL_SEC)
             cache_file.write_text(json.dumps(to_save, ensure_ascii=False), encoding="utf-8")
         except Exception:
             pass
