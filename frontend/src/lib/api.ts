@@ -70,6 +70,28 @@ export class ApiError extends Error {
   }
 }
 
+/** FastAPI sends `detail` as a string (HTTPException) or as a list of validation errors. */
+function describeErrorDetail(detail: unknown): string | null {
+  if (typeof detail === "string" && detail) return detail.slice(0, 300);
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => (d && typeof d === "object" && typeof (d as { msg?: unknown }).msg === "string" ? (d as { msg: string }).msg : null))
+      .filter((m): m is string => Boolean(m));
+    if (msgs.length) return msgs.join("; ").slice(0, 300);
+  }
+  return null;
+}
+
+/** True when the service itself could not answer (network error, timeout, gateway/5xx), not when it rejected the request. */
+export function isServiceDown(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return true;
+  return err.status === 0 || err.status === 408 || err.status >= 500;
+}
+
+// Worth one automatic retry: the request never reached the service or the gateway had no upstream.
+const TRANSIENT_STATUS = new Set([0, 502, 503, 504]);
+const RETRY_DELAY_MS = 1_200;
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -87,8 +109,8 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
     if (!res.ok) {
       let detail = `HTTP ${res.status}`;
       try {
-        const body = (await res.json()) as { detail?: string };
-        if (body?.detail) detail = body.detail;
+        const body = (await res.json()) as { detail?: unknown };
+        detail = describeErrorDetail(body?.detail) ?? detail;
       } catch {
         // Ignore JSON parse failure on error body
       }
@@ -127,7 +149,7 @@ export const DEMO_TARGETS: readonly DemoTargetMeta[] = [
     dec: -7.2422291,
     refRa: 133.7586977,
     refDec: -7.2420576,
-    epoch: "2026-Q1",
+    epoch: "2026-Q2", // SPHEREx visited WISE 0855 in Q2 and Q4: open on real data
     epochCoords: {
       "2026-Q1": { ra: 133.7595813, dec: -7.2422291 },
       "2026-Q2": { ra: 133.7589286, dec: -7.2420981 },
@@ -642,48 +664,35 @@ export async function classifyTarget(params: {
   dec?: number;
   epoch?: Epoch;
 }): Promise<{ data: AiClassifyResponse; fromCache: boolean }> {
-  let fluxUjy = params.flux_ujy;
-  let skyImage = params.image;
-
-  // Pre-resolve spectrum + cutout on the client when only (ra, dec) are supplied.
-  // This avoids ai-engine's 2.5s upstream timeout on uncached FITS archive spectra
-  // and ensures PatchAnomalyViT + AstroCLIP-ZOGY receive the real 2D sky cutout.
-  if (
-    params.ra !== undefined &&
-    params.dec !== undefined &&
-    (!fluxUjy || !skyImage)
-  ) {
-    const ep = params.epoch ?? "2026-Q1";
-    const [specRes, cutRes] = await Promise.all([
-      fluxUjy
-        ? Promise.resolve(null)
-        : getSpectrum({ ra: params.ra, dec: params.dec, epoch: ep }).catch(() => null),
-      skyImage
-        ? Promise.resolve(null)
-        : getSkyCutout({ ra: params.ra, dec: params.dec, epoch: ep, size_px: 32 }).catch(
-            () => null
-          ),
-    ]);
-    if (!fluxUjy && specRes?.data?.flux_ujy?.length === 102) {
-      fluxUjy = specRes.data.flux_ujy;
-    }
-    if (!skyImage && cutRes?.data) {
-      skyImage = cutRes.data;
-    }
-  }
-
-  const payload: Record<string, unknown> = {};
-  if (fluxUjy) payload.flux_ujy = fluxUjy;
-  if (skyImage) payload.image = skyImage;
-  if (params.ra !== undefined) payload.ra = params.ra;
-  if (params.dec !== undefined) payload.dec = params.dec;
-
-  const data = await fetchJson<AiClassifyResponse>("/api/v1/ai/classify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+  // No offline substitute: class probabilities and anomaly scores only come from the ai-engine.
+  // The engine needs a spectrum, an image or a sky position; given only (ra, dec) it reads the
+  // spectrum from the archive itself. Leaving ra/dec out of the body made every call a 422.
+  const body = JSON.stringify({
+    flux_ujy: params.flux_ujy,
+    image: params.image,
+    ra: params.ra,
+    dec: params.dec,
   });
-  return { data, fromCache: false };
+  const call = async () => {
+    const data = await fetchJson<AiClassifyResponse>("/api/v1/ai/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    // A 200 that is not a classification (proxy error page parsed as JSON, null, ...) is a broken service.
+    const probs = (data as { probabilities?: unknown } | null)?.probabilities;
+    if (!probs || typeof probs !== "object" || Array.isArray(probs)) {
+      throw new ApiError("Malformed classification response", 502);
+    }
+    return data;
+  };
+  try {
+    return { data: await call(), fromCache: false };
+  } catch (err) {
+    if (!(err instanceof ApiError) || !TRANSIENT_STATUS.has(err.status)) throw err;
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    return { data: await call(), fromCache: false };
+  }
 }
 
 export async function getGcnAlerts(

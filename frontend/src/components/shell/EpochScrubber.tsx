@@ -4,13 +4,17 @@ import React from "react";
 import { useI18n } from "@/i18n/context";
 import { EPOCHS, EPOCH_DECIMAL, type Epoch } from "@/lib/api";
 
+export type EpochCoverage = Partial<Record<Epoch, "real" | "model">>;
+
 interface EpochScrubberProps {
   epoch: Epoch;
   onChange: (epoch: Epoch) => void;
+  /** Which epochs the backend serves from real SPHEREx frames for the current target. */
+  coverage?: EpochCoverage;
 }
 
 /** Survey-epoch strip: a ruler with four stops. ← / → also step through it (handled by the page). */
-export function EpochScrubber({ epoch, onChange }: EpochScrubberProps) {
+export function EpochScrubber({ epoch, onChange, coverage }: EpochScrubberProps) {
   const { dict } = useI18n();
   const idx = Math.max(0, EPOCHS.indexOf(epoch));
   return (
@@ -37,7 +41,9 @@ export function EpochScrubber({ epoch, onChange }: EpochScrubberProps) {
                 type="button"
                 onClick={() => onChange(ep)}
                 aria-pressed={active}
-                aria-label={`${dict.shell.epoch} ${ep}`}
+                aria-label={`${dict.shell.epoch} ${ep}${
+                  coverage?.[ep] === "real" ? ` · ${dict.shell.realData}` : coverage?.[ep] === "model" ? ` · ${dict.shell.modelData}` : ""
+                }`}
                 className="group flex flex-col items-center gap-2 py-0.5 focus-visible:outline-offset-4"
               >
                 <span
@@ -49,14 +55,34 @@ export function EpochScrubber({ epoch, onChange }: EpochScrubberProps) {
                         : "mt-[7px] h-2 w-2 bg-white/35 group-hover:bg-white/70"
                   }`}
                 />
-                <span className={`aeon-mono text-[11px] ${active ? "text-foreground" : "text-muted group-hover:text-foreground"}`}>
+                <span className={`aeon-mono flex items-center gap-1 text-[11px] ${active ? "text-foreground" : "text-muted group-hover:text-foreground"}`}>
                   {ep.slice(5)}
+                  {coverage?.[ep] && (
+                    <span
+                      aria-hidden="true"
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${
+                        coverage[ep] === "real" ? "bg-ice" : "border border-white/40"
+                      }`}
+                    />
+                  )}
                 </span>
               </button>
             );
           })}
         </div>
       </div>
+      {coverage && Object.keys(coverage).length > 0 && (
+        <p className="aeon-label mt-2 flex items-center justify-center gap-3 normal-case">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-ice" />
+            {dict.shell.coverageLegendReal}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-1.5 w-1.5 rounded-full border border-white/40" />
+            {dict.shell.coverageLegendModel}
+          </span>
+        </p>
+      )}
     </div>
   );
 }

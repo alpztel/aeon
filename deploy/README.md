@@ -47,3 +47,8 @@ pip install pytest httpx jsonschema && AEON_GATEWAY_URL=http://localhost pytest 
 | `AEON_UPSTREAM_BACKOFF_S` | 5 | backend hata/zaman aşımı sonrası AI motorunun bekleme süresi (s) |
 
 Stres testinde (c150) tüm sistemin tepe belleği ~1,8 GB'dır; droplet büyütülürse önce `AI_WEB_CONCURRENCY=2` açın.
+
+## Azure veri çekme (SPHEREx + Gaia)
+
+Gerçek SPHEREx ve Gaia verisini her hafta bir Azure VM'e çeken paket ve adım adım kurulum rehberi:
+[`deploy/azure/README.md`](azure/README.md).

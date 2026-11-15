@@ -14,7 +14,9 @@ services:
       AEON_SPECTRUM_CACHE: "128"
       MALLOC_ARENA_MAX: "2"
     volumes:
-      - fits-data:/data/fits
+      # Named volume by default; set AEON_FITS_SOURCE=/data/aeon in deploy/.env to serve the files the
+      # weekly Azure ingest writes (bind mount). New files are picked up without a restart.
+      - ${AEON_FITS_SOURCE:-fits-data}:/data/fits
     expose: ["8000"]
 
   ai-engine:

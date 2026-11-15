@@ -135,7 +135,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 1D-CNN spectral classifier (5 classes) and PatchAnomalyViT image anomaly score */
+        /**
+         * 1D-CNN spectral classifier (5 classes) and PatchAnomalyViT image anomaly score
+         * @description Send at least one of flux_ujy, image, or the pair (ra, dec). With only (ra, dec) the engine reads the 102-band spectrum of that position from the core backend; spectrum_source tells which spectrum was used.
+         */
         post: operations["aiClassify"];
         delete?: never;
         options?: never;
@@ -794,6 +797,10 @@ export interface operations {
                 "application/json": {
                     flux_ujy?: number[];
                     image?: components["schemas"]["Image"];
+                    /** @description ICRS right ascension (deg); used with dec when flux_ujy is absent */
+                    ra?: number;
+                    /** @description ICRS declination (deg) */
+                    dec?: number;
                 };
             };
         };
@@ -813,6 +820,13 @@ export interface operations {
                         model_versions?: {
                             [key: string]: string;
                         };
+                        /**
+                         * @description request: flux_ujy from the request; archive: read from the core backend by (ra, dec); none: the backend has no usable spectrum at this position; unavailable: the backend could not be reached or did not answer in time (retry later). For none and unavailable the probabilities are an uninformative uniform prior
+                         * @enum {string}
+                         */
+                        spectrum_source?: "request" | "archive" | "none" | "unavailable";
+                        /** @description Median per-band S/N of the archive spectrum (null otherwise) */
+                        spectrum_snr_median?: number | null;
                     };
                 };
             };

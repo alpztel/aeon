@@ -1,0 +1,4 @@
+# Ingest-only extras on top of backend/requirements.txt (installed together by setup-vm.sh)
+astroquery>=0.4.7
+azure-identity>=1.15
+azure-storage-blob>=12.19

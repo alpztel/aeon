@@ -1,0 +1,13 @@
+{
+  "_comment": "Targets the weekly ingest keeps up to date. 'catalog_id' = an entry of backend/aeon/catalog.py (position propagated with proper motion to the run date). Or give 'ra'/'dec' (ICRS deg) and a 'tag' directly.",
+  "targets": [
+    { "catalog_id": "wise-0855" },
+    { "catalog_id": "rw-aur" },
+    { "catalog_id": "px-2026-09", "gaia": false },
+    { "catalog_id": "luhman-16" },
+    { "catalog_id": "wise-1828" },
+    { "catalog_id": "barnard" },
+    { "catalog_id": "tw-hya" },
+    { "catalog_id": "18-sco" }
+  ]
+}

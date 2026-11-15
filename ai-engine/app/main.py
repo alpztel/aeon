@@ -8,12 +8,18 @@ Implements:
 
 from __future__ import annotations
 
+import math
 import os
+import threading
 import time
 from typing import Any, Literal
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
 from . import __version__
@@ -51,6 +57,23 @@ async def server_timing(request: Request, call_next):
     response = await call_next(request)
     response.headers["Server-Timing"] = f"ai;dur={(time.perf_counter() - t0) * 1000:.1f}"
     return response
+
+
+def _json_safe(value: Any) -> Any:
+    """NaN / Infinity cannot be written as JSON; echo them back as text instead."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    # The default handler echoes the rejected input; a NaN / Infinity in it made the 422 itself fail (500).
+    return JSONResponse(status_code=422, content={"detail": _json_safe(jsonable_encoder(exc.errors()))})
 
 
 class CommandRequest(BaseModel):
@@ -110,21 +133,67 @@ def ai_command(req: CommandRequest) -> dict[str, Any]:
     return run_command_dispatcher(req.message, req.lang, req.context)
 
 
+N_BANDS = 102
+# A fresh position over real SPHEREx frames takes the backend a few seconds (measured 3.5 s on the 2-vCPU VM),
+# longer than the 2.5 s the command path allows. The browser waits 15 s for a classification.
+SPECTRUM_TIMEOUT_S = float(os.environ.get("AEON_SPECTRUM_TIMEOUT_S", "10"))
+# Slow spectrum reads may hold at most this many worker threads; the rest are for commands and fast calls.
+_SPECTRUM_SLOTS = threading.BoundedSemaphore(int(os.environ.get("AEON_SPECTRUM_CONCURRENCY", "12")))
+_SLOT_WAIT_S = 1.0
+
+
+def fetch_archive_spectrum(ra: float, dec: float) -> tuple[list[float] | None, float | None, str]:
+    """102-band spectrum of a sky position from the core backend: (flux_ujy, snr_median, source).
+
+    source is "archive" (spectrum returned), "none" (the backend answered: nothing usable at this position)
+    or "unavailable" (the backend could not be asked or did not answer in time). Whatever the backend does,
+    this never raises: a broken upstream answer must not turn into a 4xx/5xx for the caller.
+    """
+    core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
+    if not upstream_available(core_url):
+        return None, None, "unavailable"
+    if not _SPECTRUM_SLOTS.acquire(timeout=_SLOT_WAIT_S):
+        return None, None, "unavailable"
+    try:
+        resp = http_client().get(f"{core_url}/api/v1/spectrum", params={"ra": ra, "dec": dec}, timeout=SPECTRUM_TIMEOUT_S)
+    except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout):
+        return None, None, "unavailable"            # one slow position, not a dead backend: no back-off for others
+    except Exception:
+        mark_upstream_down(core_url)
+        return None, None, "unavailable"
+    finally:
+        _SPECTRUM_SLOTS.release()
+    if resp.status_code >= 500:
+        mark_upstream_down(core_url)
+        return None, None, "unavailable"
+    if resp.status_code == 429:
+        return None, None, "unavailable"
+    if resp.status_code != 200:
+        return None, None, "none"
+    try:
+        body = resp.json()
+    except ValueError:
+        return None, None, "unavailable"            # a 200 that is not JSON is a broken gateway, not an empty sky
+    if not isinstance(body, dict):
+        return None, None, "unavailable"
+    flux = body.get("flux_ujy")
+    if not isinstance(flux, list) or len(flux) != N_BANDS:
+        return None, None, "none"
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in flux):
+        return None, None, "none"
+    snr = body.get("snr_median")
+    snr = float(snr) if isinstance(snr, (int, float)) and not isinstance(snr, bool) and math.isfinite(snr) else None
+    return [float(v) for v in flux], snr, "archive"
+
+
 @app.post("/api/v1/ai/classify", tags=["ai"])
 def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
     try:
         flux = req.flux_ujy
+        spectrum_source = "request" if flux is not None else "none"
+        snr_median: float | None = None
         if flux is None and req.ra is not None and req.dec is not None:
-            core_url = os.environ.get("AEON_CORE_URL", "http://localhost:8000").rstrip("/")
-            if upstream_available(core_url):
-                try:
-                    resp = http_client().get(f"{core_url}/api/v1/spectrum", params={"ra": req.ra, "dec": req.dec})
-                    if resp.status_code == 200:
-                        flux = resp.json().get("flux_ujy")
-                    elif resp.status_code >= 500:
-                        mark_upstream_down(core_url)
-                except Exception:
-                    mark_upstream_down(core_url)
+            flux, snr_median, spectrum_source = fetch_archive_spectrum(req.ra, req.dec)
         reg = get_registry()
         probs, top_class, spec_hint = reg.classify_spectrum(flux)
         img_dict = req.image.model_dump() if req.image is not None else None
@@ -146,6 +215,8 @@ def ai_classify(req: ClassifyRequest) -> dict[str, Any]:
             "model_versions": versions,
             "physics_diagnostics": physics_diag,
             "astroclip_zogy": astroclip_zogy,
+            "spectrum_source": spectrum_source,
+            "spectrum_snr_median": snr_median,
         }
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

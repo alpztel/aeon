@@ -1,0 +1,24 @@
+[Unit]
+Description=AEON data ingest (SPHEREx cutouts from IRSA, Gaia DR3 from MAST, sync to Azure Blob)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=aeon
+Group=aeon
+# AEON_DATA_DIR, AEON_BLOB_ACCOUNT_URL, AEON_BLOB_CONTAINER (written by setup-vm.sh)
+EnvironmentFile=/etc/aeon/ingest.env
+# astropy / astroquery caches live under the data disk (the real home is hidden by ProtectHome).
+Environment=HOME=/data/aeon/.home
+ExecStart=/opt/aeon/venv/bin/python /opt/aeon/repo/deploy/azure/ingest.py
+# A weekly run normally takes minutes; never let a stuck archive hold the VM for more than 6 h.
+TimeoutStartSec=6h
+Nice=10
+IOSchedulingClass=idle
+# Hardening: the job only needs network access and its data directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/data/aeon

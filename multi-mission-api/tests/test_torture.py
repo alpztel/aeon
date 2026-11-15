@@ -236,3 +236,12 @@ def test_all_eight_catalog_targets_archival_crossmatch(client, ra, dec, expect_u
     assert_path_response_schema(body, "/api/v1/missions/crossmatch", "get")
     assert body["unmatched_ir_candidate"] is expect_unmatched_ir
 
+
+
+@pytest.mark.parametrize("raw", ['{"action": "submit", "candidate": {"ra": NaN, "dec": 1}}', '{"action": NaN}',
+                                 '{"ra": Infinity, "dec": -Infinity}', '{"action": "vote", "candidate_id": 1e999}'])
+def test_non_finite_numbers_in_a_json_body_are_422_not_500(client, raw):
+    """The 422 echoes the rejected input; a NaN in it used to make the error response itself fail."""
+    r = client.post("/api/v1/candidates", content=raw, headers={"Content-Type": "application/json"})
+    assert r.status_code == 422, r.text[:200]
+    r.json()
