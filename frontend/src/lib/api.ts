@@ -16,16 +16,12 @@ export type AstrometryPoint = components["schemas"]["Astrometry"];
 export type OrbitRequest = components["schemas"]["OrbitRequest"];
 export type OrbitResult = components["schemas"]["OrbitResult"];
 export type UiAction = components["schemas"]["UiAction"];
-export type Candidate = components["schemas"]["Candidate"];
 export type AiCommandResponse =
   operations["aiCommand"]["responses"]["200"]["content"]["application/json"];
 export type AiClassifyResponse =
   operations["aiClassify"]["responses"]["200"]["content"]["application/json"];
 export type CrossmatchResult =
   operations["missionsCrossmatch"]["responses"]["200"]["content"]["application/json"];
-export type GcnAlert =
-  operations["gcnAlerts"]["responses"]["200"]["content"]["application/json"][number];
-
 export type DataMode = "fits_archive" | "physical_model" | "offline_cache";
 
 export const EPOCHS: Epoch[] = ["2026-Q1", "2026-Q2", "2026-Q3", "2026-Q4"];
@@ -673,108 +669,6 @@ export async function classifyTarget(params: {
   }
 }
 
-export async function getGcnAlerts(
-  limit = 10
-): Promise<{ data: GcnAlert[]; fromCache: boolean }> {
-  try {
-    const data = await fetchJson<GcnAlert[]>(`/api/v1/alerts/gcn?limit=${limit}`);
-    return { data, fromCache: false };
-  } catch {
-    // GCN service unreachable: show nothing rather than invented notices.
-    return { data: [], fromCache: true };
-  }
-}
-
-const CANDIDATES_STORAGE_KEY = "aeon_candidates_pool";
-
-// Offline mode keeps only the visitor's own submissions in sessionStorage; nothing is pre-filled.
-const INITIAL_CANDIDATES: Candidate[] = [];
-
-function loadLocalCandidates(): Candidate[] {
-  try {
-    const raw = window.sessionStorage.getItem(CANDIDATES_STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Candidate[];
-  } catch {
-    // Ignore storage error
-  }
-  return INITIAL_CANDIDATES;
-}
-
-function saveLocalCandidates(list: Candidate[]): void {
-  try {
-    window.sessionStorage.setItem(CANDIDATES_STORAGE_KEY, JSON.stringify(list));
-  } catch {
-    // Ignore storage error
-  }
-}
-
-export async function getCandidates(
-  sort: "votes" | "recent" | "anomaly" = "votes",
-  limit = 20
-): Promise<{ data: Candidate[]; fromCache: boolean }> {
-  try {
-    const data = await fetchJson<Candidate[]>(
-      `/api/v1/candidates?sort=${sort}&limit=${limit}`
-    );
-    return { data, fromCache: false };
-  } catch {
-    const list = [...loadLocalCandidates()];
-    if (sort === "votes") {
-      list.sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0));
-    } else if (sort === "anomaly") {
-      list.sort((a, b) => (b.anomaly_score ?? 0) - (a.anomaly_score ?? 0));
-    } else {
-      list.sort((a, b) =>
-        String(b.created_utc ?? "").localeCompare(String(a.created_utc ?? ""))
-      );
-    }
-    return { data: list.slice(0, limit), fromCache: true };
-  }
-}
-
-export async function submitOrVoteCandidate(body: {
-  action: "submit" | "vote";
-  candidate_id?: string;
-  candidate?: Candidate;
-}): Promise<{ data: Candidate; fromCache: boolean }> {
-  try {
-    const data = await fetchJson<Candidate>("/api/v1/candidates", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    return { data, fromCache: false };
-  } catch {
-    const list = [...loadLocalCandidates()];
-    if (body.action === "vote" && body.candidate_id) {
-      const idx = list.findIndex((c) => c.id === body.candidate_id);
-      if (idx >= 0) {
-        const updated: Candidate = {
-          ...list[idx],
-          votes: (list[idx].votes ?? 0) + 1,
-        };
-        list[idx] = updated;
-        saveLocalCandidates(list);
-        return { data: updated, fromCache: true };
-      }
-    }
-
-    if (body.action === "submit" && body.candidate) {
-      const created: Candidate = {
-        ...body.candidate,
-        id: body.candidate.id ?? `cand-${Date.now()}`,
-        votes: body.candidate.votes ?? 1,
-        created_utc: new Date().toISOString(),
-      };
-      list.unshift(created);
-      saveLocalCandidates(list);
-      return { data: created, fromCache: true };
-    }
-
-    throw new ApiError("Candidate operation failed", 400);
-  }
-}
-
 // ------------------------------------------------------------------ provenance readers
 // openapi types `Spectrum.pipeline` and `Image.provenance` as open objects; these readers give the
 // fields the backend documents a type, and drop anything malformed instead of trusting it.
@@ -850,4 +744,197 @@ export const EXAMPLE_TARGET_IDS: readonly string[] = [
 export async function getBestEpochSpectrum(ra: number, dec: number): Promise<SpectrumResponse> {
   const qs = new URLSearchParams({ ra: String(ra), dec: String(dec) });
   return fetchJson<SpectrumResponse>(`/api/v1/spectrum?${qs.toString()}`);
+}
+
+// ------------------------------------------------------------------ stage 2-4: age, orbit, validation
+// Optional blocks of the cross-match answer (openapi: age_mass, kinematics.galactic, galactic_orbit,
+// validation) and the Galactic regime of /orbit/simulate. Typed here; read through stage24().
+
+export interface AgeChannel {
+  status?: string;
+  median_gyr?: number | null;
+  lo_gyr?: number | null;
+  hi_gyr?: number | null;
+  constraint?: "constrained" | "weak" | "unconstrained";
+  pdf?: number[] | null;
+  method?: string;
+  reason?: string | null;
+  channels?: string[];
+}
+
+export interface ModelRange {
+  median: number;
+  lo: number;
+  hi: number;
+}
+
+export interface MassEstimate {
+  median_msun: number;
+  lo_msun: number;
+  hi_msun: number;
+  median_mjup: number;
+  lo_mjup: number;
+  hi_mjup: number;
+  from?: string;
+  model_teff_k?: ModelRange;
+  model_log_g_cgs?: ModelRange;
+  model_radius_rjup?: ModelRange;
+  model_log_l_lsun?: ModelRange;
+}
+
+export interface AgeMass {
+  status?: "ok" | "partial" | "unmeasured" | "not_applicable";
+  reason?: string | null;
+  mode?: "substellar_w2" | "stellar_hr" | "none";
+  inputs?: Record<string, unknown>;
+  assumptions?: Record<string, string>;
+  age_grid_gyr?: number[];
+  spectral?: AgeChannel;
+  kinematic?: AgeChannel;
+  joint?: AgeChannel;
+  mass?: MassEstimate | null;
+  mass_spectral_only?: MassEstimate | null;
+  degeneracy_track?: Array<{ age_gyr: number; mass_mjup: number; teff_k: number; log_g_cgs: number }>;
+  references?: Record<string, string>;
+}
+
+export interface GalacticSolution {
+  rv_km_s: number;
+  u_lsr_km_s: number;
+  v_lsr_km_s: number;
+  w_lsr_km_s: number;
+  v_tot_km_s: number;
+  membership?: { probabilities?: Record<string, number> | null; most_likely?: string | null };
+}
+
+export interface GalacticKinematics {
+  status?: "ok" | "unmeasured" | "not_applicable";
+  reason?: string | null;
+  rv_status?: "measured" | "marginalized_envelope";
+  inputs?: Record<string, unknown> | null;
+  solutions?: GalacticSolution[];
+  envelope?: Record<string, number[]>;
+}
+
+/** A number when the radial velocity is measured, a [min, max] envelope otherwise. */
+export type MaybeRange = number | number[];
+
+export interface GalacticSummary {
+  r_peri_kpc?: MaybeRange;
+  r_apo_kpc?: MaybeRange;
+  z_max_kpc?: MaybeRange;
+  eccentricity?: MaybeRange;
+  t_min_kyr?: MaybeRange;
+  d_min_pc?: MaybeRange;
+  encounter_status?: string;
+}
+
+export interface ScorecardRow {
+  key: string;
+  label?: { en: string; tr: string };
+  unit?: string;
+  aeon_text?: string;
+  reference_text?: string;
+  aeon_source?: string | null;
+  reference_source?: string | null;
+  agreement: "consistent" | "partial" | "discrepant" | "not_comparable";
+  explanation?: { en: string; tr: string } | null;
+  not_comparable_reason?: string | null;
+}
+
+export interface Validation {
+  status?: "ok" | "no_reference" | "not_applicable";
+  reason?: string | null;
+  simbad?: { status?: string; source?: string; reason?: string | null; object?: Record<string, unknown> | null };
+  literature?: { sources?: Array<{ ref: string; bibcode: string; arxiv?: string; doi?: string | null }> } | null;
+  rows?: ScorecardRow[];
+  counts?: Record<string, number>;
+  rule?: string;
+  synthesis?: { en: string; tr: string; method?: string };
+}
+
+export interface Stage24 {
+  ageMass: AgeMass | null;
+  galactic: GalacticKinematics | null;
+  validation: Validation | null;
+}
+
+export function stage24(data: CrossmatchResult | null | undefined): Stage24 {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const kin = (d.kinematics ?? {}) as Record<string, unknown>;
+  return {
+    ageMass: (d.age_mass as AgeMass | undefined) ?? null,
+    galactic: (kin.galactic as GalacticKinematics | undefined) ?? null,
+    validation: (d.validation as Validation | undefined) ?? null,
+  };
+}
+
+// Several panels read the same cross-match answer: one request per position.
+const crossmatchInflight = new Map<string, Promise<{ data: CrossmatchResult; fromCache: boolean }>>();
+
+export function getCrossmatchShared(ra: number, dec: number): Promise<{ data: CrossmatchResult; fromCache: boolean }> {
+  const key = `${ra.toFixed(5)}:${dec.toFixed(5)}`;
+  const hit = crossmatchInflight.get(key);
+  if (hit) return hit;
+  const p = getCrossmatch({ ra, dec, radius_arcsec: 10 });
+  crossmatchInflight.set(key, p);
+  p.catch(() => crossmatchInflight.delete(key));
+  if (crossmatchInflight.size > 24) {
+    const first = crossmatchInflight.keys().next().value;
+    if (first !== undefined && first !== key) crossmatchInflight.delete(first);
+  }
+  return p;
+}
+
+export interface GalacticTrajectory {
+  t_myr: number[];
+  x_kpc: number[];
+  y_kpc: number[];
+  z_kpc: number[];
+  r_kpc: number[];
+}
+
+export interface GalacticOrbitResult {
+  engine: string;
+  rv_status: "measured" | "marginalized_envelope";
+  span_myr: number;
+  encounter_window_kyr: number;
+  orbits: Array<{
+    rv_km_s: number;
+    r_peri_kpc: number;
+    r_apo_kpc: number;
+    z_max_kpc: number;
+    eccentricity: number;
+    trajectory: GalacticTrajectory;
+  }>;
+  encounters: Array<{
+    rv_km_s: number;
+    status: "found" | "beyond_window";
+    t_min_kyr: number;
+    d_min_pc: number;
+    d_now_pc: number;
+    curve: { t_kyr: number[]; distance_pc: number[] };
+  }>;
+  sun: GalacticTrajectory;
+  summary: GalacticSummary;
+}
+
+export interface GalacticAstrometry {
+  ra: number;
+  dec: number;
+  distance_pc: number;
+  pm_ra_cosdec_mas_yr: number;
+  pm_dec_mas_yr: number;
+  radial_velocity_km_s?: number | null;
+}
+
+/** Galactic orbit (galpy, MWPotential2014) and solar encounter for explicit astrometry or a catalog target. */
+export async function simulateGalacticOrbit(req: { target_id?: string; galactic?: GalacticAstrometry }): Promise<GalacticOrbitResult> {
+  const res = await fetchJson<{ galactic?: GalacticOrbitResult }>("/api/v1/orbit/simulate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...req, regime: "galactic" }),
+  });
+  if (!res.galactic || !Array.isArray(res.galactic.orbits)) throw new ApiError("No Galactic orbit in the answer", 502);
+  return res.galactic;
 }

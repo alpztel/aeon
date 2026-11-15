@@ -19,8 +19,7 @@ interface InspectorProps {
  */
 export function Inspector({ tool, wide, onToggleWide, onClose, children }: InspectorProps) {
   const { dict } = useI18n();
-  const index = TOOLS.findIndex((t) => t.id === tool);
-  const def = TOOLS[index];
+  const def = TOOLS.find((t) => t.id === tool) ?? TOOLS[0];
   const Icon = def.icon;
 
   useEffect(() => {
@@ -49,7 +48,7 @@ export function Inspector({ tool, wide, onToggleWide, onClose, children }: Inspe
         </span>
         <div className="min-w-0 flex-1">
           <p className="aeon-label">
-            {String(index + 1).padStart(2, "0")} / {String(TOOLS.length).padStart(2, "0")}
+            {dict.shell.step} {def.step} / 4 · {dict.shell.steps[def.step - 1]}
           </p>
           <h2 className="aeon-display mt-1 text-xl text-foreground">{dict.shell.toolNames[tool]}</h2>
           <p className="aeon-caption mt-1 text-[15px] text-muted">{dict.shell.toolHints[tool]}</p>

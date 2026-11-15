@@ -4,7 +4,6 @@ import React from "react";
 import { FileDown, HelpCircle, Loader2, Play, Sparkles } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import type { CatalogObject, DataMode, Epoch, HealthResponse } from "@/lib/api";
-import { AlertsMenu } from "./AlertsMenu";
 import { SearchBox } from "./SearchBox";
 
 type Coords = { ra: number; dec: number };
@@ -77,7 +76,6 @@ export function TopBar(props: TopBarProps) {
             {dict.header.dataMode[dataMode]}
             {frames && dataMode === "fits_archive" ? <span className="aeon-mono text-muted/80">· {frames}</span> : null}
           </span>
-          <AlertsMenu onFlyTo={props.onFlyTo} />
           <button
             type="button"
             onClick={props.onDownloadPdf}

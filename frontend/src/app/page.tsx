@@ -2,12 +2,11 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AstroLlmModal } from "@/components/AstroLlmModal";
-import { CandidatePoolPanel } from "@/components/CandidatePoolPanel";
 import { ExamplesPanel } from "@/components/ExamplesPanel";
 import { ClassificationCard } from "@/components/ClassificationCard";
 import { CrossmatchSedPanel } from "@/components/CrossmatchSedPanel";
 import { DifferencePanel } from "@/components/DifferencePanel";
-import { JwstPipWindow } from "@/components/JwstPipWindow";
+import { GalacticOrbitPanel } from "@/components/GalacticOrbitPanel";
 import { ShiftStackPanel } from "@/components/ShiftStackPanel";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { SolarSystem3DPanel } from "@/components/SolarSystem3DPanel";
@@ -32,7 +31,6 @@ import {
   searchCatalog,
   type AstrometryPoint,
   type CatalogObject,
-  type CrossmatchResult,
   type DataMode,
   type HealthResponse,
   type Epoch,
@@ -53,8 +51,6 @@ export default function HomePage() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [tool, setTool] = useState<ToolId | null>(null);
   const [wide, setWide] = useState(false);
-  const [pipOpen, setPipOpen] = useState(false);
-  const [pipOverlaps, setPipOverlaps] = useState<NonNullable<CrossmatchResult["mast_overlap"]>>([]);
   const [epoch, setEpoch] = useState<Epoch>(DEMO_TARGETS[0].epoch);
   const [coords, setCoords] = useState<Coords>(DEMO_TARGETS[0].epochCoords[DEMO_TARGETS[0].epoch]);
   const [refCoords, setRefCoords] = useState<Coords>({ ra: DEMO_TARGETS[0].refRa, dec: DEMO_TARGETS[0].refDec });
@@ -339,7 +335,7 @@ export default function HomePage() {
             setTool("orbit");
             break;
           case "OPEN_JWST":
-            setPipOpen(true);
+            setTool("crossmatch");
             break;
           case "SET_LANG":
             if (p.lang === "tr" || p.lang === "en") setLang(p.lang as Lang);
@@ -357,6 +353,15 @@ export default function HomePage() {
     },
     [epoch, setLang, handleDownloadPdf, applyTourStep, handleEpochChange, selectObject, flyToCoords]
   );
+
+  // A solar-system body: a Planet X candidate, anything with a distance in AU, or a field position
+  // for which the shift-and-stack search produced astrometry to fit an orbit to.
+  const solarSystemTarget =
+    selectedObject?.object_class === "planet_x_candidate" ||
+    typeof selectedObject?.distance_au === "number" ||
+    (!selectedObject && astrometry.length >= 3);
+  // Shift-and-stack is a moving-object search: offered for solar-system candidates and bare field positions.
+  const hiddenTools: ToolId[] = solarSystemTarget || !selectedObject ? [] : ["stack"];
 
   const renderTool = (id: ToolId) => {
     switch (id) {
@@ -376,27 +381,15 @@ export default function HomePage() {
       case "classify":
         return <ClassificationCard coords={refCoords} selectedObject={selectedObject} />;
       case "crossmatch":
-        return (
-          <CrossmatchSedPanel
-            coords={refCoords}
-            selectedObject={selectedObject}
-            onOpenPip={(overlaps) => {
-              setPipOverlaps(overlaps);
-              setPipOpen(true);
-            }}
-          />
-        );
+        return <CrossmatchSedPanel coords={refCoords} selectedObject={selectedObject} />;
       case "stack":
         return <ShiftStackPanel coords={refCoords} selectedObject={selectedObject} onAstrometryReady={setAstrometry} />;
       case "orbit":
-        return <SolarSystem3DPanel coords={refCoords} selectedObject={selectedObject} astrometry={astrometry} />;
-      case "candidates":
-        return (
-          <CandidatePoolPanel
-            coords={refCoords}
-            selectedObject={selectedObject}
-            onInspectCoords={(ra, dec) => flyToCoords(ra, dec)}
-          />
+        // Solar-system candidates orbit the Sun (REBOUND); stars and brown dwarfs orbit the Galaxy (galpy).
+        return solarSystemTarget ? (
+          <SolarSystem3DPanel coords={refCoords} selectedObject={selectedObject} astrometry={astrometry} />
+        ) : (
+          <GalacticOrbitPanel coords={refCoords} selectedObject={selectedObject} />
         );
       default:
         return null;
@@ -460,15 +453,13 @@ export default function HomePage() {
         </div>
       </main>
 
-      <ToolRail active={tool} onSelect={toggleTool} />
+      <ToolRail active={tool} onSelect={toggleTool} hidden={hiddenTools} />
 
       {tool && (
         <Inspector tool={tool} wide={wide} onToggleWide={() => setWide((w) => !w)} onClose={closeTool}>
           {renderTool(tool)}
         </Inspector>
       )}
-
-      <JwstPipWindow open={pipOpen} onClose={() => setPipOpen(false)} overlaps={pipOverlaps} coords={coords} />
 
       <AstroLlmModal
         open={cmdOpen}

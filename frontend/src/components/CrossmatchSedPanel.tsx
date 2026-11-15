@@ -3,15 +3,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ExternalLink,
   Flame,
   Loader2,
   Satellite,
 } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import { DataFacts, fill, num, sci, signed } from "@/components/DataFacts";
+import { ValidationScorecard } from "@/components/ValidationScorecard";
 import {
-  getCrossmatch,
+  getCrossmatchShared,
+  stage24,
   type CatalogObject,
   type CrossmatchResult,
 } from "@/lib/api";
@@ -19,7 +20,6 @@ import {
 interface CrossmatchSedPanelProps {
   coords: { ra: number; dec: number };
   selectedObject: CatalogObject | null;
-  onOpenPip: (overlaps: NonNullable<CrossmatchResult["mast_overlap"]>) => void;
 }
 
 const SURVEY_COLORS: Record<string, string> = {
@@ -31,7 +31,6 @@ const SURVEY_COLORS: Record<string, string> = {
 export function CrossmatchSedPanel({
   coords,
   selectedObject,
-  onOpenPip,
 }: CrossmatchSedPanelProps) {
   const { dict } = useI18n();
 
@@ -46,7 +45,7 @@ export function CrossmatchSedPanel({
 
   useEffect(() => {
     let active = true;
-    getCrossmatch({ ra: coords.ra, dec: coords.dec, radius_arcsec: 10 })
+    getCrossmatchShared(coords.ra, coords.dec)
       .then(({ data: res, fromCache: cached }) => {
         if (!active) return;
         setData(res);
@@ -214,16 +213,6 @@ export function CrossmatchSedPanel({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => onOpenPip(data?.mast_overlap ?? [])}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/35 bg-cyan-500/15 px-3 py-1.5 text-xs font-medium text-cyan-200 transition hover:bg-cyan-500/25"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          <span>
-            {dict.missions.openJwstPip} ({data?.mast_overlap?.length ?? 0})
-          </span>
-        </button>
       </div>
 
       {error && (
@@ -392,6 +381,9 @@ export function CrossmatchSedPanel({
           ]}
         />
       )}
+      <div className="mt-4">
+        <ValidationScorecard validation={stage24(data).validation} loading={loading} failed={!loading && !data} />
+      </div>
     </section>
   );
 }
