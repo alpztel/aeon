@@ -161,6 +161,10 @@ export function CrossmatchSedPanel({
   const spxPoints = spx?.n_points;
   const spxEpoch = typeof spx?.epoch === "string" ? String(spx.epoch) : "";
   const spxObserved = typeof spx?.observed_quarter === "string" ? String(spx.observed_quarter) : "";
+  const spxDropped = spx?.dropped_short_wavelength_points;
+  const spxBlendReason = typeof spx?.blend_reason === "string" ? String(spx.blend_reason) : undefined;
+  const blendNote =
+    spx?.blend_suspected === true && typeof spxDropped === "number" ? fill(dict.data.blendDropped, { n: spxDropped }) : null;
   const spherexNote = !spx
     ? null
     : spxStatus === "real"
@@ -384,6 +388,7 @@ export function CrossmatchSedPanel({
                   tone: String(data.provenance?.spherex?.status ?? "") === "real" ? "real" : "model",
                 }
               : null,
+            blendNote ? { label: "SPHEREx < 2.5 µm", value: blendNote, title: spxBlendReason, tone: "warn" } : null,
           ]}
         />
       )}

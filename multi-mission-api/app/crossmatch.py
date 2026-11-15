@@ -99,6 +99,38 @@ def _fetch_spherex_spectrum(ra: float, dec: float) -> tuple[dict[str, Any] | Non
         return None, "unavailable"
 
 
+# Gaia DR3 completeness limit G ~ 20.7 (Vega) ~ 20.8 AB -> ~17 uJy across its 0.33-1.05 um passband.
+GAIA_LIMIT_UJY = 17.0
+GAIA_RED_EDGE_UM = 1.05
+BLEND_CUT_UM = 2.5
+
+
+def _optical_blend_check(points: list[dict[str, Any]], gaia_rows: list[dict[str, Any]], gaia_queried: bool
+                         ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """SPHEREx pixels are 6.2": the aperture blends neighbours. When Gaia was queried and found no
+    optical source at the target, SPHEREx detections at <= 1.05 um brighter than 3x the Gaia limit
+    cannot come from the target - they are a blended neighbour, which then also dominates the rest
+    of the short-wavelength SPHEREx range. Those points (< 2.5 um) are left out of the SED.
+    (WISE 0855: ~500 uJy at 0.75-1.3 um from a neighbour, while the Y dwarf is < 1 uJy there; at
+    3.4 / 4.6 um SPHEREx agrees with WISE.)"""
+    if not points or not gaia_queried or gaia_rows:
+        return points, {}
+    optical = sorted(p["flux_ujy"] for p in points if p["wavelength_um"] <= GAIA_RED_EDGE_UM)
+    if not optical:
+        return points, {}
+    median = optical[len(optical) // 2]
+    if median < 3.0 * GAIA_LIMIT_UJY:
+        return points, {}
+    kept = [p for p in points if p["wavelength_um"] >= BLEND_CUT_UM]
+    return kept, {
+        "blend_suspected": True,
+        "dropped_short_wavelength_points": len(points) - len(kept),
+        "blend_reason": (f"no Gaia DR3 source at the target, yet SPHEREx measures a median {median:.0f} uJy at "
+                         f"<= {GAIA_RED_EDGE_UM} um (Gaia limit ~{GAIA_LIMIT_UJY:.0f} uJy): flux from a blended "
+                         f"neighbour; SPHEREx points below {BLEND_CUT_UM} um left out of the SED"),
+    }
+
+
 def _spherex_sed_points(spec: dict[str, Any] | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """SED points from a backend spectrum and a provenance note.
 
@@ -232,6 +264,10 @@ def run_crossmatch(ra: float, dec: float, radius_arcsec: float = 6.0) -> dict[st
         gaia_rows, wise_rows, mast_rows, live_prov = _query_live_archives(ra, dec, radius_arcsec)
         provenance = {"source": "live archive queries", **live_prov}
 
+    gaia_queried = fixture is not None or str((provenance.get("gaia") or {}).get("status", "")) == "ok"
+    spherex_points, blend_note = _optical_blend_check(spherex_points, gaia_rows, gaia_queried)
+    if blend_note:
+        spherex_note = {**spherex_note, **blend_note, "n_points": len(spherex_points)}
     provenance["spherex"] = spherex_note
     sed = _build_sed(gaia_rows, wise_rows, spherex_points)
 
