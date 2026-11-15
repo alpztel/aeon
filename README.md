@@ -42,7 +42,7 @@ spectrum (0.75–5.0 µm)** for a target, and then answers the questions a spect
 
 ## At a glance
 
-| | |
+| Area | Summary |
 |---|---|
 | **Data** | Real SPHEREx Level-2 spectral images; Gaia DR3, AllWISE and CatWISE2020 astrometry and photometry; SIMBAD |
 | **Science chain** | 4 stages: reduce → infer age and mass → integrate orbits → validate |
