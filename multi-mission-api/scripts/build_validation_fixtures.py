@@ -28,7 +28,8 @@ def main() -> int:
             print(f"{tid}: SIMBAD unreachable ({exc}); snapshot left as it was")
             continue
         utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        target["simbad_snapshot"] = {"row": row, "retrieved_utc": utc} if row else None
+        target["simbad_snapshot"] = ({"row": row, "retrieved_utc": utc, "server": simbad._last_server.get("url")}
+                                     if row else None)
         done += row is not None
         print(f"{tid}: {row['main_id'] if row else 'not found'}")
         time.sleep(1.0)

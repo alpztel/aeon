@@ -3,98 +3,488 @@
     "purpose": "Reference values the AEON results are compared with (validation scorecard).",
     "literature": "Peer-reviewed values, each read from the paper itself (arXiv abstract or full text) on 2026-11-15. A quantity a paper does not give is absent here; nothing is filled in from memory. ref: authors, year and journal as given by the arXiv record / DOI; volume and page only where the arXiv record states them. bibcode: the ADS arXiv bibcode (resolves to the published record) unless the journal reference is in the arXiv record.",
     "simbad": "SIMBAD rows are added by scripts/build_validation_fixtures.py. simbad_snapshot is null where SIMBAD could not be reached when the file was built; the API then queries SIMBAD live.",
-    "simbad_built_utc": null,
-    "simbad_status": "not built: simbad.cds.unistra.fr answered 'Page unavailable' on 2026-11-15"
+    "simbad_built_utc": "2026-11-15T12:25:05Z",
+    "simbad_status": "10 of 10 targets snapshotted"
   },
   "targets": {
     "wise-0855": {
       "simbad_id": "WISE J085510.83-071442.5",
       "literature": {
-        "teff_k": {"lo": 225, "hi": 260},
-        "mass_mjup": {"lo": 3, "hi": 10},
-        "age_gyr": {"lo": 1, "hi": 10, "kind": "assumed", "note": "age range assumed by the paper (most nearby stars), not measured"},
-        "sources": [{"ref": "Luhman 2014, ApJ 786, L18", "bibcode": "2014ApJ...786L..18L", "arxiv": "1404.6501", "doi": "10.1088/2041-8205/786/2/L18"}]
+        "teff_k": {
+          "lo": 225,
+          "hi": 260
+        },
+        "mass_mjup": {
+          "lo": 3,
+          "hi": 10
+        },
+        "age_gyr": {
+          "lo": 1,
+          "hi": 10,
+          "kind": "assumed",
+          "note": "age range assumed by the paper (most nearby stars), not measured"
+        },
+        "sources": [
+          {
+            "ref": "Luhman 2014, ApJ 786, L18",
+            "bibcode": "2014ApJ...786L..18L",
+            "arxiv": "1404.6501",
+            "doi": "10.1088/2041-8205/786/2/L18"
+          }
+        ]
       },
-      "simbad_snapshot": null
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "WISEA J085510.74-071442.5",
+          "otype": "BD*",
+          "sp_type": "Y2",
+          "sp_bibcode": "2015ApJ...799...37L",
+          "ra": 133.81890825,
+          "dec": -7.247048000000001,
+          "plx_value": 439.0,
+          "plx_err": 2.4,
+          "plx_bibcode": "2021ApJS..253....7K",
+          "pmra": -8123.7,
+          "pmdec": 673.2,
+          "pm_bibcode": "2021ApJS..253....7K",
+          "rvz_radvel": null,
+          "rvz_err": null,
+          "rvz_type": null,
+          "rvz_bibcode": null,
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = 'WISE J085510.83-071442.5'"
+        },
+        "retrieved_utc": "2026-11-15T12:24:41Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
     },
     "luhman-16": {
       "simbad_id": "NAME Luhman 16",
       "literature": {
-        "mass_mjup": {"components": [{"name": "A", "value": 33.5, "err": 0.3}, {"name": "B", "value": 28.6, "err": 0.3}], "lo": 28.3, "hi": 33.8},
-        "parallax_mas": {"value": 501.557, "err": 0.082},
+        "mass_mjup": {
+          "components": [
+            {
+              "name": "A",
+              "value": 33.5,
+              "err": 0.3
+            },
+            {
+              "name": "B",
+              "value": 28.6,
+              "err": 0.3
+            }
+          ],
+          "lo": 28.3,
+          "hi": 33.8
+        },
+        "parallax_mas": {
+          "value": 501.557,
+          "err": 0.082
+        },
         "binary": true,
         "binary_note": "resolved 1.5 arcsec binary (L8 + L/T transition); SPHEREx and WISE measure the combined light",
-        "sources": [{"ref": "Lazorenko & Sahlmann 2018, A&A 618, A111", "bibcode": "2018A&A...618A.111L", "arxiv": "1808.07835", "doi": "10.1051/0004-6361/201833626"},
-                    {"ref": "Luhman 2013, ApJ 767, L1", "bibcode": "2013ApJ...767L...1L", "arxiv": "1303.2401", "doi": "10.1088/2041-8205/767/1/L1"}]
+        "sources": [
+          {
+            "ref": "Lazorenko & Sahlmann 2018, A&A 618, A111",
+            "bibcode": "2018A&A...618A.111L",
+            "arxiv": "1808.07835",
+            "doi": "10.1051/0004-6361/201833626"
+          },
+          {
+            "ref": "Luhman 2013, ApJ 767, L1",
+            "bibcode": "2013ApJ...767L...1L",
+            "arxiv": "1303.2401",
+            "doi": "10.1088/2041-8205/767/1/L1"
+          }
+        ]
       },
-      "simbad_snapshot": null
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "NAME Luhman 16",
+          "otype": "**",
+          "sp_type": "L7.5+T0.5",
+          "sp_bibcode": "2013ApJ...772..129B",
+          "ra": 162.32881400000002,
+          "dec": -53.319466000000006,
+          "plx_value": 501.557,
+          "plx_err": 0.082,
+          "plx_bibcode": "2018A&A...618A.111L",
+          "pmra": -2767.502,
+          "pmdec": 356.856,
+          "pm_bibcode": "2018A&A...618A.111L",
+          "rvz_radvel": null,
+          "rvz_err": null,
+          "rvz_type": null,
+          "rvz_bibcode": null,
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = 'NAME Luhman 16'"
+        },
+        "retrieved_utc": "2026-11-15T12:24:44Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
     },
     "wise-1828": {
-      "simbad_id": "WISEPA J182831.08+265037.8",
+      "simbad_id": "WISE J182831.08+265037.7",
       "literature": {
-        "teff_k": {"value": 325, "kind": "approximate", "note": "each component of the best-matching model, an equal binary"},
-        "mass_mjup": {"value": 5, "kind": "approximate", "note": "each component of the best-matching model binary"},
-        "age_gyr": {"value": 1, "kind": "approximate"},
-        "log_l_lsun": {"value": -6.50, "err": 0.02},
+        "teff_k": {
+          "value": 325,
+          "kind": "approximate",
+          "note": "each component of the best-matching model, an equal binary"
+        },
+        "mass_mjup": {
+          "value": 5,
+          "kind": "approximate",
+          "note": "each component of the best-matching model binary"
+        },
+        "age_gyr": {
+          "value": 1,
+          "kind": "approximate"
+        },
+        "log_l_lsun": {
+          "value": -6.5,
+          "err": 0.02
+        },
         "binary": true,
         "binary_note": "best literature match is an unresolved binary of two ~325 K, ~5 M_Jup brown dwarfs",
-        "sources": [{"ref": "Cushing et al. 2021, ApJ", "bibcode": "2021arXiv210700506C", "arxiv": "2107.00506", "doi": "10.3847/1538-4357/ac12cb"}]
+        "sources": [
+          {
+            "ref": "Cushing et al. 2021, ApJ",
+            "bibcode": "2021arXiv210700506C",
+            "arxiv": "2107.00506",
+            "doi": "10.3847/1538-4357/ac12cb"
+          }
+        ]
       },
-      "simbad_snapshot": null
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "WISE J182831.08+265037.7",
+          "otype": "BD*",
+          "sp_type": "Y0",
+          "sp_bibcode": "2011ApJS..197...19K",
+          "ra": 277.12628737499995,
+          "dec": 26.843354194444448,
+          "plx_value": 100.3,
+          "plx_err": 2.0,
+          "plx_bibcode": "2021ApJS..253....7K",
+          "pmra": 1016.5,
+          "pmdec": 169.3,
+          "pm_bibcode": "2021ApJS..253....7K",
+          "rvz_radvel": null,
+          "rvz_err": null,
+          "rvz_type": null,
+          "rvz_bibcode": null,
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = 'WISE J182831.08+265037.7'"
+        },
+        "retrieved_utc": "2026-11-15T12:24:46Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
     },
-    "wise-1738": {"simbad_id": "WISE J173835.52+273258.9", "literature": null, "simbad_snapshot": null},
+    "wise-1738": {
+      "simbad_id": "WISE J173835.53+273259.0",
+      "literature": null,
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "WISE J173835.53+273259.0",
+          "otype": "BD*",
+          "sp_type": "Y0",
+          "sp_bibcode": "2011ApJS..197...19K",
+          "ra": 264.6469630833333,
+          "dec": 27.550652611111115,
+          "plx_value": 130.9,
+          "plx_err": 2.1,
+          "plx_bibcode": "2021ApJS..253....7K",
+          "pmra": 337.1,
+          "pmdec": -343.4,
+          "pm_bibcode": "2021ApJS..253....7K",
+          "rvz_radvel": null,
+          "rvz_err": null,
+          "rvz_type": null,
+          "rvz_bibcode": null,
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = 'WISE J173835.53+273259.0'"
+        },
+        "retrieved_utc": "2026-11-15T12:24:48Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
+    },
     "barnard": {
       "simbad_id": "NAME Barnard's star",
       "literature": {
-        "teff_k": {"value": 3278, "err": 51},
-        "mass_msun": {"value": 0.163, "err": 0.022},
-        "age_gyr": {"lo": 7, "hi": 10},
-        "sources": [{"ref": "Ribas et al. 2018, Nature", "bibcode": "2018arXiv181105955R", "arxiv": "1811.05955", "doi": "10.1038/s41586-018-0677-y"}]
+        "teff_k": {
+          "value": 3278,
+          "err": 51
+        },
+        "mass_msun": {
+          "value": 0.163,
+          "err": 0.022
+        },
+        "age_gyr": {
+          "lo": 7,
+          "hi": 10
+        },
+        "sources": [
+          {
+            "ref": "Ribas et al. 2018, Nature",
+            "bibcode": "2018arXiv181105955R",
+            "arxiv": "1811.05955",
+            "doi": "10.1038/s41586-018-0677-y"
+          }
+        ]
       },
-      "simbad_snapshot": null
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "NAME Barnard's star",
+          "otype": "BY*",
+          "sp_type": "M4V",
+          "sp_bibcode": "1991ApJS...77..417K",
+          "ra": 269.4520769586187,
+          "dec": 4.693364966576667,
+          "plx_value": 546.9759,
+          "plx_err": 0.0401,
+          "plx_bibcode": "2020yCat.1350....0G",
+          "pmra": -801.551,
+          "pmdec": 10362.394,
+          "pm_bibcode": "2020yCat.1350....0G",
+          "rvz_radvel": -110.11,
+          "rvz_err": 0.0002,
+          "rvz_type": "v",
+          "rvz_bibcode": "2018MNRAS.475.1960F",
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = 'NAME Barnard''s star'"
+        },
+        "retrieved_utc": "2026-11-15T12:24:51Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
     },
     "18-sco": {
       "simbad_id": "18 Sco",
       "literature": {
-        "mass_msun": {"value": 1.02, "err": 0.03},
-        "radius_rsun": {"value": 1.010, "err": 0.009},
-        "sources": [{"ref": "Bazot et al. 2011, A&A 526, L4", "bibcode": "2011A&A...526L...4B", "arxiv": "1209.0217", "doi": "10.1051/0004-6361/201015679"}]
+        "mass_msun": {
+          "value": 1.02,
+          "err": 0.03
+        },
+        "radius_rsun": {
+          "value": 1.01,
+          "err": 0.009
+        },
+        "sources": [
+          {
+            "ref": "Bazot et al. 2011, A&A 526, L4",
+            "bibcode": "2011A&A...526L...4B",
+            "arxiv": "1209.0217",
+            "doi": "10.1051/0004-6361/201015679"
+          }
+        ]
       },
-      "simbad_snapshot": null
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "*  18 Sco",
+          "otype": "PM*",
+          "sp_type": "G2Va",
+          "sp_bibcode": "1989ApJS...71..245K",
+          "ra": 243.90529281485533,
+          "dec": -8.369439479286111,
+          "plx_value": 70.7371,
+          "plx_err": 0.0631,
+          "plx_bibcode": "2020yCat.1350....0G",
+          "pmra": 232.23,
+          "pmdec": -495.378,
+          "pm_bibcode": "2020yCat.1350....0G",
+          "rvz_radvel": 11.764,
+          "rvz_err": 0.0002,
+          "rvz_type": "v",
+          "rvz_bibcode": "2018A&A...616A...7S",
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = '18 Sco'"
+        },
+        "retrieved_utc": "2026-11-15T12:24:53Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
     },
     "tw-hya": {
       "simbad_id": "V* TW Hya",
       "literature": {
-        "teff_k": {"value": 3800, "kind": "best-fit model"},
-        "log_g_cgs": {"value": 4.2, "kind": "best-fit model"},
-        "age_gyr": {"lo": 0.007, "hi": 0.013, "note": "10 +/- 3 Myr, TW Hya association (Bell et al. 2015); 8 Myr for the star itself (Sokal et al. 2018)"},
-        "sources": [{"ref": "Sokal et al. 2018, ApJ", "bibcode": "2017arXiv171204785S", "arxiv": "1712.04785", "doi": "10.3847/1538-4357/aaa1e4"},
-                    {"ref": "Bell, Mamajek & Naylor 2015, MNRAS", "bibcode": "2015arXiv150805955B", "arxiv": "1508.05955", "doi": "10.1093/mnras/stv1981"}]
+        "teff_k": {
+          "value": 3800,
+          "kind": "best-fit model"
+        },
+        "log_g_cgs": {
+          "value": 4.2,
+          "kind": "best-fit model"
+        },
+        "age_gyr": {
+          "lo": 0.007,
+          "hi": 0.013,
+          "note": "10 +/- 3 Myr, TW Hya association (Bell et al. 2015); 8 Myr for the star itself (Sokal et al. 2018)"
+        },
+        "sources": [
+          {
+            "ref": "Sokal et al. 2018, ApJ",
+            "bibcode": "2017arXiv171204785S",
+            "arxiv": "1712.04785",
+            "doi": "10.3847/1538-4357/aaa1e4"
+          },
+          {
+            "ref": "Bell, Mamajek & Naylor 2015, MNRAS",
+            "bibcode": "2015arXiv150805955B",
+            "arxiv": "1508.05955",
+            "doi": "10.1093/mnras/stv1981"
+          }
+        ]
       },
-      "simbad_snapshot": null
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "V* TW Hya",
+          "otype": "TT*",
+          "sp_type": "K6Ve",
+          "sp_bibcode": "2006A&A...460..695T",
+          "ra": 165.46627220211,
+          "dec": -34.70473144955,
+          "plx_value": 16.6289,
+          "plx_err": 0.015,
+          "plx_bibcode": "2020yCat.1350....0G",
+          "pmra": -68.309,
+          "pmdec": -13.9,
+          "pm_bibcode": "2020yCat.1350....0G",
+          "rvz_radvel": 12.335,
+          "rvz_err": 0.002,
+          "rvz_type": "v",
+          "rvz_bibcode": "2018A&A...616A...7S",
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = 'V* TW Hya'"
+        },
+        "retrieved_utc": "2026-11-15T12:24:56Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
     },
-    "rw-aur": {"simbad_id": "V* RW Aur", "literature": null, "simbad_snapshot": null},
+    "rw-aur": {
+      "simbad_id": "V* RW Aur",
+      "literature": null,
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "V* RW Aur",
+          "otype": "TT*",
+          "sp_type": "K1/5e+K5e",
+          "sp_bibcode": "1999A&A...351..954D",
+          "ra": 76.95652603458333,
+          "dec": 30.401438173888888,
+          "plx_value": 15.42,
+          "plx_err": 3.69,
+          "plx_bibcode": "2007A&A...474..653V",
+          "pmra": 7.23,
+          "pmdec": -20.33,
+          "pm_bibcode": "2007A&A...474..653V",
+          "rvz_radvel": 15.0,
+          "rvz_err": 0.03,
+          "rvz_type": "v",
+          "rvz_bibcode": "2012ApJ...745..119N",
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = 'V* RW Aur'"
+        },
+        "retrieved_utc": "2026-11-15T12:24:59Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
+    },
     "trappist-1": {
       "simbad_id": "TRAPPIST-1",
       "literature": {
-        "teff_k": {"value": 2566, "err": 26},
-        "mass_msun": {"value": 0.0898, "err": 0.0023},
-        "age_gyr": {"lo": 5.4, "hi": 9.8, "note": "7.6 +/- 2.2 Gyr"},
-        "sources": [{"ref": "Agol et al. 2020, arXiv:2010.01074", "bibcode": "2020arXiv201001074A", "arxiv": "2010.01074", "doi": null},
-                    {"ref": "Burgasser & Mamajek 2017, ApJ", "bibcode": "2017arXiv170602018B", "arxiv": "1706.02018", "doi": "10.3847/1538-4357/aa7fea"}]
+        "teff_k": {
+          "value": 2566,
+          "err": 26
+        },
+        "mass_msun": {
+          "value": 0.0898,
+          "err": 0.0023
+        },
+        "age_gyr": {
+          "lo": 5.4,
+          "hi": 9.8,
+          "note": "7.6 +/- 2.2 Gyr"
+        },
+        "sources": [
+          {
+            "ref": "Agol et al. 2020, arXiv:2010.01074",
+            "bibcode": "2020arXiv201001074A",
+            "arxiv": "2010.01074",
+            "doi": null
+          },
+          {
+            "ref": "Burgasser & Mamajek 2017, ApJ",
+            "bibcode": "2017arXiv170602018B",
+            "arxiv": "1706.02018",
+            "doi": "10.3847/1538-4357/aa7fea"
+          }
+        ]
       },
-      "simbad_snapshot": null
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "TRAPPIST-1",
+          "otype": "LM*",
+          "sp_type": "M7.5e",
+          "sp_bibcode": "2000AJ....120.1085G",
+          "ra": 346.62236872857875,
+          "dec": -5.041399250518334,
+          "plx_value": 80.2123,
+          "plx_err": 0.0716,
+          "plx_bibcode": "2020yCat.1350....0G",
+          "pmra": 930.788,
+          "pmdec": -479.038,
+          "pm_bibcode": "2020yCat.1350....0G",
+          "rvz_radvel": -52.003101,
+          "rvz_err": 0.134416,
+          "rvz_type": "v",
+          "rvz_bibcode": "2020AJ....160..120J",
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = 'TRAPPIST-1'"
+        },
+        "retrieved_utc": "2026-11-15T12:25:01Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
     },
     "lhs-1140": {
       "simbad_id": "LHS 1140",
       "literature": {
-        "teff_k": {"value": 3131, "err": 100},
-        "mass_msun": {"value": 0.146, "err": 0.019},
-        "age_gyr": {"lo": 5, "hi": null, "note": "older than 5 Gyr"},
-        "radial_velocity_km_s": {"value": -13.23, "err": 0.60},
-        "sources": [{"ref": "Dittmann et al. 2017, Nature", "bibcode": "2017arXiv170405556D", "arxiv": "1704.05556", "doi": "10.1038/nature22055"}]
+        "teff_k": {
+          "value": 3131,
+          "err": 100
+        },
+        "mass_msun": {
+          "value": 0.146,
+          "err": 0.019
+        },
+        "age_gyr": {
+          "lo": 5,
+          "hi": null,
+          "note": "older than 5 Gyr"
+        },
+        "radial_velocity_km_s": {
+          "value": -13.23,
+          "err": 0.6
+        },
+        "sources": [
+          {
+            "ref": "Dittmann et al. 2017, Nature",
+            "bibcode": "2017arXiv170405556D",
+            "arxiv": "1704.05556",
+            "doi": "10.1038/nature22055"
+          }
+        ]
       },
-      "simbad_snapshot": null
+      "simbad_snapshot": {
+        "row": {
+          "main_id": "G 268-38",
+          "otype": "PM*",
+          "sp_type": "M4.5V",
+          "sp_bibcode": "1995AJ....110.1838R",
+          "ra": 11.247212140629582,
+          "dec": -15.271539677775003,
+          "plx_value": 66.8287,
+          "plx_err": 0.0479,
+          "plx_bibcode": "2020yCat.1350....0G",
+          "pmra": 318.152,
+          "pmdec": -596.623,
+          "pm_bibcode": "2020yCat.1350....0G",
+          "rvz_radvel": -13.329,
+          "rvz_err": 0.5,
+          "rvz_type": "v",
+          "rvz_bibcode": "2022ApJ...935..104M",
+          "query": "SELECT TOP 1 b.* FROM basic AS b JOIN ident AS i ON i.oidref = b.oid WHERE i.id = 'LHS 1140'"
+        },
+        "retrieved_utc": "2026-11-15T12:25:04Z",
+        "server": "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
+      }
     }
   }
 }

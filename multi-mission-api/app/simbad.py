@@ -1,7 +1,13 @@
 """SIMBAD (CDS, Strasbourg) reference data for the validation scorecard.
 
 One TAP query per object: the `basic` row found through an identifier, or the nearest object in a
-cone. The values returned are SIMBAD's own, with SIMBAD's bibcodes. Order of sources:
+cone. The values returned are SIMBAD's own, with SIMBAD's bibcodes.
+
+Servers, tried in order until one answers: CDS Strasbourg, then the official SIMBAD mirror at the
+Harvard-Smithsonian CfA (same database, same TAP service). AEON_SIMBAD_TAP replaces the list
+(comma-separated URLs ending in /sync).
+
+Order of sources:
   1. a live query (cached on disk for 24 h),
   2. the snapshot in fixtures/validation_reference.json (built by scripts/build_validation_fixtures.py),
   3. nothing: status "unavailable" - no value is substituted.
@@ -21,7 +27,12 @@ from typing import Any
 
 import httpx
 
-SIMBAD_TAP = os.environ.get("AEON_SIMBAD_TAP", "https://simbad.cds.unistra.fr/simbad/sim-tap/sync")
+DEFAULT_SERVERS = (
+    "https://simbad.cds.unistra.fr/simbad/sim-tap/sync",      # CDS, Strasbourg
+    "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync",     # official mirror, Harvard-Smithsonian CfA
+)
+SIMBAD_SERVERS = tuple(u.strip() for u in os.environ.get("AEON_SIMBAD_TAP", ",".join(DEFAULT_SERVERS)).split(",") if u.strip())
+SIMBAD_TAP = SIMBAD_SERVERS[0]
 TIMEOUT_S = float(os.environ.get("AEON_SIMBAD_TIMEOUT_S", "8"))
 CACHE_TTL_SEC = 86400.0
 FIELDS = ("main_id", "otype", "sp_type", "sp_bibcode", "ra", "dec", "plx_value", "plx_err", "plx_bibcode",
@@ -45,15 +56,29 @@ def _num(v: Any) -> float | None:
     return x if x is not None and math.isfinite(x) else None
 
 
+_last_server: dict[str, str] = {}
+
+
 def _tap(query: str) -> list[dict[str, str]]:
-    try:
-        r = httpx.post(SIMBAD_TAP, data={"request": "doQuery", "lang": "adql", "format": "csv", "query": query},
-                       timeout=TIMEOUT_S)
-    except httpx.HTTPError as exc:
-        raise SimbadError(f"{type(exc).__name__}") from exc
-    if r.status_code != 200 or r.text.lstrip().startswith("<"):
-        raise SimbadError(f"HTTP {r.status_code}")
-    return list(csv.DictReader(io.StringIO(r.text)))
+    """Run the query on the first SIMBAD server that answers with a table."""
+    errors = []
+    for url in SIMBAD_SERVERS:
+        try:
+            r = httpx.post(url, data={"request": "doQuery", "lang": "adql", "format": "csv", "query": query},
+                           timeout=TIMEOUT_S)
+        except httpx.HTTPError as exc:
+            errors.append(f"{_host(url)}: {type(exc).__name__}")
+            continue
+        if r.status_code != 200 or r.text.lstrip().startswith("<"):
+            errors.append(f"{_host(url)}: HTTP {r.status_code}")
+            continue
+        _last_server["url"] = url
+        return list(csv.DictReader(io.StringIO(r.text)))
+    raise SimbadError("; ".join(errors) or "no SIMBAD server configured")
+
+
+def _host(url: str) -> str:
+    return url.split("/")[2] if "//" in url else url
 
 
 def _row(raw: dict[str, str], query: str) -> dict[str, Any]:
@@ -112,7 +137,8 @@ def lookup(identifier: str | None, ra: float, dec: float, snapshot: dict[str, An
                     cache_file.write_text(json.dumps({"_ts": time.time(), "utc": utc, "row": row}), encoding="utf-8")
                 except Exception:
                     pass
-            return {"status": "live", "row": row, "source": "SIMBAD TAP", "retrieved_utc": utc}
+            return {"status": "live", "row": row, "source": f"SIMBAD TAP ({_host(_last_server.get('url', SIMBAD_TAP))})",
+                    "retrieved_utc": utc}
         except SimbadError as exc:
             err = f"SIMBAD did not answer ({exc})"
         except Exception as exc:  # a malformed answer is an outage too, never a guess
