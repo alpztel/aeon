@@ -24,6 +24,7 @@ export function ShortcutsModal({ open, onClose }: ShortcutsModalProps) {
   if (!open) return null;
 
   const rows = [
+    { key: "G", label: dict.shortcuts.items.g },
     { key: "D", label: dict.shortcuts.items.d },
     { key: "S", label: dict.shortcuts.items.s },
     { key: "3", label: dict.shortcuts.items["3"] },

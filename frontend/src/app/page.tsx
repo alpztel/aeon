@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AstroLlmModal } from "@/components/AstroLlmModal";
 import { CandidatePoolPanel } from "@/components/CandidatePoolPanel";
+import { ExamplesPanel } from "@/components/ExamplesPanel";
 import { ClassificationCard } from "@/components/ClassificationCard";
 import { CrossmatchSedPanel } from "@/components/CrossmatchSedPanel";
 import { DifferencePanel } from "@/components/DifferencePanel";
@@ -125,6 +126,27 @@ export default function HomePage() {
     setRefCoords(nextRef ?? next);
   }, []);
 
+  // Example gallery: fly to a catalog object, at the quarter holding its best real SPHEREx data.
+  const pickExample = useCallback(
+    async (id: string, best: Epoch | null) => {
+      const ep = best ?? epoch;
+      try {
+        const [epRes, refRes] = await Promise.all([
+          searchCatalog({ q: id, epoch: ep, limit: 5 }),
+          searchCatalog({ q: id, limit: 5 }),
+        ]);
+        const hit = epRes.data.results.find((r) => r.id === id);
+        const refHit = refRes.data.results.find((r) => r.id === id);
+        if (!hit) return;
+        if (ep !== epoch) setEpoch(ep);
+        selectObject(hit, { ra: hit.ra, dec: hit.dec }, { ra: refHit?.ra ?? hit.ra, dec: refHit?.dec ?? hit.dec });
+      } catch {
+        // catalog unreachable: stay where we are
+      }
+    },
+    [epoch, selectObject]
+  );
+
   const flyToCoords = useCallback((ra: number, dec: number) => {
     setSelectedObject(null);
     setCoords({ ra, dec });
@@ -239,6 +261,9 @@ export default function HomePage() {
       if (k === "?") {
         e.preventDefault();
         setShortcutsOpen((prev) => !prev);
+      } else if (k === "g" || k === "G") {
+        e.preventDefault();
+        toggleTool("examples");
       } else if (k === "d" || k === "D") {
         e.preventDefault();
         toggleTool("diff");
@@ -335,6 +360,8 @@ export default function HomePage() {
 
   const renderTool = (id: ToolId) => {
     switch (id) {
+      case "examples":
+        return <ExamplesPanel currentId={selectedObject?.id ?? null} onPick={(tid, best) => void pickExample(tid, best)} />;
       case "diff":
         return (
           <DifferencePanel
